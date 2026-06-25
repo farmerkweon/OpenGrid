@@ -1,0 +1,35 @@
+# 소스 및 테스트 제외
+src/
+test/
+examples/
+docs/
+
+# 설정 파일
+*.config.ts
+*.config.js
+tsconfig*.json
+.eslintrc*
+.prettierrc*
+playwright.config.ts
+
+# 빌드 도구
+node_modules/
+.vite/
+.cache/
+
+# 개발용 파일
+sessions/
+CHANGELOG.md
+.env*
+*.log
+
+# Git
+.git/
+.gitignore
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user

@@ -1,0 +1,9 @@
+services:
+  opengrid-demo:
+    build: .
+    container_name: opengrid-demo
+    ports:
+      - "5174:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
