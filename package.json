@@ -1,6 +1,6 @@
 {
   "name": "open-grid",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Ultra-light data grid with a zero-dependency core — works with React, Vue, Angular, jQuery, or vanilla JS. MIT-licensed, endlessly customizable, with an AI-friendly override guide.",
   "type": "module",
   "main": "dist/open-grid.cjs",
@@ -92,5 +92,12 @@
   ],
   "license": "MIT",
   "author": "OPEN_GRID Contributors",
-  "homepage": "https://foxnail.kr/open-grid/demo/v2/index.php"
+  "homepage": "https://foxnail.kr/open-grid/demo/v2/index.php",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farmerkweon/OpenGrid.git"
+  },
+  "bugs": {
+    "url": "https://github.com/farmerkweon/OpenGrid/issues"
+  }
 }
