@@ -503,35 +503,40 @@ export class OpenGrid<T extends Record<string, any> = any>
     const sheets = this._options.worksheets!;
     this._wsManager = new WorksheetManager<T>(
       this._container,
-      (_name, state) => {
-        // 탭을 전환할 때 데이터와 컬럼을 업데이트한다
-        this._data.setData(state.data);
-        this._colLayout = new ColumnLayout<T>(
-          state.columns.length ? state.columns : this._options.columns,
-          this._options.frozenColumns,
-        );
-        this._doRender(...this._visRange());
-        this._renderHeader();
-      }
+      (_name, state) => this._loadWorksheetState(state),
     );
     for (const sheet of sheets) {
       this._wsManager.add(sheet.name, sheet.columns ?? this._options.columns, sheet.data ?? []);
     }
   }
 
+  // 탭(워크시트) 전환 시 데이터·컬럼을 화면에 반영한다.
+  // 핵심(Why): _data.setData 만으로는 가상 스크롤(_vs)의 총 행수가 갱신되지 않아
+  //   _visRange 가 빈 범위를 돌려줘 행이 렌더되지 않는다(데이터 미표시 버그).
+  //   공개 setData 와 동일하게 _vs.setTotalRows + aria + 컬럼폭 재계산까지 수행한다.
+  private _loadWorksheetState(state: import('./types').WorksheetState<T>): void {
+    this._rowMgr.reset();
+    this._data.setData(state.data);
+    this._colLayout = new ColumnLayout<T>(
+      state.columns.length ? state.columns : this._options.columns,
+      this._options.frozenColumns,
+    );
+    this._vs?.setTotalRows(this._data.rowCount);
+    this._pagination?.setTotalRows(this._data.rowCount);
+    this._container.setAttribute('aria-rowcount', String(this._data.rowCount));
+    this._container.setAttribute('aria-colcount', String(this._colLayout.visibleLeaves.length));
+    // 시트마다 컬럼 구성이 다를 수 있으므로 폭을 재계산한 뒤 헤더·본문을 다시 그린다
+    const { width } = this._container.getBoundingClientRect();
+    if (width) this._recalcWidths(width);
+    this._renderHeader();
+    this._doRender(...this._visRange());
+  }
+
   addWorksheet(name: string, columns?: import('./types').ColumnDef<T>[], data?: T[]): void {
     if (!this._wsManager) {
       this._wsManager = new WorksheetManager<T>(
         this._container,
-        (_n, state) => {
-          this._data.setData(state.data);
-          this._colLayout = new ColumnLayout<T>(
-            state.columns.length ? state.columns : this._options.columns,
-            this._options.frozenColumns,
-          );
-          this._doRender(...this._visRange());
-          this._renderHeader();
-        }
+        (_n, state) => this._loadWorksheetState(state),
       );
     }
     this._wsManager.add(name, columns ?? this._options.columns, data ?? []);
