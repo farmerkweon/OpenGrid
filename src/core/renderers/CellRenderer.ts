@@ -12,6 +12,7 @@ export interface RenderContext<T = any> {
   colIndex: number;
   isSelected: boolean;
   rowState: 'none' | 'added' | 'edited' | 'removed';
+  displayValue?: string | null;
 }
 
 export interface CellRenderer {
@@ -228,6 +229,12 @@ export class TextRenderer implements CellRenderer {
       return span;
     }
     const { value, column, rowIndex } = ctx;
+
+    if (ctx.displayValue != null) {
+      span.textContent = ctx.displayValue;
+      span.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;";
+      return span;
+    }
 
     let displayText: string;
     if (column.valueMap && value != null && column.valueMap[value]) {

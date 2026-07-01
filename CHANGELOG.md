@@ -2,6 +2,16 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.0.8] - 2026-07-01
+
+### Fixed
+- **`grid.override('getDisplayValue')` 커스터마이징이 셀 화면에 반영되지 않던 버그 수정** —
+  텍스트·불리언 등 셀 렌더 경로가 내부적으로 `getDisplayValue()`를 거치지 않아,
+  `getDisplayValue`를 오버라이드해도 셀에 표시되는 값이 바뀌지 않던 문제를 고쳤다.
+  이제 렌더러가 인스턴스 콜백을 통해 `getDisplayValue()` 결과를 표시값으로 사용한다.
+  오버라이드·전략이 등록되지 않은 경우 기존 렌더 경로로 폴백하므로 기존 동작은
+  100% 보존된다(출력 바이트 동일, 회귀 없음). 단위 테스트 408건 통과.
+
 ## [1.0.7] - 2026-06-27
 
 ### Fixed

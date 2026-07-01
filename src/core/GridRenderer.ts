@@ -22,6 +22,8 @@ export interface RendererCallbacks {
   onColDragStart: (colIndex: number) => void;
   onColDrop: (toIndex: number) => void;
   getColDragIdx: () => number | null;
+  // 추가: override/strategy 활성 시 string, 미등록이면 null → 기존 경로 폴백
+  getDisplayText?: (rowIndex: number, field: string) => string | null;
 }
 
 // ─── GridRenderer ─────────────────────────────────────────
@@ -761,7 +763,8 @@ export class GridRenderer {
         const rendered = renderer.render({
           value: rowData[col.field], row: rowData, rowIndex: ri,
           column: col as any, colIndex: ci,
-          isSelected: selectedRows.has(ri), rowState
+          isSelected: selectedRows.has(ri), rowState,
+          displayValue: this._cbs.getDisplayText?.(ri, col.field) ?? null,
         });
         _treeRenderTarget.appendChild(rendered);
 

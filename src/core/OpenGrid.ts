@@ -302,6 +302,10 @@ export class OpenGrid<T extends Record<string, any> = any>
         this._editMgr.dragColIdx = null;
       },
       getColDragIdx:     () => this._editMgr.dragColIdx,
+      getDisplayText: (ri, field) =>
+        (this.hasOverride("getDisplayValue") || this._ovk.hasStrategy("displayFormatter"))
+          ? this.getDisplayValue(ri, field)
+          : null,
     });
 
     this._filterPanel = new FilterPanel(
