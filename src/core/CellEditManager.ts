@@ -18,6 +18,11 @@ export interface CellEditDeps<T extends Record<string, any>> {
   writeCell: (ri: number, field: string, value: any) => void;
   scrollToRow: (ri: number) => void;
   getVisibleLeaves: () => ColumnDef<T>[];
+  // F3(11_design_F3_v2.md §7.1/§4.3): 인-셀 '=' 편집 인식 + 재편집 시 원문 표시.
+  hasCellFormula?: (ri: number, field: string) => boolean;
+  getCellFormula?: (ri: number, field: string) => string | null;
+  setCellFormula?: (ri: number, field: string, formula: string) => void;
+  clearCellFormula?: (ri: number, field: string) => void;
 }
 
 export class CellEditManager<T extends Record<string, any> = any> {
@@ -93,8 +98,10 @@ export class CellEditManager<T extends Record<string, any> = any> {
     this._d.getOptions().onEditStart?.(startEvt);
 
     cellEl.classList.add('og-editing');
+    // F3(§4.3): 수식 셀 재편집 시 계산값이 아니라 원문("=A1+B2")을 에디터에 채운다.
+    const formulaSrc = this._d.hasCellFormula?.(rowIndex, col.field) ? this._d.getCellFormula?.(rowIndex, col.field) : null;
     const ctx = {
-      value: row?.[col.field], row: row as any, rowIndex,
+      value: formulaSrc ?? row?.[col.field], row: row as any, rowIndex,
       column: col as any, colIndex, isSelected: true, rowState: 'none' as any
     };
     editor.mount(cellEl, ctx,
@@ -137,8 +144,10 @@ export class CellEditManager<T extends Record<string, any> = any> {
     opts.onEditStart?.(startEvt);
 
     cellEl.classList.add('og-editing');
+    // F3(§4.3): 수식 셀 재편집 시 계산값이 아니라 원문("=A1+B2")을 에디터에 채운다.
+    const formulaSrc = this._d.hasCellFormula?.(rowIndex, col.field) ? this._d.getCellFormula?.(rowIndex, col.field) : null;
     const ctx = {
-      value: row?.[col.field], row: row as any, rowIndex,
+      value: formulaSrc ?? row?.[col.field], row: row as any, rowIndex,
       column: col as any, colIndex, isSelected: true, rowState: 'none' as any
     };
     editor.mount(cellEl, ctx,
@@ -179,7 +188,26 @@ export class CellEditManager<T extends Record<string, any> = any> {
 
     if (!cancel && col) {
       const old = this._d.data.getCellValue(ri, col.field);
-      if (value !== old) {
+      const hadFormula = this._d.hasCellFormula?.(ri, col.field) ?? false;
+      // F3(§7.1 P0 MVP): 커밋된 문자열이 '='로 시작하면 수식으로 인식. 기존 값 편집 경로는
+      // (autoRecalc 옵션과 무관하게) 사용자가 명시적으로 '='를 입력한 경우에만 갈라진다 —
+      // '=' 로 시작하지 않는 일반 편집은 회귀 0 유지.
+      const isFormulaInput = typeof value === 'string' && value.trimStart().startsWith('=');
+      if (isFormulaInput) {
+        this._d.setCellFormula?.(ri, col.field, value);
+        const row = this._d.data.getRowByIndex(ri);
+        const opts = this._d.getOptions();
+        const evt: EditEvent<T> = {
+          type: 'editEnd', rowIndex: ri, columnIndex: ci,
+          field: col.field, oldValue: old, newValue: value,
+          row: row as T, column: col as any
+        };
+        this._d.emit('editEnd', evt);
+        opts.onEditEnd?.(evt);
+        this._d.emit('dataChange', this._d.data.getData());
+        opts.onDataChange?.(this._d.data.getData());
+      } else if (value !== old || hadFormula) {
+        if (hadFormula) this._d.clearCellFormula?.(ri, col.field);
         this._d.data.updateCell(ri, col.field, value);
         const row = this._d.data.getRowByIndex(ri);
         const opts = this._d.getOptions();

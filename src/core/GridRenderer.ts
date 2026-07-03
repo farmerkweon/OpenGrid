@@ -2,7 +2,7 @@ import { DataLayer } from './DataLayer.js';
 import { RowDragDrop } from './RowDragDrop.js';
 import { MergeEngine } from './MergeEngine.js';
 import { createRenderer } from './renderers/CellRenderer.js';
-import type { ColumnDef, SortItem, TreeNodeIconDef } from './types.js';
+import type { ColumnDef, SortItem, TreeNodeIconDef, CellRange } from './types.js';
 
 // ─── RendererCallbacks ────────────────────────────────────
 export interface RendererCallbacks {
@@ -24,7 +24,37 @@ export interface RendererCallbacks {
   getColDragIdx: () => number | null;
   // 추가: override/strategy 활성 시 string, 미등록이면 null → 기존 경로 폴백
   getDisplayText?: (rowIndex: number, field: string) => string | null;
+  // F3(11_design_F3_v2.md §7.4/§7.5/§7.6, C7): 셀 수식 메타(마커/에러 툴팁/aria-label). 없으면 null.
+  getFormulaMeta?: (rowIndex: number, field: string) => { src: string; error: string | null; approx: boolean } | null;
 }
+
+/**
+ * F2(11_design_F2_v2.md §4/§5, C6/C10): renderBody 가 detail head/filler 분기·expander 셀을
+ * 그릴 때 소비하는 배선 콜백 묶음. OpenGrid._buildDetailRenderContext() 가 매 렌더 새로 만들어
+ * 넘긴다(옵션/상태는 항상 DetailManager 최신값). masterDetail.enabled 가 아니면 undefined.
+ */
+export interface DetailRenderContext {
+  toggleMode: 'expander-col' | 'first-cell';
+  ariaLabel: string;
+  getRowId: (row: any) => string;
+  isExpanded: (rowId: string) => boolean;
+  onToggle: (rowIndex: number, rowId: string) => void;
+  getGlyph: (expanded: boolean) => { glyph: string; ariaLabel: string; title: string };
+  getPanelHost: (rowId: string) => HTMLElement;
+  /** renderBody 매 호출 시작(teardown 직전) — 편집중 host hoist + 나머지 detach(§5). */
+  onBeforeTeardown: () => void;
+}
+
+// F3(§6/C11): 에러코드 → 한국어 원인(hover 툴팁/aria-live 공용).
+const _FORMULA_ERROR_KO: Record<string, string> = {
+  '#ERR': '수식 오류',
+  '#REF': '참조 대상이 삭제됨',
+  '#CYCLE': '순환 참조',
+  '#DIV0': '0으로 나눔',
+  '#NAME': '알 수 없는 함수/이름',
+  '#VALUE': '숫자가 아닌 값에 산술 연산',
+  '#NUM': '수치 도메인 오류',
+};
 
 // ─── GridRenderer ─────────────────────────────────────────
 export class GridRenderer {
@@ -87,11 +117,16 @@ export class GridRenderer {
     const frozenCount: number = opts._frozenCount ?? 0;
 
     // 헤더·바디 정렬을 위해 총 컬럼 너비를 계산 — 헤더 table은 이 너비로 고정
+    // F2(§4.3/§6.1): renderBody 와 동일한 규칙 — expander 컬럼(toggle:'expander-col', 기본값)이면
+    // 헤더에도 자리를 잡아 폭/스크롤 동기를 유지한다.
+    const detailColOn = !!opts.masterDetail?.enabled && (opts.masterDetail?.toggle ?? 'expander-col') === 'expander-col';
+    const DETAIL_COL_W = 28;
     let _extraW = 0;
     if (opts.stateColumn) _extraW += 24;
     if (opts.draggable)   _extraW += 18;
     if (opts.rowNumber)   _extraW += 44;
     if (opts.checkColumn) _extraW += 36;
+    if (detailColOn)      _extraW += DETAIL_COL_W;
     const totalColWidth = _extraW + leaves.reduce((s: number, _: any, i: number) => s + (widths[i] ?? opts.defaultColumnWidth), 0);
 
     // 헤더 div 배경 — 테이블이 totalColWidth보다 짧아도 헤더 영역 전체에 배경 유지
@@ -158,6 +193,7 @@ export class GridRenderer {
           th.appendChild(allChk);
           tr.appendChild(th);
         }
+        if (detailColOn) addExtraCol(tr, DETAIL_COL_W, '', 'og-detail-toggle-col');
       }
 
       for (const cell of (headerRows[ri] ?? [])) {
@@ -208,6 +244,7 @@ export class GridRenderer {
           if (opts.draggable)   leftOff += 18;
           if (opts.rowNumber)   leftOff += 44;
           if (opts.checkColumn) leftOff += 36;
+          if (detailColOn)      leftOff += DETAIL_COL_W;
           for (let i = 0; i < leafIdx; i++) leftOff += widths[i] ?? opts.defaultColumnWidth;
           th.classList.add('og-frozen');
           if (leafIdx === frozenCount - 1) th.classList.add('og-frozen-last');
@@ -352,10 +389,13 @@ export class GridRenderer {
     onGroupToggle?: (key: string) => void,
     onTreeToggle?: (nodeId: any) => void,
     extraOpts: Record<string, any> = {},
-    mergeEngine?: MergeEngine
+    mergeEngine?: MergeEngine,
+    detailApi?: DetailRenderContext
   ): void {
     // opts에 extraOpts 병합 (DnD _totalRows 등)
     if (Object.keys(extraOpts).length) opts = { ...opts, ...extraOpts };
+    // F2(§5 skip-rebuild): teardown(아래 innerHTML='') 전에 편집중 host 를 hoist, 나머지는 detach.
+    detailApi?.onBeforeTeardown();
     this._body.innerHTML = '';
     this._cellMap.clear();
     // autoHeight(비가상): 행을 플로우로 쌓아 높이 자동. 그 외: 고정 rowHeight 절대배치.
@@ -363,24 +403,50 @@ export class GridRenderer {
     this._body.classList.toggle('og-autoheight', auto);
     this._body.style.height = auto ? '' : `${totalHeight}px`;
     const frozenCount: number = opts._frozenCount ?? 0;
+    // F2(§4.3/§6.1): 전용 expander 컬럼 폭(toggle:'first-cell' 이면 별도 컬럼 없이 첫 셀에 얹음).
+    const detailColOn = !!detailApi && (detailApi.toggleMode ?? 'expander-col') === 'expander-col';
+    const DETAIL_COL_W = 28;
 
     // 바디 최소 너비를 totalColWidth로 설정 — 헤더 table과 너비 동기화 (수평 스크롤 영역 확보)
-    {
-      let _ew = 0;
-      if (opts.stateColumn) _ew += 24;
-      if (opts.draggable)   _ew += 18;
-      if (opts.rowNumber)   _ew += 44;
-      if (opts.checkColumn) _ew += 36;
-      const _totalCW = _ew + leaves.reduce((s: number, _: any, i: number) => s + (widths[i] ?? opts.defaultColumnWidth), 0);
-      this._body.style.minWidth = `${_totalCW}px`;
-    }
+    let _ew = 0;
+    if (opts.stateColumn) _ew += 24;
+    if (opts.draggable)   _ew += 18;
+    if (opts.rowNumber)   _ew += 44;
+    if (opts.checkColumn) _ew += 36;
+    if (detailColOn)      _ew += DETAIL_COL_W;
+    const totalColWidth = _ew + leaves.reduce((s: number, _: any, i: number) => s + (widths[i] ?? opts.defaultColumnWidth), 0);
+    this._body.style.minWidth = `${totalColWidth}px`;
 
     if (endIndex < startIndex) return;
 
     const frag = document.createDocumentFragment();
+    // F2(EC-3 뷰포트 상단 걸침): head 가 startIndex 위에 있고 span 이 startIndex 를 덮는 경우
+    // 백스캔으로 먼저 그린다(merge master 와 동형의 잠재 버그 — 디테일은 span 이 커서 명시 구현).
+    if (groupFlatRows && detailApi) {
+      for (let bi = startIndex - 1; bi >= 0; bi--) {
+        const it: any = groupFlatRows[bi];
+        if (it && it._isDetailFiller === true) continue;
+        if (it && it._isDetailHead === true) {
+          if (bi + it._span - 1 >= startIndex) {
+            const top = offsetY + (bi - startIndex) * opts.rowHeight;
+            this._appendDetailPanel(frag, it._rowId, top, it._span * opts.rowHeight, totalColWidth, detailApi);
+          }
+        }
+        break;
+      }
+    }
     for (let ri = startIndex; ri <= endIndex; ri++) {
       // 그룹/트리 모드: flatRow 배열 사용
       const flatItem = groupFlatRows ? groupFlatRows[ri] : null;
+      // F2(§4.2): filler 는 패널이 이 밴드를 덮으므로 스킵, head 는 전폭 패널을 그리고 continue.
+      if (flatItem && (flatItem as any)._isDetailFiller === true) continue;
+      if (flatItem && (flatItem as any)._isDetailHead === true && detailApi) {
+        const head = flatItem as any;
+        const top = offsetY + (ri - startIndex) * opts.rowHeight;
+        this._appendDetailPanel(frag, head._rowId, top, head._span * opts.rowHeight, totalColWidth, detailApi);
+        continue;
+      }
+      if (flatItem && (flatItem as any)._isDetailHead === true) continue; // detailApi 없으면 방어적 스킵(패널 없이 건너뜀)
       const isGroupRow = flatItem && (flatItem as any)._isGroup === true;
       const isTreeRow = flatItem && (flatItem as any)._isTree === true;
 
@@ -408,6 +474,7 @@ export class GridRenderer {
         if (opts.draggable)   extraW += 18;
         if (opts.rowNumber)   extraW += 44;
         if (opts.checkColumn) extraW += 36;
+        if (detailColOn)      extraW += DETAIL_COL_W;
 
         // stateColumn 자리: 편집 상태 배지 표시
         if (extraW > 0) {
@@ -582,6 +649,42 @@ export class GridRenderer {
         rowEl.appendChild(chkCell);
       }
 
+      // F2(§4.5 C10 R-DETAIL-GLYPH): expander 셀. group/tree 헤더가 아닌 일반 데이터 행에만
+      // 붙는다(트리 노드 포함 — 그룹 헤더는 위 isGroupRow 분기에서 이미 continue 됨).
+      if (detailColOn) {
+        const dCell = _el('div', 'og-cell og-col-detail-toggle');
+        dCell.style.cssText = 'display:flex;align-items:center;justify-content:center;flex-shrink:0;box-sizing:border-box;';
+        const rid = detailApi!.getRowId(rowData);
+        const expanded = !!rid && detailApi!.isExpanded(rid);
+        const glyphInfo = detailApi!.getGlyph(expanded);
+        const btn = _el('span', 'og-detail-expander');
+        btn.textContent = glyphInfo.glyph;
+        btn.title = glyphInfo.title;
+        btn.setAttribute('role', 'button');
+        btn.setAttribute('tabindex', '0');
+        btn.setAttribute('aria-label', glyphInfo.ariaLabel);
+        if (rid) btn.setAttribute('aria-controls', `og-detail-${rid}`);
+        btn.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;min-height:22px;user-select:none;line-height:1;';
+        const localRid = rid, localRi = ri;
+        const doToggle = (e: Event) => { e.stopPropagation(); if (localRid) detailApi!.onToggle(localRi, localRid); };
+        btn.addEventListener('click', doToggle);
+        btn.addEventListener('keydown', (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doToggle(e); }
+        });
+        dCell.appendChild(btn);
+        if (frozenCount > 0) {
+          dCell.style.position = 'sticky';
+          dCell.style.left = `${extraBodyLeft}px`;
+          dCell.style.zIndex = '2';
+          dCell.style.background = bg;
+        }
+        dCell.style.width = `${DETAIL_COL_W}px`;
+        dCell.style.minWidth = `${DETAIL_COL_W}px`;
+        extraBodyLeft += DETAIL_COL_W;
+        rowEl.appendChild(dCell);
+        if (rid) rowEl.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      }
+
       // 데이터 컬럼
       for (let ci = 0; ci < leaves.length; ci++) {
         const col = leaves[ci]!;
@@ -628,6 +731,7 @@ export class GridRenderer {
           if (opts.draggable)   frozenLeftOff += 18;
           if (opts.rowNumber)   frozenLeftOff += 44;
           if (opts.checkColumn) frozenLeftOff += 36;
+          if (detailColOn)      frozenLeftOff += DETAIL_COL_W;
           for (let i = 0; i < ci; i++) frozenLeftOff += widths[i] ?? opts.defaultColumnWidth;
           cellEl.classList.add('og-frozen-cell');
           if (ci === frozenCount - 1) cellEl.classList.add('og-frozen-last');
@@ -674,6 +778,13 @@ export class GridRenderer {
           cellEl.classList.add('og-cell-focused');
           cellEl.tabIndex = -1;
         }
+        // M-2/M-6(§4.2, F1): 범위 선택 면 하이라이트 — renderBody 클래스 재적용(가상스크롤/frozen/merged 자연 상속).
+        // opts._rangeRects 가 없으면(비-'cells' 모드) 기존 렌더와 동일(회귀 0).
+        const rangeRects = opts._rangeRects as CellRange[] | undefined;
+        if (rangeRects?.some(r => ri >= r.startRow && ri <= r.endRow && ci >= r.startCol && ci <= r.endCol)) {
+          cellEl.classList.add('og-range-selected');
+          cellEl.style.background = 'var(--og-range-bg, rgba(25,118,210,0.12))';
+        }
         // 셀 접근성 레이블 (헤더명: 값)
         const _rawVal = rowData ? rowData[col.field] : null;
         cellEl.setAttribute('aria-label', `${col.header}: ${_rawVal == null ? '' : String(_rawVal)}`);
@@ -685,6 +796,38 @@ export class GridRenderer {
             : String(col.tooltip);
         } else if (opts.tooltips && _rawVal != null && _rawVal !== '') {
           cellEl.title = String(_rawVal);
+        }
+
+        // ── F3(§7.4/§7.5/§7.6, C7/C8.3/C10 R-FORMULA-MARKER) ──────────────
+        // 수식 메타가 있으면: aria-label 재작성(수식+값) · 에러 한국어 툴팁 · 마커(기본 ON,
+        // formula.cellMarker:false 로만 끔) · 근사(≈) 표식. 전부 호스트 CSS 격리(인라인 스타일).
+        const _formulaMeta = this._cbs.getFormulaMeta?.(ri, col.field) ?? null;
+        if (_formulaMeta) {
+          const displayVal = _rawVal == null ? '빈 값' : String(_rawVal);
+          if (_formulaMeta.error) {
+            const errMsg = _FORMULA_ERROR_KO[_formulaMeta.error] ?? '수식 오류';
+            cellEl.setAttribute('aria-label', `수식 ${_formulaMeta.src}, 오류: ${errMsg}`);
+            cellEl.title = `${_formulaMeta.error} — ${errMsg}`;
+            cellEl.style.color = 'var(--og-formula-error-color, #c62828)';
+          } else {
+            const approxTxt = _formulaMeta.approx ? ' (근사값)' : '';
+            cellEl.setAttribute('aria-label', `수식 ${_formulaMeta.src}, 값 ${displayVal}${approxTxt}`);
+            cellEl.title = `${_formulaMeta.src}${approxTxt}`;
+          }
+          if (opts.formula?.cellMarker !== false) {
+            cellEl.classList.add('og-formula-cell');
+            // 코너 삼각형 마커 — 클래스 의존 없이 인라인 배경 그라디언트로 직접 그린다(F3-R36).
+            const markerColor = _formulaMeta.error
+              ? 'var(--og-formula-error-color, #c62828)'
+              : 'var(--og-formula-marker-color, #1976d2)';
+            const prevBg = cellEl.style.background || cellEl.style.backgroundColor;
+            cellEl.style.backgroundImage =
+              `linear-gradient(135deg, ${markerColor} 0 6px, transparent 6px)`;
+            cellEl.style.backgroundRepeat = 'no-repeat';
+            cellEl.style.backgroundPosition = 'top right';
+            cellEl.style.backgroundSize = '8px 8px';
+            if (prevBg) cellEl.style.backgroundColor = prevBg;
+          }
         }
 
         // ── 트리 첫 컬럼: 탐색기 스타일 렌더링 ──────────────
@@ -765,6 +908,8 @@ export class GridRenderer {
           column: col as any, colIndex: ci,
           isSelected: selectedRows.has(ri), rowState,
           displayValue: this._cbs.getDisplayText?.(ri, col.field) ?? null,
+          // C7(15_cross_contracts.md/F3-R14): 셀 수식 있으면 렌더러가 ColumnDef.formula 재평가를 skip.
+          hasCellFormula: _formulaMeta != null,
         });
         _treeRenderTarget.appendChild(rendered);
 
@@ -796,6 +941,7 @@ export class GridRenderer {
           if (opts.draggable)   leftOff += 18;
           if (opts.rowNumber)   leftOff += 44;
           if (opts.checkColumn) leftOff += 36;
+          if (detailColOn)      leftOff += DETAIL_COL_W;
           for (let pc = 0; pc < ci; pc++) leftOff += widths[pc] ?? opts.defaultColumnWidth;
           const rowTop = offsetY + (ri - startIndex) * opts.rowHeight;
           cellEl.style.left = `${leftOff}px`;
@@ -823,6 +969,37 @@ export class GridRenderer {
 
   getCellEl(rowIndex: number, colIndex: number): HTMLElement | undefined {
     return this._cellMap.get(rowIndex)?.get(colIndex);
+  }
+
+  /**
+   * F2(§4.3 C6): full-width 디테일 패널을 body-absolute 로 그린다(병합 마스터셀 선례
+   * `:783-806` 재사용 — flex flow 밖). host 는 detailApi.getPanelHost() 가 반환하는 영속
+   * div(mount-once, §5) — 이 함수는 그 host 를 새 패널 wrapper 에 appendChild 할 뿐이며,
+   * DOM 이동만 발생하므로(파괴 아님) 재렌더/스크롤 왕복에도 인스턴스 상태가 생존한다.
+   */
+  private _appendDetailPanel(
+    frag: DocumentFragment, rowId: string, top: number, height: number,
+    totalColWidth: number, detailApi: DetailRenderContext
+  ): void {
+    const panel = _el('div', 'og-detail-panel og-detail-panel-intro');
+    panel.dataset.ogRowId = rowId;
+    panel.id = `og-detail-${rowId}`;
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-label', detailApi.ariaLabel);
+    // host isolation(NFR-3): load-bearing 속성 전부 인라인. z-index 는 계약 변수(C6).
+    panel.style.cssText = [
+      'position:absolute;left:0;',
+      `top:${top}px;width:${totalColWidth}px;height:${height}px;`,
+      'box-sizing:border-box;',
+      'overflow-y:auto;overflow-x:auto;',
+      'overscroll-behavior:contain;', // HANMS-07: 중첩 스크롤 체이닝 차단
+      'background:var(--og-detail-bg,#fff);',
+      'border:0;border-bottom:1px solid var(--og-border-color,#e0e0e0);',
+      'z-index:var(--og-z-detail,2);',
+    ].join('');
+    const host = detailApi.getPanelHost(rowId);
+    panel.appendChild(host);
+    frag.appendChild(panel);
   }
 
   destroy(): void {

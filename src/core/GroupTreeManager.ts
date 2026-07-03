@@ -18,6 +18,19 @@ export interface GroupTreeDeps<T extends Record<string, any>> {
   doRender: () => void;
   /** Phase 2: OverrideKernel.getStrategy 주입(슬롯 groupKeyFn 도달용). */
   getStrategy?: <F extends Function>(slot: string, fallback: F) => F;
+  /**
+   * Phase 0(C0.3): FlatRowModel 의 baseline backing 등록점. group/tree 진입 시 자기
+   * flat 배열(`_groupFlatRows`/`_treeFlatRows`)로 교체하고, 해제 시 null(plain 복귀)로 되돌린다.
+   */
+  setFlatBacking: (provider: (() => Array<any>) | null) => void;
+  /**
+   * F2(11_design_F2_v2.md §3.2 R3 "flat 소유 경합" 해소): setFlatBacking 직후 이 값을 조회해
+   * VirtualScroll.setTotalRows/doRenderFull 에 넘긴다. FlatRowModel.count() 는 방금 교체한
+   * backing 위에 DetailManager 가 등록한 detail splice 까지 합성한 "최종" 총 행수이므로,
+   * GroupTreeManager 는 자기 배열 길이(`_groupFlatRows.length` 등)를 직접 쓰지 않는다
+   * (detail 활성 시 그 값은 실제보다 작아 스크롤/렌더 범위가 잘린다).
+   */
+  getFlatCount: () => number;
 }
 
 export class GroupTreeManager<T extends Record<string, any> = any> {
@@ -54,8 +67,8 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
     this._groupExpandedKeys.clear();
     this._isGroupMode = false;
     this._groupFlatRows = [];
-    const n = this._d.getData().length;
-    this._d.getVs()?.setTotalRows(n);
+    this._d.setFlatBacking(null);
+    this._d.getVs()?.setTotalRows(this._d.getFlatCount());
     this._d.doRender();
   }
 
@@ -96,8 +109,10 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
     };
     const groups = buildGroups(data, this._groupFields, this._getSummaryDefs(), this._groupExpandedKeys, getState, this._groupKeyFn());
     this._groupFlatRows = flattenGroups(groups);
-    this._d.getVs()?.setTotalRows(this._groupFlatRows.length);
-    this._d.doRenderFull(this._groupFlatRows.length);
+    this._d.setFlatBacking(() => this._groupFlatRows);
+    const n = this._d.getFlatCount();
+    this._d.getVs()?.setTotalRows(n);
+    this._d.doRenderFull(n);
   }
 
   // ─── 트리 ─────────────────────────────────────────────────
@@ -120,8 +135,8 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
     this._treeRoots  = [];
     this._treeFlatRows = [];
     this._treeExpandedKeys.clear();
-    const n = this._d.getData().length;
-    this._d.getVs()?.setTotalRows(n);
+    this._d.setFlatBacking(null);
+    this._d.getVs()?.setTotalRows(this._d.getFlatCount());
     this._d.doRender();
   }
 
@@ -159,8 +174,10 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
       expandOnLoad: opts.expandOnLoad,
     }, this._treeExpandedKeys);
     this._treeFlatRows = flattenTree(this._treeRoots);
-    this._d.getVs()?.setTotalRows(this._treeFlatRows.length);
-    this._d.doRenderFull(this._treeFlatRows.length);
+    this._d.setFlatBacking(() => this._treeFlatRows);
+    const n = this._d.getFlatCount();
+    this._d.getVs()?.setTotalRows(n);
+    this._d.doRenderFull(n);
   }
 
   // ─── 내부 헬퍼 ───────────────────────────────────────────

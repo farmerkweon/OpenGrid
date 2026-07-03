@@ -25,6 +25,15 @@ export class DataLayer<T extends Record<string, any> = any> {
   // rowId → _data 인덱스 역매핑
   private _idMap: Map<string, number> = new Map();
 
+  /**
+   * rowId → DataLayer 원본(_data) 인덱스 조회.
+   * Phase 0 인프라(FlatRowModel.ts, C0.3 FlatRowRef.dataIndex) 해소 전용 — _idMap 을
+   * 직접 노출하지 않고 단건 조회만 허용한다. 없으면 undefined(삭제된 행 등).
+   */
+  getDataIndexByRowId(rowId: string): number | undefined {
+    return this._idMap.get(rowId);
+  }
+
   // F3: 찾기 바 전용 크로스-필드 OR 필터
   private _findQuery:  string   = '';
   private _findFields: string[] = [];
@@ -179,6 +188,40 @@ export class DataLayer<T extends Record<string, any> = any> {
 
   getCellValue(rowIndex: number, field: string): any {
     return this.getRowByIndex(rowIndex)?.[field];
+  }
+
+  // ─── F3(수식) stable-id 기반 접근자 ────────────────────
+  // FormulaGridAccessor(RecalcCoordinator 주입, C0.5 stable-id 앵커) 구현에 쓰인다.
+  // 정렬/필터로 흔들리는 displayIndex 가 아니라 rowId 로 직접 조회하므로 이 그룹의
+  // 메서드는 applySort/applyFilter/moveRow 와 무관하게 항상 같은 논리 레코드를 가리킨다.
+
+  /** rowId 가 아직 존재(soft-delete 제외)하는지(F3-R28 삭제 무효화 판정용). */
+  hasRow(rowId: string): boolean {
+    const idx = this._idMap.get(rowId);
+    if (idx === undefined) return false;
+    return this._meta.get(rowId)?.state !== 'removed';
+  }
+
+  /** rowId → 원본 행(soft-delete 된 행은 undefined, F3-R28). */
+  getRowById(rowId: string): T | undefined {
+    if (!this.hasRow(rowId)) return undefined;
+    const idx = this._idMap.get(rowId)!;
+    return this._data[idx];
+  }
+
+  getCellValueByRowId(rowId: string, field: string): any {
+    return this.getRowById(rowId)?.[field];
+  }
+
+  /**
+   * 수식 재계산 결과 기록(§4.2/C2.2) — 일반 updateCell 과 달리 meta.state 를 건드리지
+   * 않는다(edited 오염 방지) 및 dataChange 를 발화하지 않는다(호출부가 배치 종료 후
+   * formulaRecalc 1회로 표면화할 책임을 진다).
+   */
+  setComputedValueByRowId(rowId: string, field: string, value: any): void {
+    const idx = this._idMap.get(rowId);
+    if (idx === undefined) return;
+    (this._data[idx] as any)[field] = value;
   }
 
   // ─── 변경 추적 ────────────────────────────────────────

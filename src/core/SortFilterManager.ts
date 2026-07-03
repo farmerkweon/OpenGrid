@@ -15,6 +15,8 @@ export interface SortFilterDeps<T extends Record<string, any>> {
   doRender: () => void;
   announce: (msg: string) => void;
   emit: (event: string, ...args: any[]) => void;
+  /** C0.5/§2.5: 정렬/필터 후 F1 범위 선택을 rowId 집합 기준으로 재투영(해제 아님). */
+  onReproject?: () => void;
 }
 
 export class SortFilterManager<T extends Record<string, any> = any> {
@@ -47,6 +49,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
       this._sortList.push({ field, dir: 'asc' });
     }
     this._d.getData().applySort(this._sortList);
+    this._d.onReproject?.();
     this._d.renderHeader();
     this._d.doRender();
     const sortedItem = this._sortList.find(s => s.field === field);
@@ -66,6 +69,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
       if (!this._d.getOptions().multiSort) this._sortList = this._sortList.slice(-1);
     }
     this._d.getData().applySort(this._sortList);
+    this._d.onReproject?.();
     this._d.renderHeader();
     this._d.doRender();
     this._d.emit('sortChange', { sortList: this._sortList });
@@ -74,6 +78,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
   resetSort(): void {
     this._sortList = [];
     this._d.getData().applySort([]);
+    this._d.onReproject?.();
     this._d.renderHeader();
     this._d.doRender();
   }
@@ -81,6 +86,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
   initSort(sortList: SortItem[]): void {
     this._sortList = [...sortList];
     this._d.getData().applySort(this._sortList);
+    this._d.onReproject?.();
   }
 
   getSortState(): SortItem[] { return [...this._sortList]; }
@@ -114,6 +120,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     const data = this._d.getData();
     data.setFindFilter(this._d.getFindFilter(), this._d.getColLayout().visibleLeaves.map(c => c.field));
     data.applyFilter(this._filters);
+    this._d.onReproject?.();
     const n = data.rowCount;
     this._d.getVs()?.setTotalRows(n);
     this._d.getPagination()?.setTotalRows(n);

@@ -1,5 +1,5 @@
 /* ============================================================
-   OPEN_GRID — 12가지 테마 정의
+   OPEN_GRID — 15가지 테마 정의
    사용법: <div data-og-theme="ocean"> 또는 grid.setTheme('ocean')
    ============================================================ */
 
@@ -628,3 +628,98 @@
   --og-filter-bg:              #ffffff;
   --og-filter-color:           #0f172a;
 }
+
+/* ──────────────────────────────────────────────────────────
+   15. stitch  (스티치 — 리넨/크라프트지 + 자수실 핸드크래프트)
+   천에 박음질한 느낌: 대시(점선) 보더를 실땀처럼 사용하고,
+   본문 CSS 변수(--og-row-bg 등)에 아주 옅은 능직(綾織) 그라디언트를
+   중첩해 리넨 결을 표현한다(별도 이미지 없이 순수 CSS gradient).
+   ────────────────────────────────────────────────────────── */
+[data-og-theme="stitch"] {
+  /* 내부 헬퍼: 능직(리넨) 텍스처 — 공식 변수 계약 밖의 private 변수.
+     8px 타일, 4~5% 불투명도로 배경색 위에 아주 은은하게만 겹친다. */
+  --og-stitch-weave:
+    linear-gradient(45deg,  rgba(124,98,64,0.05) 25%, transparent 25%, transparent 75%, rgba(124,98,64,0.05) 75%) 0 0/8px 8px,
+    linear-gradient(-45deg, rgba(124,98,64,0.05) 25%, transparent 25%, transparent 75%, rgba(124,98,64,0.05) 75%) 4px 4px/8px 8px;
+
+  --og-primary:            #a8342a;  /* 자수 레드 (embroidery red) */
+  --og-primary-light:      #f3e0d3;
+  --og-primary-dark:       #7c2620;
+  --og-header-bg:          var(--og-stitch-weave), #f1e8d4;
+  --og-header-color:       #3e2f22;
+  --og-header-hover-bg:    #e4d6ba;
+  --og-header-sort-color:  #a8342a;
+  --og-row-bg:             var(--og-stitch-weave), #faf5e9;
+  --og-row-alt-bg:         var(--og-stitch-weave), #efe6d2;
+  --og-row-hover-bg:       #ece0c4;
+  --og-row-color:          #3e2f22;
+  --og-row-selected-bg:    #34415e;  /* 인디고 실 */
+  --og-row-selected-color: #fbf4e4;
+  --og-row-added-bg:       #e3ead4;  /* 모스그린 실 */
+  --og-row-added-color:    #3b5a2e;
+  --og-row-edited-bg:      #f5e7c4;  /* 머스터드 실 */
+  --og-row-edited-color:   #7a5209;
+  --og-row-removed-bg:     #f0dad6;  /* 러스트 실 */
+  --og-row-removed-color:  #6e2a22;
+  --og-group-bg:           #eadfc0;
+  --og-group-color:        #3e2f22;
+  --og-group-border:       #c9a354;
+  --og-tree-toggle-color:  #34415e;
+  --og-tree-line-color:         #d8c7a0;
+  --og-tree-folder-color:       #b9822b;  /* 열림: 머스터드 */
+  --og-tree-folder-closed-color: #7c6b4e;  /* 닫힘: 무광 타우프 */
+  --og-tree-file-color:    #8a7b63;
+  --og-tree-hover-bg:      rgba(168,52,42,0.07);
+  --og-tree-indent-guide:  #e4d7b8;
+  --og-merge-bg:           #f6ecc9;
+  --og-merge-border:       #b9822b;
+  --og-border-color:       #c7b48c;  /* 실땀(스티치) 색 — 대시 보더에 사용 */
+  --og-focus-border:       #a8342a;
+  --og-pagination-bg:      #f1e8d4;
+  --og-pagination-btn-bg:  #faf5e9;
+  --og-pagination-btn-color:#3e2f22;
+  --og-input-bg:           #faf5e9;
+  --og-input-color:        #3e2f22;
+  --og-input-border:       #a8342a;
+  --og-filter-bg:          #f1e8d4;
+  --og-filter-color:       #3e2f22;
+  --og-spinner-track:      rgba(62,47,34,0.15);
+}
+/* 핵심 라인만 절제해서 대시(점선) 처리 — 셀 세로줄은 과해지므로 손대지 않는다.
+   각 규칙은 base.css 원본 선언이 이미 해당 변만 명시적으로 지정해둔 곳만 override
+   하므로(예: .og-cell은 border-right만 선언되어 있어 대상에서 제외) 다른 테마의
+   보더 렌더링에는 영향이 없다.
+
+   ⚠ 셀렉터 특정성 주의 (실브라우저 버그 수정, 2026-07-03):
+   OpenGrid는 data-og-theme 속성을 그리드 루트 .og-container 자기 자신에 붙인다
+   (OpenGrid.ts _mount/setTheme). 따라서:
+   - 컨테이너 자신: `[data-og-theme="stitch"] .og-container`(자손 결합자)는
+     "속성을 가진 조상의 자손"을 찾으므로 속성이 걸린 요소 자기 자신에는 매치되지
+     않는다 → 컴파운드 셀렉터 `.og-container[data-og-theme="stitch"]`(공백 없음)로
+     교체.
+   - 자손 요소(.og-header 등)는 구조상 base.css의 단일 클래스 셀렉터(특정성 0,1,0)
+     보다 여기 셀렉터가 항상 높아야 한다. `.og-container[data-og-theme="stitch"] .og-x`
+     (특정성 0,3,0)로 접두를 강화한다.
+   - !important가 필요한 대상 (컨테이너/헤더/헤더셀/그룹행): "host isolation" 설계
+     (GridRenderer.ts:81 `_header.style.cssText`의 border-bottom, :271 헤더셀
+     `_style()`의 borderBottom, OpenGrid.ts:393 `_container.style.border`)로 인해
+     이 요소들은 border를 **인라인 style 속성**으로 직접 갖는다. 인라인 스타일은
+     외부 스타일시트 규칙보다 항상 우선하므로(특정성을 아무리 올려도 소용없음),
+     여기서는 !important 없이는 절대 이길 수 없다 — 실측(Playwright computed
+     style)으로 확인. og-group-row는 추가로 base.css 1603행에 이미
+     `border-bottom: ... !important` 선언(og-group-row 3중 정의 중 마지막)이
+     있어 어차피 !important가 필요했다.
+   - .og-row 는 인라인 border가 없고(base.css 클래스 선언만 있음) 이미 특정성
+     우위만으로 정상 동작함을 실측 확인 → !important 불필요, 최소 적용 유지.
+   - .og-footer 는 현재 코어 렌더링 코드에 이 클래스로 생성되는 실 DOM 요소가
+     없어(FooterManager 는 og-footer-bar 사용) 실브라우저 검증 대상에서 제외
+     되었으나, base.css 선언과의 정합성을 위해 셀렉터는 유지한다(인라인 style
+     충돌 사례가 없으므로 !important 불필요). */
+.og-container[data-og-theme="stitch"]                 { border-style: dashed !important; }
+.og-container[data-og-theme="stitch"] .og-header      { border-bottom-style: dashed !important; }
+.og-container[data-og-theme="stitch"] .og-header-cell { border-bottom-style: dashed !important; }
+.og-container[data-og-theme="stitch"] .og-row          { border-bottom-style: dashed; }
+.og-container[data-og-theme="stitch"] .og-group-row    { border-bottom-style: dashed !important; }
+.og-container[data-og-theme="stitch"] .og-footer       { border-top-style: dashed; }
+[data-og-theme="stitch"] .og-empty-message { color: #6b5d46; }
+[data-og-theme="stitch"] .og-loading-mask  { background: rgba(250,245,233,0.80); }

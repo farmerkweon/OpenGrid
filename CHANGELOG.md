@@ -2,6 +2,30 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.1.0] - 2026-07-03
+
+### Added
+- **범위 선택 + 채우기 (F1)** — 셀 범위를 드래그로 선택하고 복제/시리즈 채우기, 클립보드(TSV) 복사·붙여넣기,
+  키보드 채우기(Ctrl+D/R)를 지원한다. `rangeSelection` 옵션, `fillRange`/`getActiveRange`/`getRangeValues` API.
+- **마스터/디테일 (F2)** — 행을 펼쳐 상세 패널(HTML renderer 또는 서브그리드)을 표시한다. `masterDetail` 옵션,
+  `expandRow`/`collapseRow`/`getDetailInstance` API, `rowExpand` 이벤트, 중첩 깊이 제한.
+- **수식 셀 (F3)** — 셀에 `=B1*C1`, `=SUM(C1:C10)` 같은 수식을 넣어 자동 계산한다. `[field]`/A1 참조 공존,
+  19개 함수, 정밀 산술, 에러 코드(#REF/#VALUE/#CYCLE 등), 정렬·필터·행삭제 시 안정적 재계산.
+  `formula` 옵션, `setCellFormula`/`getCellFormula` API, `formulaRecalc`(대량 재계산 시 `large` 신호) 이벤트.
+- **그리드 데이터 통합 차트 (F4)** — 그리드 데이터로 bar/line 차트를 호출 한 번에 그린다. 5종 소스
+  (columns/checked/selection/all/range), LTTB 다운샘플 + 샘플링 배지, 라이브 갱신(데이터·수식 편집 반영),
+  색약 대응 팔레트, 접근성(role=img·시각숨김 데이터표·키보드 순회·실 button 범례), 외부 런타임 의존성 0의
+  내장 canvas 렌더러. `chart` 옵션, `createChart`/`getCharts`/`destroyCharts` API.
+- **stitch 테마** — 리넨/크라프트 색감에 실땀(점선) 보더를 입힌 핸드크래프트 스타일 테마. 12개 → 13개 내장 테마.
+- **`fallbackViewportHeight` 옵션 (옵트인 안전장치)** — 그리드 컨테이너에 확정 높이가 없어 대량 데이터에서
+  전 행이 DOM 렌더되는 것을 막는다. 기본 OFF(기존 동작 완전 불변)이며, 컨테이너가 스크롤 제약 없이 전
+  콘텐츠를 담는 "언바운드" 상태를 감지했을 때만 가상 스크롤 뷰포트를 이 값(px)으로 클램프한다.
+  (1순위 권장은 여전히 그리드 컨테이너에 확정 높이를 주는 것.)
+
+### Fixed
+- 통합 차트(F4) 코어 리뷰 반영 — 사용자 지정 `size` 좌표가 히트테스트/툴팁에 반영되지 않던 문제,
+  라이브 재렌더 시 범례 포커스 유실, 컨테이너 리사이즈/DPR 변경 시 재렌더 부재 등 12건 수정.
+
 ## [1.0.8] - 2026-07-01
 
 ### Fixed

@@ -30,9 +30,28 @@ export type {
   TriggerContext,
   TriggerHandler,
   TriggerEvent,
+  // Phase 0 인프라(C0.3/C0.4)
+  CellRange,
+  FlatRowRef,
 } from './core/types.js';
 export type {
   XmlParseOptions,
   XmlStringifyOptions,
   SapParseResult,
 } from './core/XmlConverter.js';
+// F4: 그리드 데이터 통합 차트(11_design_F4_v2.md §6)
+export type {
+  ChartType,
+  ChartSource,
+  ChartSeriesSpec,
+  ChartSeries,
+  ChartDataModel,
+  ChartConfig,
+  ChartInstance,
+  ChartGlobalOptions,
+  ChartPoint,
+  ChartAdapter,
+  ChartRenderSpec,
+  ChartTheme,
+  A11yTableModel,
+} from './core/chart/types.js';

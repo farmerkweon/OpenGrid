@@ -169,6 +169,47 @@ describe('Sprint 39 — aria-live 알림', () => {
   });
 });
 
+// ─── Phase 0(C8.1) — 공용 aria-live 리전 인프라 ─────────────
+describe('Phase 0 — 공용 aria-live 리전(C8.1)', () => {
+  it('그리드 컨테이너 내부(그리드 루트)에 부착된다', () => {
+    const c = makeContainer();
+    makeGrid(c);
+    const region = c.querySelector('.og-live-region');
+    expect(region).not.toBeNull();
+    expect(c.contains(region)).toBe(true);
+  });
+
+  it('시각 숨김이 클래스가 아니라 인라인 스타일로 강제된다(호스트 CSS 격리)', () => {
+    const c = makeContainer();
+    makeGrid(c);
+    const region = c.querySelector('.og-live-region') as HTMLElement;
+    // 호스트 페이지가 .og-live-region 클래스 규칙을 깨뜨려도(예: 전역 리셋 CSS) 인라인
+    // 스타일은 최고 특이도로 살아남는다 — baseline §Q5 하드 제약.
+    expect(region.style.position).toBe('absolute');
+    expect(region.style.width).toBe('1px');
+    expect(region.style.height).toBe('1px');
+    expect(region.style.overflow).toBe('hidden');
+  });
+
+  it('announce() 로 표면화된 메시지가 리전 텍스트에 반영된다(writeCells skip 경유)', async () => {
+    vi.useFakeTimers();
+    try {
+      const c = makeContainer();
+      const g = makeGrid(c);
+      g.setData(sampleData);
+      g.groupBy(['dept']); // 부서 3종 전부 유니크 → 전부 접힌 그룹 헤더만 존재(flat index 0 = group)
+
+      g.writeCells([{ rowIndex: 0, field: 'salary', value: 1 }]); // group 헤더 대상 → skip → announce
+
+      vi.advanceTimersByTime(60); // _announce 는 50ms 뒤 textContent 를 채운다
+      const region = c.querySelector('.og-live-region') as HTMLElement;
+      expect(region.textContent).toContain('건너뛰');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 // ─── setFilterSelect API ────────────────────────────────────
 describe('Sprint 39 — setFilterSelect API', () => {
   it('setFilterSelect(config) 호출 시 패널이 컨테이너에 삽입됨', () => {

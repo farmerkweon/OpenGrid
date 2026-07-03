@@ -13,6 +13,8 @@ export interface RenderContext<T = any> {
   isSelected: boolean;
   rowState: 'none' | 'added' | 'edited' | 'removed';
   displayValue?: string | null;
+  /** C7(15_cross_contracts.md/F3-R14): 이 셀에 F3 셀 수식이 있으면 true — ColumnDef.formula 재평가를 skip. */
+  hasCellFormula?: boolean;
 }
 
 export interface CellRenderer {
@@ -44,6 +46,9 @@ export function setDisplayFormatterResolver(
  * formula가 없으면 null 반환 → 기존 ctx.value 사용.
  */
 export function resolveFormula(ctx: RenderContext): string | null {
+  // C7(F3-R14): 이 셀에 셀 수식(F3)이 저장돼 있으면 컬럼 수식(ColumnDef.formula) 재평가를
+  // skip 하고 저장된 계산값(ctx.value, setComputedValue 로 이미 기록됨)을 그대로 쓴다.
+  if (ctx.hasCellFormula) return null;
   const col = ctx.column;
   if (!col.formula) return null;
   const prec = col.formulaPrecision ?? 30;

@@ -122,11 +122,156 @@ export interface SelectionEvent<T = any> {
   cells?: CellRange[];
 }
 
+/**
+ * CellRangeSemantics — CellRange 의미 규범(C0.4, 15_cross_contracts.md). 소유자 = F1(범위 선택).
+ * F3(수식 ref)·F4(차트 소스)는 이 의미로만 CellRange 를 소비한다.
+ *  - startRow/endRow : flat/visual index (C0.2 — FlatRowModel 이 다루는 화면 표시 순서).
+ *    group/tree pseudo-row, (F2 도입 후) detail head/filler 도 포함한 인덱스 공간이며,
+ *    display index(정렬/필터만 반영, group/tree 제외)와 다르다.
+ *  - startCol/endCol : `ColumnLayout.visibleLeaves` 인덱스(숨김 컬럼 제외). 숨김 컬럼은
+ *    좌표를 흔들지 않되, 언하이드 시 재렌더로 좌표 표시(A1 등)가 갱신된다.
+ *  - 선택 자체의 영속 정체성은 이 인덱스가 아니라 stable (rowId × field) 앵커로 저장한다
+ *    (C0.5) — CellRange 는 어디까지나 "현재 화면에 투영된" 사각형 표현이다.
+ */
 export interface CellRange {
   startRow: number;
   endRow: number;
   startCol: number;
   endCol: number;
+}
+
+// ─── F1: 범위 선택 + 채우기 핸들 옵션/이벤트(11_design_F1_v2.md §6, C5) ────
+export interface RangeSelectionOptions {
+  /** 기본 selection==='cells' 와 동치 */
+  enabled?: boolean;
+  /** 기본 true — 핸들 표시/드래그 */
+  fillHandle?: boolean;
+  /** 기본 false — Ctrl 멀티 rect(Full, 미구현) */
+  multiRange?: boolean;
+  /** 기본 24(px) — autoscroll 밴드 폭 */
+  autoScrollEdge?: number;
+  /** 기본 true — false 면 항상 copy(시리즈 감지 비활성) */
+  seriesFill?: boolean;
+  /** 기본 false — 그룹/트리 모드 범위선택(MVP 비활성) */
+  enabledInTreeGroup?: boolean;
+  /** 기본 false — 수식 대상 덮어쓰기(C3.2 opt-in) */
+  fillOverwriteFormula?: boolean;
+}
+
+export interface RangeFillEvent {
+  source: CellRange;
+  target: CellRange;
+  mode: 'copy' | 'series';
+  written: Array<{ rowIndex: number; field: string; oldValue: any; newValue: any }>;
+  skippedFormula?: number;
+  /** before 훅에서 true 로 바꾸면 채우기 취소(현재 배선은 이벤트 emit 뒤 즉시 확인) */
+  cancel?: boolean;
+}
+
+export interface RangeCopyEvent {
+  range: CellRange;
+  text: string;
+}
+
+export interface RangeChangeEvent {
+  range: CellRange | null;
+}
+
+// ─── F3: 셀 수식 옵션/이벤트(11_design_F3_v2.md §8, 15_cross_contracts.md C5) ─────
+import type { FormulaErrorCode } from './formula/types.js';
+export type { FormulaErrorCode } from './formula/types.js';
+
+/** F3 옵션(C5.1 단일 중첩 — 최상위 flat 키 금지). */
+export interface FormulaOptions {
+  /** 셀 수식 인-셀 '=' 편집 자동 인식 on(기본 false — 회귀 0). setCellFormula API 는 이 값과 무관하게 항상 동작. */
+  enabled?: boolean;
+  /** 참조 정규화 정책(기본 'stable', §3.2). */
+  refMode?: 'stable' | 'relative';
+  /** 나눗셈 소수 자리(기본 30, FormulaEngine 계승). */
+  divisionPrecision?: number;
+  /** 수식 바 표시(P1, 기본 false — 미구현). */
+  formulaBar?: boolean;
+  /** 수식 셀 마커(기본 true — HANMS-09/R-FORMULA-MARKER). */
+  cellMarker?: boolean;
+  /** 편집 시 자동 재계산(기본 true). */
+  autoRecalc?: boolean;
+  onFormulaChange?: (e: FormulaChangeEvent) => void;
+  onFormulaRecalc?: (e: FormulaRecalcEvent) => void;
+  onFormulaError?: (e: FormulaErrorEvent) => void;
+}
+
+export interface FormulaChangeEvent {
+  rowIndex: number;
+  field: string;
+  formula: string;
+  oldFormula: string | null;
+}
+
+export interface FormulaRecalcEvent {
+  changed: string[];
+  cycles: number;
+  ms: number;
+  /** Spike-A §8 교훈: 폐포가 임계(500) 초과 시 true(가이드 문서화/모니터링용). */
+  large: boolean;
+}
+
+export interface FormulaErrorEvent {
+  rowIndex: number;
+  field: string;
+  error: FormulaErrorCode;
+}
+
+export type { RangeStats } from './range/RangeQuery.js';
+import type { RangeStats as _RangeStats } from './range/RangeQuery.js';
+
+// ─── F2: 마스터/디테일 옵션/이벤트(11_design_F2_v2.md §6, 15_cross_contracts.md C5) ─────
+/** masterDetail.renderer 3번째 인자(§6.1). */
+export interface DetailRenderApi<T = any> {
+  grid: OpenGridInstance<T>;
+  rowId: string;
+  /** 현재 그리드의 중첩 깊이(CON-4). 0 = 최상위. */
+  depth: number;
+  collapse: () => void;
+  /** 패널 재측정(Phase2 auto 대비 자리 — MVP 는 no-op 에 가까움). */
+  refresh: () => void;
+}
+
+/** F2 옵션(C5.1 단일 중첩 — 구 flat `detail*`/`masterDetail:boolean` 은 이 안으로 접힘). */
+export interface MasterDetailOptions<T = any> {
+  /** 기능 on/off. 기본 false. */
+  enabled?: boolean;
+  /** 임의 HTML/컴포넌트를 host 에 주입(§5). subgridOptions 와 동시 지정 시 이 쪽이 우선. */
+  renderer?: (row: T, host: HTMLElement, api: DetailRenderApi<T>) => void | HTMLElement;
+  /** 패널 높이(px). 기본 200. MVP 는 rowHeight 배수로 양자화(EC-10). */
+  height?: number;
+  /**
+   * 'fixed'(기본)만 MVP 에서 동작. 'auto' 는 Spike-B(C12.2) 통과 전 미공개 — 지정해도
+   * DetailManager 가 'fixed' 로 무시 처리하고 1회 console.warn 한다.
+   */
+  heightMode?: 'fixed' | 'auto';
+  /** 기본 true. false = 아코디언(펼침 1개만 허용). */
+  expandMultiple?: boolean;
+  /** 기본 false. true 면 collapse 해도 host/instance 캐시를 유지(재펼침 시 재생성 생략). */
+  cache?: boolean;
+  /** 어포던스 위치. 기본 'expander-col'(전용 컬럼). */
+  toggle?: 'expander-col' | 'first-cell';
+  /** 패널 role=region 의 aria-label. 기본 '상세 내용'. */
+  ariaLabel?: string;
+  /** 중첩 깊이 한계(CON-4/FR-10). 기본 2. */
+  maxDepth?: number;
+  /** 지정 시 height 대신 이 값을 슬롯수(정수, 최소 1)로 직접 사용. */
+  detailRowCount?: number;
+  /** renderer 미지정 시: 자식 OpenGrid 를 이 옵션으로 자동 생성(§5 ②). */
+  subgridOptions?: GridOptions<any>;
+}
+
+/** rowExpand/rowCollapse payload(C5.2, §6.3). */
+export interface RowExpandEvent<T = any> {
+  /** flat/visual index(C0.2). */
+  rowIndex: number;
+  rowId: string;
+  row: T;
+  host: HTMLElement | null;
 }
 
 // ─── 컬럼 정의 ────────────────────────────────────────────
@@ -340,6 +485,17 @@ export interface GridOptions<T = any> {
   autoHeight?: boolean;
   fillWidth?: boolean;
   defaultColumnWidth?: number;
+  /**
+   * 뷰포트 안전장치(옵트인, 기본 undefined = OFF = 기존 동작 완전 불변).
+   * 호스트가 그리드 컨테이너 조상 체인에 확정 높이(definite height)를 주지 않으면
+   * 내부 스페이서(totalRows×rowHeight)가 컨테이너를 전체 콘텐츠 크기로 부풀리고,
+   * ResizeObserver 되먹임으로 windowing 이 무력화되어 전 행이 DOM 렌더되는 폭주가 발생한다
+   * (대량 데이터일수록 재앙적). 이 값을 지정하면, 컨테이너가 전 콘텐츠를 다 담는 "언바운드"
+   * 상태로 감지될 때에 한해 윈도잉 뷰포트 높이를 이 값(px)으로 클램프해 폭주를 차단한다.
+   * 정상적으로 확정 높이가 있는 바운드 컨테이너에는 영향이 없다.
+   * 1순위 권장은 컨테이너/그리드에 확정 height 를 주는 것이며, 이 옵션은 안전망이다.
+   */
+  fallbackViewportHeight?: number;
 
   // 편집
   editable?: boolean;
@@ -350,6 +506,14 @@ export interface GridOptions<T = any> {
   // 선택
   selection?: SelectionMode;
   clipboard?: boolean;
+  /** F1: 범위 선택 + 채우기 핸들(C5.1 단일 중첩 — 최상위 flat 키 금지). */
+  rangeSelection?: RangeSelectionOptions;
+  /** F3: 셀 수식(C5.1 단일 중첩). */
+  formula?: FormulaOptions;
+  /** F2: 마스터/디테일(C5.1 단일 중첩). */
+  masterDetail?: MasterDetailOptions<T>;
+  /** F4: 그리드 데이터 통합 차트(C5.1 단일 중첩). 타입은 chart/types 순환-안전 type-only import. */
+  chart?: import('./chart/types.js').ChartGlobalOptions;
 
   // 정렬/필터
   sortable?: boolean;
@@ -431,6 +595,15 @@ export interface GridOptions<T = any> {
   onEditBefore?: (e: EditEvent<T>) => boolean;
   onRowClick?: (e: RowEvent<T>) => void;
   onSelectionChange?: (e: SelectionEvent<T>) => void;
+  /** F1: 범위 rects 변경 시(C4, F4 라이브 소비) */
+  onRangeChange?: (e: RangeChangeEvent) => void;
+  /** F1: 채우기 커밋 결과(§6.3) */
+  onRangeFill?: (e: RangeFillEvent) => void;
+  /** F1: 범위 복사 시(§6.3) */
+  onRangeCopy?: (e: RangeCopyEvent) => void;
+  /** F2: 행 상세 패널 펼침/접힘 시(C5.1 on* 버킷). */
+  onRowExpand?: (e: RowExpandEvent<T>) => void;
+  onRowCollapse?: (e: RowExpandEvent<T>) => void;
   onSortChange?: (e: SortEvent) => void;
   onFilterChange?: (e: FilterEvent) => void;
   onScroll?: (e: ScrollEvent) => void;
@@ -502,6 +675,11 @@ export type CellSerializerFn = (value: any, col: any, row: any) => any;
 export type GroupKeyFn = (row: any, remainingFields: string[]) => any;
 /** 집계 연산. null 반환 시 기본 SUM/AVG/COUNT/MAX/MIN 분기로 폴백. */
 export type SummaryOpFn = (op: string, nums: any[], field: string) => number | null;
+/**
+ * F1 채우기 시리즈 커스텀 리졸버 슬롯(C5.3, 예약). 사용자가 날짜/커스텀 시리즈를 주입할 수 있다.
+ * ⚠️ 슬롯 등록 경로만 확보되어 있으며, RangeSelectionManager/FillEngine 소비 배선은 F1-b(Full) 대상.
+ */
+export type FillSeriesResolverFn = (sourceLine: any[], k: number, axisSign: 1 | -1) => any;
 
 /** 슬롯명 → 시그니처 매핑. */
 export interface StrategyMap {
@@ -511,6 +689,7 @@ export interface StrategyMap {
   cellSerializer: CellSerializerFn;
   groupKeyFn: GroupKeyFn;
   summaryOp: SummaryOpFn;
+  fillSeriesResolver: FillSeriesResolverFn;
 }
 
 /** 호출가능 + .strategy 멤버를 가진 하이브리드 override API. */
@@ -559,6 +738,19 @@ export interface OpenGridInstance<T = any> {
   writeCell(rowIndex: number, field: string, value: any): void;
   getRowAt(rowIndex: number): T;
 
+  // ── Phase 0 인프라(C0.3/C2.1) ────────────────────────────
+  /** flat/visual index ↔ data 리졸버. F1/F3/F4 는 이 모델을 경유해 대상을 해소한다. */
+  getFlatRowModel(): import('./FlatRowModel.js').FlatRowModel;
+  /** 배치 쓰기 시작 — 이후 writeCell 들의 render/dataChange 를 지연·coalesce(reentrant). */
+  beginBatch(): void;
+  /** 배치 종료 — 배치 중 쓰기가 있었으면 1회 render + 1회 coalesced dataChange. */
+  endBatch(): void;
+  /**
+   * beginBatch+루프+endBatch 래퍼. rowIndex 는 flat index — kind!=='data' 대상(group/tree/
+   * detail 의사행)은 쓰기 전에 skip 한다(C0.3 쓰기 안전). 반환값 = 건너뛴 셀 수.
+   */
+  writeCells(patches: Array<{ rowIndex: number; field: string; value: any }>): number;
+
   // 변경 추적
   getChanges(): { added: T[]; edited: T[]; removed: T[] };
   getEditedRows(): T[];
@@ -593,6 +785,56 @@ export interface OpenGridInstance<T = any> {
   getActiveRow(): number;
   activate(index: number): void;
   deselect(): void;
+
+  // ── F1: 범위 선택 + 채우기 핸들(11_design_F1_v2.md §6.2, C4) ────────────
+  /** 정규화 rects(없으면 []). MVP 는 길이 ≤1. */
+  getRangeSelection(): CellRange[];
+  /** = getRangeSelection()[0] ?? null(C4, F4 소비). */
+  getActiveRange(): CellRange | null;
+  setRangeSelection(range: CellRange | CellRange[]): void;
+  clearRangeSelection(): void;
+  /** 현재 활성 범위의 값 2D 배열(FR-6, F4 필수 계약). */
+  getRangeValues(): any[][];
+  /** 현재 활성 범위 숫자 셀의 OGDecimal 기반 통계(FR-6, F4 필수 계약). */
+  getRangeStats(): _RangeStats | null;
+  /** source→target 채우기(배치 경유, C2). axis 는 두 rect 상대 위치로 추론. */
+  fillRange(source: CellRange, target: CellRange, mode?: 'copy' | 'series'): void;
+
+  // ── F4: 그리드 데이터 통합 차트(11_design_F4_v2.md §6, C5) ────────────
+  createChart(config: import('./chart/types.js').ChartConfig): import('./chart/types.js').ChartInstance;
+  getCharts(): import('./chart/types.js').ChartInstance[];
+  destroyCharts(): void;
+
+  // ── F3: 셀 수식(11_design_F3_v2.md §8.2, C0/C2/C3) ────────────────────
+  /** "=A1+B2" 형태. rowIndex 는 flat(C0), 내부 즉시 stable rowId 로 정규화. */
+  setCellFormula(rowIndex: number, field: string, formula: string): void;
+  getCellFormula(rowIndex: number, field: string): string | null;
+  hasCellFormula(rowIndex: number, field: string): boolean;
+  /** 수식 제거(값은 유지). */
+  clearCellFormula(rowIndex: number, field: string): void;
+  getCellError(rowIndex: number, field: string): FormulaErrorCode | null;
+  /** 디버깅용 — 이 셀을 참조하는(종속) 셀들. */
+  getDependents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }>;
+  /** 디버깅용 — 이 셀이 참조하는(선행) 셀들. */
+  getPrecedents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }>;
+  /** 전체 수식 위상 재계산(setData/컬럼 변경 등). */
+  recalculate(): void;
+  /** 단일 셀 + 종속 폐포만 재계산. */
+  recalculateCell(rowIndex: number, field: string): void;
+  /** C3(F1 fill 전용): srcRowId/srcField 수식의 상대축만 dRow/dCol 오프셋한 새 수식 원문. */
+  offsetFormula(srcRowId: string, srcField: string, dRow: number, dCol: number): string;
+
+  // ── F2: 마스터/디테일(11_design_F2_v2.md §6.2, C5.4) ──────────────────
+  /** rowRef 는 flat/visual index(C0.2) 또는 stable id. maxDepth 초과 시 거부(announce, FR-10). */
+  expandRow(rowRef: number | { id: string }): void;
+  collapseRow(rowRef: number | { id: string }): void;
+  toggleRow(rowRef: number | { id: string }): void;
+  isRowExpanded(rowRef: number | { id: string }): boolean;
+  collapseAllDetails(): void;
+  /** 펼쳐진 적 없으면 undefined. renderer 반환값 또는 자동 생성 서브그리드 인스턴스. */
+  getDetailInstance<D = any>(rowRef: number | { id: string }): D | undefined;
+  /** FR-11: 컬럼/호스트 리사이즈 후 열린 패널 폭을 강제 재동기(보통은 재렌더가 자동 처리). */
+  resyncPanelWidths(): void;
 
   // 체크박스
   getChecked(): Array<{ row: T; rowIndex: number }>;
@@ -722,6 +964,8 @@ export interface ContextMenuItem {
 
 // ─── Sprint 38: 캐스케이딩 필터 셀렉트 ─────────────────────
 export type { FilterSelectColumn, FilterSelectConfig } from './FilterSelect.js';
+// Phase 0(C0.3): FlatRowModel 리졸버 참조 타입 공개.
+export type { FlatRowRef } from './FlatRowModel.js';
 
 // ─── F2: 워크시트 ─────────────────────────────────────────
 export interface WorksheetDef<T = any> {

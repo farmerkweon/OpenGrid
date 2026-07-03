@@ -3,6 +3,19 @@ import type { ColumnLayout } from './ColumnLayout.js';
 import type { CellEditManager } from './CellEditManager.js';
 import type { RowManager } from './RowManager.js';
 
+/** F1 범위 선택 배선 훅(M-3/M-4/M-5) — RangeSelectionManager 가 그대로 구현한다. */
+export interface RangeKeyboardHooks {
+  isEnabled(): boolean;
+  hasSelection(): boolean;
+  extendFocus(dir: 'up' | 'down' | 'left' | 'right'): void;
+  ctrlFill(axis: 'down' | 'right'): void;
+  clear(): void;
+  /** 범위 없으면 null(호출측이 기존 focusCell/selectedRows 경로로 폴백) */
+  copyText(): string | null;
+  /** true = 배치 경유로 처리함, false = 범위 없음(폴백) */
+  pasteText(text: string): boolean;
+}
+
 export interface KeyboardDeps<T extends Record<string, any>> {
   getEditMgr: () => CellEditManager<T>;
   getRowMgr: () => RowManager<T>;
@@ -16,6 +29,9 @@ export interface KeyboardDeps<T extends Record<string, any>> {
   emit: (event: string, ...args: any[]) => void;
   visRange: () => [number, number];
   handleCellKeyEvt: (eventName: 'cellKeyDown' | 'cellKeyUp' | 'cellKeyPress', e: KeyboardEvent) => void;
+  /** M-4: 붙여넣기 쓰기 퍼널을 writeCell(배치)로 교체(CON-2, 의도적 동작 변경) */
+  writeCells?: (patches: Array<{ rowIndex: number; field: string; value: any }>) => number;
+  getRangeHooks?: () => RangeKeyboardHooks | null;
 }
 
 export class KeyboardManager<T extends Record<string, any> = any> {
@@ -45,6 +61,29 @@ export class KeyboardManager<T extends Record<string, any> = any> {
     if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
       e.preventDefault();
       this._pasteFromClipboard();
+      return;
+    }
+
+    const rangeHooks = this._d.getRangeHooks?.() ?? null;
+
+    // M-3(HANMS-02/C9): Ctrl+D/Ctrl+R 키보드 채우기 — 'cells' 모드 + 편집 비활성일 때만.
+    if ((e.ctrlKey || e.metaKey) && rangeHooks?.isEnabled() && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault();
+      rangeHooks.ctrlFill('down');
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && rangeHooks?.isEnabled() && (e.key === 'r' || e.key === 'R')) {
+      e.preventDefault();
+      rangeHooks.ctrlFill('right');
+      return;
+    }
+
+    // M-3: Shift+Arrow 범위 확장 — 'cells' 모드일 때만. 그 외 모드는 기존 focus 이동 분기로 낙하(회귀 0).
+    if (e.shiftKey && rangeHooks?.isEnabled() &&
+      (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const dir = e.key === 'ArrowDown' ? 'down' : e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowLeft' ? 'left' : 'right';
+      rangeHooks.extendFocus(dir);
       return;
     }
 
@@ -182,6 +221,9 @@ export class KeyboardManager<T extends Record<string, any> = any> {
         break;
       }
       case 'Escape': {
+        // C9: 이 지점에 도달했다는 것은 이미 activeEditor 가 없다는 뜻(함수 최상단에서 return) —
+        // 편집 종료 후에만 범위 해제(M-3, 부록 B).
+        this._d.getRangeHooks?.()?.clear();
         editMgr.clearFocusCell();
         this._d.doRender();
         break;
@@ -192,6 +234,16 @@ export class KeyboardManager<T extends Record<string, any> = any> {
   private _copyToClipboard(): void {
     const opts = this._d.getOptions();
     if (!opts.clipboard) return;
+
+    // M-5(§5.1, UR-4): 범위 선택이 있으면 범위 TSV 가 focusCell/selectedRows 보다 우선.
+    const rangeHooks = this._d.getRangeHooks?.();
+    if (rangeHooks?.isEnabled() && rangeHooks.hasSelection()) {
+      const rangeText = rangeHooks.copyText();
+      if (rangeText != null) {
+        navigator.clipboard?.writeText(rangeText).catch(() => {});
+        return;
+      }
+    }
 
     const editMgr = this._d.getEditMgr();
     const colLayout = this._d.getColLayout();
@@ -219,15 +271,24 @@ export class KeyboardManager<T extends Record<string, any> = any> {
     if (!opts.clipboard || !opts.editable) return;
 
     const editMgr = this._d.getEditMgr();
-    if (!editMgr.focusCell) return;
+    const rangeHooks = this._d.getRangeHooks?.();
 
     navigator.clipboard?.readText().then(text => {
       if (!text) return;
-      const { ri, ci } = editMgr.focusCell!;
+
+      // M-4(FR-4/§5.2): 범위 선택이 있으면 범위 붙여넣기(타일/blockp 전개)가 우선.
+      if (rangeHooks?.isEnabled() && rangeHooks.hasSelection() && rangeHooks.pasteText(text)) return;
+
+      if (!editMgr.focusCell) return;
+      const { ri, ci } = editMgr.focusCell;
       const lines = text.split('\n');
       const cols = this._d.getColLayout().visibleLeaves;
       const data = this._d.getData();
 
+      // M-4 ⚠️의도적 동작 변경(CON-2): 기존 updateCell 직접호출(트리거/editEnd/dataChange 미발화) →
+      // writeCell(배치 writeCells) 경유로 교체. 트리거/editEnd/dataChange 가 새로 발화한다
+      // (unit:F1-paste-writecell-sideeffect 로 명시 검증).
+      const patches: Array<{ rowIndex: number; field: string; value: any }> = [];
       for (let dr = 0; dr < lines.length; dr++) {
         const cells = lines[dr]!.split('\t');
         for (let dc = 0; dc < cells.length; dc++) {
@@ -235,12 +296,11 @@ export class KeyboardManager<T extends Record<string, any> = any> {
           const targetCi = ci + dc;
           const col = cols[targetCi];
           if (col && targetRi < data.rowCount) {
-            data.updateCell(targetRi, col.field, cells[dc]);
+            patches.push({ rowIndex: targetRi, field: col.field, value: cells[dc] });
           }
         }
       }
-      this._d.emit('dataChange', data.getData());
-      this._d.doRender();
+      if (patches.length) this._d.writeCells?.(patches);
     }).catch(() => {});
   }
 }

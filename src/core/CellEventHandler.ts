@@ -16,6 +16,13 @@ export interface CellEventDeps<T extends Record<string, any>> {
   writeCell: (ri: number, field: string, value: any) => void;
   doRender: () => void;
   getContainer: () => HTMLElement;
+  // ── F1: 범위 선택(selection:'cells') 배선 훅(M-1) ──────────────
+  /** 'cells' 모드 클릭/Shift+클릭 위임 — RangeSelectionManager.handleClick 로 연결 */
+  onCellsClick?: (ri: number, ci: number, shiftKey: boolean) => void;
+  /** 범위 드래그 선택 상태머신(§3.1) — RangeSelectionManager.handleCellMouseDown/Move/Up 로 연결 */
+  rangeMouseDown?: (ri: number, ci: number, e: MouseEvent) => void;
+  rangeMouseMove?: (ri: number, ci: number, e: MouseEvent) => void;
+  rangeMouseUp?: (ri: number, ci: number, e: MouseEvent) => void;
 }
 
 export class CellEventHandler<T extends Record<string, any> = any> {
@@ -38,6 +45,9 @@ export class CellEventHandler<T extends Record<string, any> = any> {
       } else {
         rowMgr.selectSingle(rowIndex);
       }
+    } else if (opts.selection === 'cells' && colIndex >= 0) {
+      // FR-1(M-1): 'cells' 모드 — 1×1 앵커/Shift 확장은 RangeSelectionManager 가 소유.
+      this._d.onCellsClick?.(rowIndex, colIndex, e.shiftKey);
     }
 
     const row = this._d.getData().getRowByIndex(rowIndex);
@@ -95,6 +105,10 @@ export class CellEventHandler<T extends Record<string, any> = any> {
       return;
     }
 
+    // 'cells' 모드는 RangeSelectionManager.handleClick(onCellsClick 경유)이 이미
+    // doRender + selectionChange/rangeChange 를 처리했다(중복 emit 방지, M-1 회귀 격리).
+    if (opts.selection === 'cells') return;
+
     this._d.doRender();
     this._d.emit('selectionChange', {
       rows: rowMgr.getSelections(),
@@ -151,6 +165,7 @@ export class CellEventHandler<T extends Record<string, any> = any> {
   }
 
   handleCellMouseDown(ri: number, ci: number, e: MouseEvent): void {
+    this._d.rangeMouseDown?.(ri, ci, e); // §3.1 드래그 선택 상태머신(no-op if selection!=='cells')
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
@@ -164,6 +179,7 @@ export class CellEventHandler<T extends Record<string, any> = any> {
   }
 
   handleCellMouseUp(ri: number, ci: number, e: MouseEvent): void {
+    this._d.rangeMouseUp?.(ri, ci, e);
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
@@ -177,6 +193,7 @@ export class CellEventHandler<T extends Record<string, any> = any> {
   }
 
   handleCellMouseMove(ri: number, ci: number, e: MouseEvent): void {
+    this._d.rangeMouseMove?.(ri, ci, e);
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
