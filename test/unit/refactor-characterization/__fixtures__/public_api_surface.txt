@@ -70,6 +70,7 @@ getFilterState
 getFlatRowModel
 getFooterData
 getFooterValue
+getLocale
 getMaskEnabled
 getOriginalRow
 getOverrideNames
@@ -137,7 +138,9 @@ setFilter
 setFilterSelect
 setFooter
 setIcon
+setLocale
 setMaskEnabled
+setMessage
 setOptions
 setRangeSelection
 setSkin
@@ -146,6 +149,7 @@ setTheme
 setThemeVar
 showColumn
 switchWorksheet
+t
 toArray
 toggleRow
 uncheckAll

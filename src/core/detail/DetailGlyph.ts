@@ -13,6 +13,11 @@
  * 이 파일은 DOM 을 만들지 않는다 — 문자열/속성 값만 생성.
  */
 
+import { t as _globalT } from '../i18n/LocaleRegistry.js';
+
+/** i18n: 글리프 aria/툴팁 로케일 해석기(주입 없으면 전역 t). / i18n: glyph aria/tooltip resolver (global t when not injected). */
+export type DetailGlyphT = (key: string, params?: Record<string, string | number>) => string;
+
 /** 트리 셰브론(▸/▾)과 충돌하지 않는 전용 글리프(C10 기본값). */
 export const DETAIL_GLYPH_COLLAPSED = '⊕'; // ⊕
 export const DETAIL_GLYPH_EXPANDED = '⊖'; // ⊖
@@ -36,11 +41,11 @@ export interface DetailGlyphInfo {
  * 펼침 여부에 따른 글리프/aria-label/title 조합을 반환한다. 트리 셰브론과 절대 겹치지 않는
  * 문자셋만 사용(C10 R-DETAIL-GLYPH 하드 룰).
  */
-export function getDetailGlyph(expanded: boolean): DetailGlyphInfo {
+export function getDetailGlyph(expanded: boolean, t: DetailGlyphT = _globalT): DetailGlyphInfo {
   return {
     glyph: expanded ? DETAIL_GLYPH_EXPANDED : DETAIL_GLYPH_COLLAPSED,
-    ariaLabel: expanded ? '상세 패널 접기' : '상세 패널 펼치기',
-    title: DETAIL_GLYPH_TOOLTIP,
+    ariaLabel: expanded ? t('detail.collapseAria') : t('detail.expandAria'),
+    title: t('detail.glyphTooltip'),
   };
 }
 

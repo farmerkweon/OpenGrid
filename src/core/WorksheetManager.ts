@@ -8,17 +8,22 @@
 // ============================================================
 
 import type { ColumnDef, WorksheetDef, WorksheetState } from './types.js';
+import { t as _globalT } from './i18n/LocaleRegistry.js';
 
 export type SwitchCallback<T> = (name: string, state: WorksheetState<T>) => void;
+/** i18n: 탭 UI aria 해석기(주입 없으면 전역 t). / i18n: tab-UI aria resolver (global t when not injected). */
+export type WorksheetT = (key: string, params?: Record<string, string | number>) => string;
 
 export class WorksheetManager<T extends Record<string, any> = any> {
   private _sheets: Map<string, WorksheetState<T>> = new Map();
   private _active: string = '';
   private _tabBar: HTMLElement;
   private _onSwitch: SwitchCallback<T>;
+  private _t: WorksheetT;
 
-  constructor(container: HTMLElement, onSwitch: SwitchCallback<T>) {
+  constructor(container: HTMLElement, onSwitch: SwitchCallback<T>, t?: WorksheetT) {
     this._onSwitch = onSwitch;
+    this._t        = t ?? _globalT;
     this._tabBar   = this._buildTabBar(container);
   }
 
@@ -128,7 +133,7 @@ export class WorksheetManager<T extends Record<string, any> = any> {
     const addBtn = document.createElement('button');
     addBtn.className   = 'og-sheet-add';
     addBtn.textContent = '+';
-    addBtn.setAttribute('aria-label', '새 워크시트 추가');
+    addBtn.setAttribute('aria-label', this._t('worksheet.addAria'));
     addBtn.addEventListener('click', () => {
       const n = `Sheet${this._sheets.size + 1}`;
       this.add(n, [], []);

@@ -8,6 +8,10 @@
 // 디자인타임 헬퍼 — 한 번 매핑을 확정하면 스크립트를 코드에 박아 모달 없이 운영한다.
 // ============================================================
 
+// i18n: 크로스그리드 매핑 모달은 디자인타임 헬퍼(standalone 함수, 인스턴스 컨텍스트 없음) →
+//   전역 t 로 라벨/설명/버튼을 해석(설계 §3 헬퍼 예외).
+import { t } from './i18n/LocaleRegistry.js';
+
 export interface FieldInfo {
   field: string;
   header: string;
@@ -28,7 +32,7 @@ export function buildMappingScript(mapping: Record<string, string>): string {
     .filter(([, src]) => src !== NONE)
     .map(([tgt, src]) => `    ${JSON.stringify(tgt)}: src[${JSON.stringify(src)}],`);
   return (
-    '// crossGridMapping 옵션에 이 함수를 그대로 지정하세요.\n' +
+    t('crossGrid.scriptComment') + '\n' +
     'function mapRow(src) {\n' +
     '  return {\n' +
     lines.join('\n') + (lines.length ? '\n' : '') +
@@ -74,7 +78,7 @@ export function openCrossGridMapper(
     overlay.className = 'og-mapper-overlay';
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', '그리드 필드 매핑');
+    overlay.setAttribute('aria-label', t('crossGrid.overlayAria'));
     overlay.style.cssText =
       'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.45);' +
       'display:flex;align-items:center;justify-content:center;' +
@@ -90,17 +94,17 @@ export function openCrossGridMapper(
     const head = document.createElement('div');
     head.style.cssText = 'padding:18px 20px 8px;';
     head.innerHTML =
-      '<div style="font-size:16px;font-weight:700;">필드 매핑</div>' +
+      '<div style="font-size:16px;font-weight:700;">' + t('crossGrid.title') + '</div>' +
       '<div style="font-size:12.5px;color:#666;margin-top:4px;line-height:1.5;">' +
-      '두 그리드의 필드 구조가 다릅니다. <b>타깃 필드</b>마다 어떤 <b>소스 필드</b>의 값을 가져올지 지정하세요. ' +
-      '아래 스크립트를 복사해 <code>crossGridMapping</code> 에 baking 하면 다음부터는 이 창 없이 자동 변환됩니다.</div>';
+      t('crossGrid.desc1') +
+      t('crossGrid.desc2') + '</div>';
     box.appendChild(head);
 
     // ── 매핑 테이블 ──
     const table = document.createElement('div');
     table.style.cssText = 'padding:6px 20px;';
     const optionHtml =
-      `<option value="">(비움)</option>` +
+      `<option value="">${t('crossGrid.emptyOption')}</option>` +
       sourceFields.map(f =>
         `<option value="${esc(f.field)}">${esc(f.header)} &lt;${esc(f.field)}&gt;</option>`
       ).join('');
@@ -133,10 +137,10 @@ export function openCrossGridMapper(
     scriptWrap.style.cssText = 'padding:10px 20px 4px;';
     const scriptHead = document.createElement('div');
     scriptHead.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;';
-    scriptHead.innerHTML = '<span style="font-size:12.5px;font-weight:600;color:#444;">생성된 변환 스크립트</span>';
+    scriptHead.innerHTML = '<span style="font-size:12.5px;font-weight:600;color:#444;">' + t('crossGrid.scriptTitle') + '</span>';
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
-    copyBtn.textContent = '복사';
+    copyBtn.textContent = t('crossGrid.copy');
     copyBtn.style.cssText =
       'font-size:12px;padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;cursor:pointer;';
     scriptHead.appendChild(copyBtn);
@@ -154,8 +158,8 @@ export function openCrossGridMapper(
     copyBtn.addEventListener('click', () => {
       const txt = currentScript();
       navigator.clipboard?.writeText(txt).then(
-        () => { copyBtn.textContent = '복사됨!'; setTimeout(() => (copyBtn.textContent = '복사'), 1200); },
-        () => { copyBtn.textContent = '복사 실패'; setTimeout(() => (copyBtn.textContent = '복사'), 1200); },
+        () => { copyBtn.textContent = t('crossGrid.copied'); setTimeout(() => (copyBtn.textContent = t('crossGrid.copy')), 1200); },
+        () => { copyBtn.textContent = t('crossGrid.copyFailed'); setTimeout(() => (copyBtn.textContent = t('crossGrid.copy')), 1200); },
       );
     });
 
@@ -164,12 +168,12 @@ export function openCrossGridMapper(
     foot.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding:14px 20px 18px;';
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
-    cancelBtn.textContent = '취소';
+    cancelBtn.textContent = t('crossGrid.cancel');
     cancelBtn.style.cssText =
       'font-size:13px;padding:8px 16px;border:1px solid #ccc;border-radius:7px;background:#fff;cursor:pointer;';
     const okBtn = document.createElement('button');
     okBtn.type = 'button';
-    okBtn.textContent = '적용 후 이동';
+    okBtn.textContent = t('crossGrid.applyMove');
     okBtn.style.cssText =
       'font-size:13px;padding:8px 16px;border:0;border-radius:7px;background:#1976d2;color:#fff;cursor:pointer;font-weight:600;';
     foot.append(cancelBtn, okBtn);

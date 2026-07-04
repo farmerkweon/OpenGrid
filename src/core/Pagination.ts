@@ -7,6 +7,19 @@ export interface PageChangeEvent {
 
 export type PageChangeFn = (e: PageChangeEvent) => void;
 
+/** i18n: 페이지네이션 라벨 해석기(행/페이지·범위 배지·빈 상태). / i18n: pagination label resolver (rows-per-page, range badge, empty). */
+export type PaginationT = (key: string, params?: Record<string, string | number>) => string;
+
+/** i18n 미주입(직접 생성) 폴백 — 전역 t 없이도 동작(byte-identical ko). / Fallback when i18n is not injected (standalone) — works without global t (byte-identical ko). */
+const _KO_FALLBACK: Record<string, string> = {
+  'pagination.rowsPerPage': '행/페이지:',
+  'pagination.empty': '0건',
+};
+function _defaultT(key: string, params?: Record<string, string | number>): string {
+  if (key === 'pagination.rangeBadge') return `${params?.from}–${params?.to} / ${params?.total}건`;
+  return _KO_FALLBACK[key] ?? key;
+}
+
 /**
  * 그리드 하단 페이지네이션 UI + 상태 관리.
  * DataLayer의 _displayIndexes 슬라이싱을 담당.
@@ -17,10 +30,12 @@ export class Pagination {
   private _pageSize: number;
   private _totalRows = 0;
   private _onChange: PageChangeFn;
+  private _t: PaginationT;
 
-  constructor(container: HTMLElement, pageSize: number, onChange: PageChangeFn) {
+  constructor(container: HTMLElement, pageSize: number, onChange: PageChangeFn, t?: PaginationT) {
     this._pageSize = pageSize;
     this._onChange = onChange;
+    this._t = t ?? _defaultT;
 
     this._el = document.createElement('div');
     this._el.className = 'og-pagination';
@@ -82,7 +97,7 @@ export class Pagination {
     const sizeWrap = document.createElement('span');
     sizeWrap.style.cssText = 'display:flex;align-items:center;gap:3px;margin-right:8px;';
     const sizeLabel = document.createElement('span');
-    sizeLabel.textContent = '행/페이지:';
+    sizeLabel.textContent = this._t('pagination.rowsPerPage');
     sizeLabel.style.color = '#888';
     const sizeSel = document.createElement('select');
     sizeSel.style.cssText = `padding:2px 4px;border:1px solid var(--og-border-color,#e0e0e0);border-radius:3px;font-size:11px;cursor:pointer;`;
@@ -102,8 +117,8 @@ export class Pagination {
     const info = document.createElement('span');
     const { start, end } = this.getRange();
     info.textContent = this._totalRows > 0
-      ? `${start + 1}–${end + 1} / ${this._totalRows}건`
-      : '0건';
+      ? this._t('pagination.rangeBadge', { from: start + 1, to: end + 1, total: this._totalRows })
+      : this._t('pagination.empty');
     info.style.cssText = 'margin-right:8px;color:#888;';
     this._el.appendChild(info);
 
@@ -147,6 +162,11 @@ export class Pagination {
 
     this._el.appendChild(mkBtn('›', this._page + 1, this._page === total));
     this._el.appendChild(mkBtn('»', total, this._page === total));
+  }
+
+  /** i18n: 상주 크롬 라벨을 활성 로케일로 다시 그린다(setLocale 경로). / i18n: repaint resident chrome labels in the active locale (setLocale path). */
+  refreshLabels(): void {
+    this._render();
   }
 
   destroy(): void {

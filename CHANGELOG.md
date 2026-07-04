@@ -2,6 +2,26 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.2.0] - 2026-07-05
+
+### Added
+- **다국어(i18n) — 리소스 분리** / **Internationalization — separated resources.**
+  UI 문자열(라벨·aria-label·announce·툴팁·플레이스홀더)을 코어에서 분리해 로케일 카탈로그로 관리.
+  `SkinRegistry`/`IconRegistry`와 동형인 `LocaleRegistry`(전역 싱글턴 + 인스턴스별 child 체인 + never-throw 폴백).
+  - 옵션: `new OpenGrid(el, { locale: 'en', messages: { ... } })`
+  - 메서드: `grid.setLocale('en')` / `grid.getLocale()` / `grid.setMessage(key, value)` / `grid.t(key, params)`
+  - 등록: `localeRegistry.register('ja', { ... })`, `OpenGrid.defineLocale(id, messages)`
+  - 내장 로케일 `ko`(기본)·`en`. 폴백 체인 = 인스턴스 오버라이드 → 활성 로케일 → ko → 키 원문.
+  - `setLocale` 시 상주 크롬(페이지네이션·찾기 바) 재라벨 + 컨텍스트메뉴/필터패널 재구성 + `lang` 속성 갱신 + `localeChange` 이벤트.
+  - 공개 export: `LocaleRegistry`/`localeRegistry`/`t` + 타입 `LocaleMessages`/`PartialLocaleMessages`/`LocaleMessageKey`/`MessageValue`.
+
+### Changed
+- **하위호환 보장** — 기본 로케일 `ko` 고정. `locale`/`messages` 미지정 시 렌더 결과는 이전과 동일(byte-identical).
+  개발자 대면 오류 메시지(throw/console)와 숫자·날짜 포맷은 i18n 범위에서 제외(로그 안정성·별도 축).
+
+### Docs
+- **TypeDoc API 문서 파이프라인** — `npm run docs`로 공개 API 문서 생성. 공개 표면에 한·영 병행 JSDoc.
+
 ## [1.1.1] - 2026-07-04
 
 ### Added

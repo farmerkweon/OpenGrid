@@ -10,6 +10,9 @@
  */
 
 import type { ChartDataModel, A11yTableModel } from './types.js';
+// i18n: a11y 문자열 생성기는 순수 함수 체인(DataExtractor/downsample)이 깊게 호출하는 헤드리스
+//   모듈이라 per-instance 로케일 주입 경로가 없다 → 전역 t 로 해석(설계 §3 헬퍼 예외).
+import { t } from '../i18n/LocaleRegistry.js';
 
 export type ChartNumberFormat = (
   v: number,
@@ -43,9 +46,10 @@ export function buildA11yTable(
     ...series.map(s => formatCell(s.data[i] ?? null, opts.numberFormat)),
   ]);
   const seriesNames = series.map(s => s.name).join(', ');
+  const seriesLabel = seriesNames || t('chart.tooltipEmpty');
   const caption = opts.title
-    ? `${opts.title}: 카테고리 ${categories.length}개, 시리즈 ${seriesNames || '없음'}`
-    : `카테고리 ${categories.length}개, 시리즈 ${seriesNames || '없음'}`;
+    ? t('chart.a11ySummary', { title: opts.title, categories: categories.length, series: seriesLabel })
+    : t('chart.a11ySummaryNoTitle', { categories: categories.length, series: seriesLabel });
   return { caption, colHeaders, rows };
 }
 
@@ -55,9 +59,10 @@ export function buildA11yTable(
  */
 export function chartAriaLabel(
   model: Pick<ChartDataModel, 'categories' | 'series'>,
-  title = '차트'
+  title?: string
 ): string {
   const { categories, series } = model;
-  const seriesNames = series.map(s => s.name).join(', ') || '데이터 없음';
-  return `${title}: ${categories.length}개 카테고리별 ${seriesNames} — 상세 값은 아래 표를 참고하세요`;
+  const ttl = title ?? t('chart.defaultTitle');
+  const seriesNames = series.map(s => s.name).join(', ') || t('chart.a11yNoData');
+  return t('chart.a11yAltText', { title: ttl, categories: categories.length, series: seriesNames });
 }

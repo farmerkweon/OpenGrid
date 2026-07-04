@@ -1,6 +1,6 @@
 import type { CellEditor } from './CellEditor.js';
 import type { RenderContext } from '../renderers/CellRenderer.js';
-import { formatDate } from '../renderers/CellRenderer.js';
+import { formatDate, ctxT } from '../renderers/CellRenderer.js';
 
 export class DateEditor implements CellEditor {
   private input!: HTMLInputElement;
@@ -19,7 +19,7 @@ export class DateEditor implements CellEditor {
     this.input = document.createElement('input');
     this.input.type = 'date';
     this.input.className = 'og-cell-input';
-    this.input.setAttribute('aria-label', ctx.column.header ?? '날짜 선택');
+    this.input.setAttribute('aria-label', ctx.column.header ?? ctxT(ctx, 'editor.datePick'));
 
     const raw = ctx.value;
     if (raw) {

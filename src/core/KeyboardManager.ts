@@ -26,6 +26,8 @@ export interface KeyboardDeps<T extends Record<string, any>> {
   handleRowDrop: (from: number, to: number) => void;
   doRender: () => void;
   announce: (msg: string) => void;
+  /** i18n: 행 이동 announce 해석. / i18n: resolve row-move announce. */
+  t: (key: string, params?: Record<string, string | number>) => string;
   emit: (event: string, ...args: any[]) => void;
   visRange: () => [number, number];
   handleCellKeyEvt: (eventName: 'cellKeyDown' | 'cellKeyUp' | 'cellKeyPress', e: KeyboardEvent) => void;
@@ -95,7 +97,7 @@ export class KeyboardManager<T extends Record<string, any> = any> {
         if (ri < totalRows - 1) {
           this._d.handleRowDrop(ri, ri + 1);
           this._d.setFocusCell(ri + 1, editMgr.focusCell.ci);
-          this._d.announce(`행 ${ri + 1}을(를) ${ri + 2}번째 위치로 이동`);
+          this._d.announce(this._d.t('row.moveAnnounce', { from: ri + 1, to: ri + 2 }));
         }
         return;
       }
@@ -105,7 +107,7 @@ export class KeyboardManager<T extends Record<string, any> = any> {
         if (ri > 0) {
           this._d.handleRowDrop(ri, ri - 1);
           this._d.setFocusCell(ri - 1, editMgr.focusCell.ci);
-          this._d.announce(`행 ${ri + 1}을(를) ${ri}번째 위치로 이동`);
+          this._d.announce(this._d.t('row.moveAnnounce', { from: ri + 1, to: ri }));
         }
         return;
       }

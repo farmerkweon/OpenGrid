@@ -10,12 +10,16 @@ export interface FindBarDeps<T extends Record<string, any>> {
   getVs: () => VirtualScroll | null;
   getPagination: () => Pagination | null;
   doRender: () => void;
+  /** i18n: 메시지 해석(라벨/placeholder/aria/카운트 배지). / i18n: resolve labels/placeholder/aria/count badge. */
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export class FindBarManager<T extends Record<string, any> = any> {
   private _bar:    HTMLElement | null = null;
   private _input:  HTMLInputElement | null = null;
   private _count:  HTMLElement | null = null;
+  private _lbl:    HTMLElement | null = null;
+  private _close:  HTMLElement | null = null;
   private _filter: string = '';
   private _d: FindBarDeps<T>;
 
@@ -32,13 +36,13 @@ export class FindBarManager<T extends Record<string, any> = any> {
 
     const lbl = document.createElement('span');
     lbl.className   = 'og-find-label';
-    lbl.textContent = '찾기';
+    lbl.textContent = this._d.t('findBar.label');
 
     const input = document.createElement('input');
     input.type        = 'text';
     input.className   = 'og-find-input';
-    input.placeholder = '검색어 입력...';
-    input.setAttribute('aria-label', '그리드 내 검색');
+    input.placeholder = this._d.t('findBar.placeholder');
+    input.setAttribute('aria-label', this._d.t('findBar.searchAria'));
 
     const count = document.createElement('span');
     count.className = 'og-find-count';
@@ -46,7 +50,7 @@ export class FindBarManager<T extends Record<string, any> = any> {
     const closeBtn = document.createElement('button');
     closeBtn.className   = 'og-find-close';
     closeBtn.textContent = '✕';
-    closeBtn.setAttribute('aria-label', '찾기 닫기');
+    closeBtn.setAttribute('aria-label', this._d.t('findBar.closeAria'));
 
     bar.appendChild(lbl);
     bar.appendChild(input);
@@ -67,6 +71,21 @@ export class FindBarManager<T extends Record<string, any> = any> {
     this._bar   = bar;
     this._input = input;
     this._count = count;
+    this._lbl   = lbl;
+    this._close = closeBtn;
+  }
+
+  /** i18n: 상주 크롬 라벨을 활성 로케일로 다시 그린다(setLocale 경로). / i18n: repaint resident chrome labels in the active locale (setLocale path). */
+  refreshLabels(): void {
+    if (this._lbl)   this._lbl.textContent = this._d.t('findBar.label');
+    if (this._input) {
+      this._input.placeholder = this._d.t('findBar.placeholder');
+      this._input.setAttribute('aria-label', this._d.t('findBar.searchAria'));
+    }
+    if (this._close) this._close.setAttribute('aria-label', this._d.t('findBar.closeAria'));
+    if (this._count && this._filter) {
+      this._count.textContent = this._d.t('findBar.countBadge', { n: this._d.getData().rowCount });
+    }
   }
 
   open(): void {
@@ -93,7 +112,7 @@ export class FindBarManager<T extends Record<string, any> = any> {
     const n = data.rowCount;
     this._d.getVs()?.setTotalRows(n);
     this._d.getPagination()?.setTotalRows(n);
-    if (this._count) this._count.textContent = this._filter ? `${n}건` : '';
+    if (this._count) this._count.textContent = this._filter ? this._d.t('findBar.countBadge', { n }) : '';
     this._d.doRender();
   }
 }

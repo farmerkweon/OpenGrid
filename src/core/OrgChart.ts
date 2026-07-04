@@ -1,4 +1,6 @@
 import { buildTree, TreeNode } from './TreeEngine.js';
+// i18n: OrgChart 는 그리드와 독립된 standalone 컴포넌트(인스턴스 로케일 child 없음) → 전역 t 로 해석.
+import { t } from './i18n/LocaleRegistry.js';
 
 export interface OrgChartColumnDef {
   field: string;
@@ -226,7 +228,7 @@ export class OrgChart {
           btn.type = 'button';
           btn.className = 'og-orgchart-toggle';
           btn.setAttribute('aria-expanded', node._expanded ? 'true' : 'false');
-          btn.setAttribute('aria-label', node._expanded ? '접기' : '펼치기');
+          btn.setAttribute('aria-label', t(node._expanded ? 'tree.collapse' : 'tree.expand'));
           const icon = document.createElement('i');
           icon.setAttribute('aria-hidden', 'true');
           icon.className = node._expanded ? 'bi bi-dash-circle' : 'bi bi-plus-circle';

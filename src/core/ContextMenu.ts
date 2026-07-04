@@ -19,6 +19,25 @@ export interface ContextMenuActions {
   onPrint:    () => void;
 }
 
+/** i18n: 메시지 해석기 시그니처. / i18n: message resolver signature. */
+export type ContextMenuT = (key: string, params?: Record<string, string | number>) => string;
+
+// i18n: 기본 메뉴 라벨을 상수에서 dot-key 로 분리 — 열 때 t() 로 지연 평가(활성 로케일 반영).
+// / i18n: default menu labels moved from constants to dot-keys — resolved lazily via t() at open time.
+const _DEFAULT_ITEM_TEMPLATE: ReadonlyArray<
+  { type: 'divider' } | { id: string; labelKey: string; icon: string; action: string }
+> = [
+  { id: 'sort-asc',  labelKey: 'contextMenu.sortAsc',     icon: '↑', action: 'sortAsc'  },
+  { id: 'sort-desc', labelKey: 'contextMenu.sortDesc',    icon: '↓', action: 'sortDesc' },
+  { type: 'divider' },
+  { id: 'find',  labelKey: 'contextMenu.find',        icon: '🔍', action: 'find'  },
+  { type: 'divider' },
+  { id: 'excel', labelKey: 'contextMenu.exportExcel', icon: '📊', action: 'excel' },
+  { id: 'csv',   labelKey: 'contextMenu.exportCsv',   icon: '📄', action: 'csv'   },
+  { id: 'print', labelKey: 'contextMenu.print',       icon: '🖨', action: 'print' },
+];
+
+/** 기본 메뉴 항목(ko 라벨) — i18n 미주입 폴백 + 구조 계약(테스트/공개 표면). / Default items (ko labels) — i18n fallback + structural contract. */
 export const DEFAULT_CONTEXT_ITEMS: ContextMenuItem[] = [
   { id: 'sort-asc',  label: '오름차순 정렬', icon: '↑', action: 'sortAsc'  },
   { id: 'sort-desc', label: '내림차순 정렬', icon: '↓', action: 'sortDesc' },
@@ -29,6 +48,16 @@ export const DEFAULT_CONTEXT_ITEMS: ContextMenuItem[] = [
   { id: 'csv',   label: 'CSV로 저장',   icon: '📄', action: 'csv'   },
   { id: 'print', label: '인쇄',         icon: '🖨', action: 'print' },
 ];
+
+/** 활성 로케일로 기본 메뉴 항목을 생성(열 때 호출). / Build default menu items in the active locale (called at open time). */
+function _buildDefaultItems(t: ContextMenuT | undefined): ContextMenuItem[] {
+  if (!t) return DEFAULT_CONTEXT_ITEMS;
+  return _DEFAULT_ITEM_TEMPLATE.map(it =>
+    'type' in it
+      ? { type: 'divider' as const }
+      : { id: it.id, label: t(it.labelKey), icon: it.icon, action: it.action },
+  );
+}
 
 export class ContextMenuManager {
   private _el: HTMLElement | null = null;
@@ -45,12 +74,13 @@ export class ContextMenuManager {
   constructor(
     private readonly _anchor: HTMLElement,
     private readonly _actions: ContextMenuActions,
+    private readonly _t?: ContextMenuT,
   ) {}
 
   open(e: MouseEvent, customItems?: ContextMenuItem[]): void {
     this.close();
 
-    const items = customItems ?? DEFAULT_CONTEXT_ITEMS;
+    const items = customItems ?? _buildDefaultItems(this._t);
     const menu  = document.createElement('div');
     menu.className  = 'og-context-menu';
     menu.setAttribute('role', 'menu');

@@ -45,6 +45,8 @@ export interface ChartManagerDeps {
   off(ev: string, cb: (...a: any[]) => void): void;
   emit(ev: string, ...args: any[]): void;
   announce(msg: string): void;
+  /** i18n: 차트 배지·패널 aria·announce 해석. / i18n: resolve chart badges/panel-aria/announce. */
+  t(key: string, params?: Record<string, string | number>): string;
 }
 
 export type { ChartInstance } from './chart/types.js';
@@ -303,7 +305,7 @@ export class ChartManager {
     panel.className = 'og-chart-panel';
     panel.setAttribute('data-placement', placement);
     panel.setAttribute('role', 'group');
-    panel.setAttribute('aria-label', config.title ?? '차트');
+    panel.setAttribute('aria-label', config.title ?? this._d.t('chart.defaultTitle'));
 
     const badgeBox = document.createElement('div');
     badgeBox.className = 'og-chart-badges';
@@ -356,13 +358,13 @@ export class ChartManager {
     const meta = rec.model.meta;
     const badges: string[] = [];
     if (meta.sampled && meta.sampledFrom) {
-      badges.push(`샘플링됨 ${meta.sampledTo?.toLocaleString()}/${meta.sampledFrom.toLocaleString()}행`);
+      badges.push(this._d.t('chart.badgeSampled', { to: meta.sampledTo?.toLocaleString() as any, from: meta.sampledFrom.toLocaleString() }));
     }
-    if (meta.aggregatedOp) badges.push(`category 집계됨 (${meta.aggregatedOp})`);
-    if (meta.pieReducedToFirst) badges.push('파이: 첫 시리즈만 표시');
-    if (meta.negativesAbsInPie) badges.push('음수→절대값 표시 · bar 권장');
-    if (rangeFallback) badges.push('범위 소스 없음 · 선택 행으로 대체');
-    if (engineFallback) badges.push(`${engineFallback} 미설치 · 내장 차트로 대체`);
+    if (meta.aggregatedOp) badges.push(this._d.t('chart.badgeAggregated', { op: meta.aggregatedOp }));
+    if (meta.pieReducedToFirst) badges.push(this._d.t('chart.badgePieFirstSeries'));
+    if (meta.negativesAbsInPie) badges.push(this._d.t('chart.badgeNegativesAbs'));
+    if (rangeFallback) badges.push(this._d.t('chart.badgeRangeFallback'));
+    if (engineFallback) badges.push(this._d.t('chart.badgeEngineFallback', { engine: engineFallback }));
 
     for (const text of badges) {
       const span = document.createElement('span');
@@ -374,7 +376,7 @@ export class ChartManager {
       box.appendChild(span);
     }
     box.style.display = badges.length ? 'flex' : 'none';
-    if (badges.length) this._d.announce(`차트 안내: ${badges.join(', ')}`);
+    if (badges.length) this._d.announce(this._d.t('chart.announcePrefix', { badges: badges.join(', ') }));
   }
 
   // ── 라이브 구독(C2.2) ───────────────────────────────────────────────────

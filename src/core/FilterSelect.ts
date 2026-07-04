@@ -1,4 +1,8 @@
 import type { FilterItem } from './types.js';
+import { t as _globalT } from './i18n/LocaleRegistry.js';
+
+/** i18n: 필터 셀렉트 라벨 해석기(주입 없으면 전역 t). / i18n: filter-select label resolver (global t when not injected). */
+export type FilterSelectT = (key: string, params?: Record<string, string | number>) => string;
 
 // ─── 공개 타입 ────────────────────────────────────────────
 
@@ -88,6 +92,7 @@ export class FilterSelectPanel {
   private _config:   FilterSelectConfig;
   private _onFilter: FilterFn;
   private _onReset:  ResetFn;
+  private _t:        FilterSelectT;
 
   constructor(
     container: HTMLElement,
@@ -95,10 +100,12 @@ export class FilterSelectPanel {
     onFilter:  FilterFn,
     onReset:   ResetFn,
     gridId?:   string,
+    t?:        FilterSelectT,
   ) {
     this._config   = config;
     this._onFilter = onFilter;
     this._onReset  = onReset;
+    this._t        = t ?? _globalT;
 
     /* fieldset */
     this._el = document.createElement('fieldset');
@@ -106,7 +113,7 @@ export class FilterSelectPanel {
 
     const legend = document.createElement('legend');
     legend.className   = 'og-filter-select-legend';
-    legend.textContent = config.legend ?? '필터';
+    legend.textContent = config.legend ?? this._t('filter.legend');
     this._el.appendChild(legend);
 
     const row = document.createElement('div');
@@ -148,9 +155,9 @@ export class FilterSelectPanel {
     /* 초기화 버튼 */
     const btn = document.createElement('button');
     btn.type        = 'button';
-    btn.textContent = '초기화';
+    btn.textContent = this._t('filter.clear');
     btn.className   = 'og-filter-select-reset';
-    btn.setAttribute('aria-label', '필터 초기화');
+    btn.setAttribute('aria-label', this._t('filter.clearAria'));
     btn.addEventListener('click', () => this._reset());
 
     this._el.appendChild(row);
@@ -198,7 +205,7 @@ export class FilterSelectPanel {
   ): void {
     select.innerHTML = '';
     const all = document.createElement('option');
-    all.value = ''; all.textContent = '전체';
+    all.value = ''; all.textContent = this._t('filter.all');
     select.appendChild(all);
     for (const o of opts) {
       const el = document.createElement('option');

@@ -3,6 +3,7 @@ import { RowDragDrop } from './RowDragDrop.js';
 import { MergeEngine } from './MergeEngine.js';
 import { createRenderer } from './renderers/CellRenderer.js';
 import { AppearanceResolver, ThemeContext } from './AppearanceResolver.js';
+import { t as _globalT } from './i18n/LocaleRegistry.js';
 import type { ColumnDef, SortItem, TreeNodeIconDef, CellRange, GridOptions, FilterItem } from './types.js';
 
 // ─── RenderOptions ────────────────────────────────────────
@@ -72,6 +73,8 @@ export interface RendererCallbacks {
   getDisplayFormatter?: () => ((value: any, field: string, row: any) => string | null) | null;
   // F3(11_design_F3_v2.md §7.4/§7.5/§7.6, C7): 셀 수식 메타(마커/에러 툴팁/aria-label). 없으면 null.
   getFormulaMeta?: (rowIndex: number, field: string) => { src: string; error: string | null; approx: boolean } | null;
+  // i18n: 렌더 컨텍스트 로케일 해석기(OpenGrid 가 주입, 미주입 시 전역 t 폴백). 인스턴스 로케일 우선.
+  t?: (key: string, params?: Record<string, string | number>) => string;
 }
 
 /**
@@ -91,15 +94,16 @@ export interface DetailRenderContext {
   onBeforeTeardown: () => void;
 }
 
-// F3(§6/C11): 에러코드 → 한국어 원인(hover 툴팁/aria-live 공용).
-const _FORMULA_ERROR_KO: Record<string, string> = {
-  '#ERR': '수식 오류',
-  '#REF': '참조 대상이 삭제됨',
-  '#CYCLE': '순환 참조',
-  '#DIV0': '0으로 나눔',
-  '#NAME': '알 수 없는 함수/이름',
-  '#VALUE': '숫자가 아닌 값에 산술 연산',
-  '#NUM': '수치 도메인 오류',
+// F3(§6/C11): 에러코드 → 카탈로그 키(hover 툴팁/aria-live 공용). i18n: FormulaController 와 동일한
+// formulaError.* 키로 통합(중복 맵 해소) — 실제 문구는 활성 로케일에서 t() 로 해석한다.
+const _FORMULA_ERROR_KEY: Record<string, string> = {
+  '#ERR': 'formulaError.err',
+  '#REF': 'formulaError.ref',
+  '#CYCLE': 'formulaError.cycle',
+  '#DIV0': 'formulaError.div0',
+  '#NAME': 'formulaError.name',
+  '#VALUE': 'formulaError.value',
+  '#NUM': 'formulaError.num',
 };
 
 // ─── GridRenderer ─────────────────────────────────────────
@@ -116,6 +120,11 @@ export class GridRenderer {
   private _cellMap: Map<number, Map<number, HTMLElement>> = new Map();
 
   get bodyWrapper() { return this._bodyWrap; }
+
+  /** i18n: 렌더 로케일 해석기 — cbs.t(인스턴스 로케일) 우선, 미주입 시 전역 t. / i18n: cbs.t (instance locale) first, global t otherwise. */
+  private _t(key: string, params?: Record<string, string | number>): string {
+    return this._cbs.t ? this._cbs.t(key, params) : _globalT(key, params);
+  }
 
   constructor(root: HTMLElement, opts: RenderOptions, cbs: RendererCallbacks, appearance?: AppearanceResolver) {
     this._root = root;
@@ -238,7 +247,7 @@ export class GridRenderer {
           extraHeaderLeft += 36;
           const allChk = document.createElement('input');
           allChk.type = 'checkbox';
-          allChk.setAttribute('aria-label', '전체 행 선택');
+          allChk.setAttribute('aria-label', this._t('row.selectAllAria'));
           allChk.style.cssText = 'width:16px;height:16px;';
           allChk.addEventListener('change', () => this._cbs.onAllCheck(allChk.checked));
           th.appendChild(allChk);
@@ -361,7 +370,7 @@ export class GridRenderer {
           const filterIcon = _el('span', 'og-filter-icon');
           const hasFilter = (opts._activeFilters?.[col.field]?.length ?? 0) > 0;
           filterIcon.textContent = hasFilter ? '⊿' : '▿';
-          filterIcon.title = '필터';
+          filterIcon.title = this._t('grid.filterTooltip');
           filterIcon.style.cssText = 'margin-left:3px;cursor:pointer;font-size:10px;opacity:0.6;';
           if (hasFilter) filterIcon.classList.add('og-filter-icon--active');
           filterIcon.addEventListener('click', (e) => {
@@ -568,7 +577,7 @@ export class GridRenderer {
             cell.appendChild(arrow);
 
             const lbl = _el('span', 'og-group-label');
-            lbl.textContent = `${g._groupLabel}  (${g._childCount}건)`;
+            lbl.textContent = this._t('group.badge', { label: g._groupLabel, count: g._childCount });
             lbl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;font-weight:600;';
             cell.appendChild(lbl);
             cell.style.gap = '0';
@@ -676,7 +685,7 @@ export class GridRenderer {
         const chk = document.createElement('input');
         chk.type = 'checkbox';
         chk.checked = checkedRows.has(ri);
-        chk.setAttribute('aria-label', `${ri + 1}행 선택`);
+        chk.setAttribute('aria-label', this._t('row.selectAria', { n: ri + 1 }));
         chk.addEventListener('click', (e) => e.stopPropagation());
         chk.addEventListener('change', (e) => {
           e.stopPropagation();
@@ -849,15 +858,16 @@ export class GridRenderer {
         // formula.cellMarker:false 로만 끔) · 근사(≈) 표식. 전부 호스트 CSS 격리(인라인 스타일).
         const _formulaMeta = this._cbs.getFormulaMeta?.(ri, col.field) ?? null;
         if (_formulaMeta) {
-          const displayVal = _rawVal == null ? '빈 값' : String(_rawVal);
+          const displayVal = _rawVal == null ? this._t('cell.emptyValue') : String(_rawVal);
           if (_formulaMeta.error) {
-            const errMsg = _FORMULA_ERROR_KO[_formulaMeta.error] ?? '수식 오류';
-            cellEl.setAttribute('aria-label', `수식 ${_formulaMeta.src}, 오류: ${errMsg}`);
+            const errKey = _FORMULA_ERROR_KEY[_formulaMeta.error];
+            const errMsg = errKey ? this._t(errKey) : this._t('formulaError.fallback');
+            cellEl.setAttribute('aria-label', this._t('formula.ariaError', { src: _formulaMeta.src, message: errMsg }));
             cellEl.title = `${_formulaMeta.error} — ${errMsg}`;
             cellEl.style.color = 'var(--og-formula-error-color, #c62828)';
           } else {
-            const approxTxt = _formulaMeta.approx ? ' (근사값)' : '';
-            cellEl.setAttribute('aria-label', `수식 ${_formulaMeta.src}, 값 ${displayVal}${approxTxt}`);
+            const approxTxt = _formulaMeta.approx ? this._t('formula.approxSuffix') : '';
+            cellEl.setAttribute('aria-label', this._t('formula.ariaValue', { src: _formulaMeta.src, value: displayVal, approx: approxTxt }));
             cellEl.title = `${_formulaMeta.src}${approxTxt}`;
           }
           if (opts.formula?.cellMarker !== false) {
@@ -924,7 +934,7 @@ export class GridRenderer {
             nodeIcon.setAttribute('role', 'button');
             nodeIcon.setAttribute('tabindex', '0');
             nodeIcon.setAttribute('aria-expanded', treeNode._expanded ? 'true' : 'false');
-            nodeIcon.setAttribute('aria-label', treeNode._expanded ? '접기' : '펼치기');
+            nodeIcon.setAttribute('aria-label', this._t(treeNode._expanded ? 'tree.collapse' : 'tree.expand'));
             nodeIcon.addEventListener('click', (e: MouseEvent) => {
               e.stopPropagation();
               onTreeToggle?.(treeNode._treeId);
@@ -965,6 +975,8 @@ export class GridRenderer {
           displayFormatter: this._cbs.getDisplayFormatter?.() ?? null,
           // C7(15_cross_contracts.md/F3-R14): 셀 수식 있으면 렌더러가 ColumnDef.formula 재평가를 skip.
           hasCellFormula: _formulaMeta != null,
+          // i18n: 셀 렌더러(마스킹/라디오/바코드) 가 인스턴스 로케일로 aria/tooltip 을 해석하도록 주입.
+          t: (key: string, params?: Record<string, string | number>) => this._t(key, params),
         });
         _treeRenderTarget.appendChild(rendered);
 
@@ -1014,7 +1026,7 @@ export class GridRenderer {
     // 빈 데이터 메시지
     if (data.rowCount === 0) {
       const empty = _el('div', 'og-empty-message');
-      empty.textContent = '데이터가 없습니다.';
+      empty.textContent = this._t('grid.emptyMessage');
       empty.style.cssText = `width:100%;`;
       frag.appendChild(empty);
     }

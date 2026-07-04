@@ -39,6 +39,8 @@ export interface DetailManagerDeps<T extends Record<string, any> = any> {
   doRenderFull: (n: number) => void;
   emit: (ev: string, payload: any) => void;
   announce: (msg: string) => void;
+  /** i18n: 깊이 한계/펼침·접힘 announce 메시지 해석. / i18n: resolve depth-limit & expand/collapse announces. */
+  t: (key: string, params?: Record<string, string | number>) => string;
   /** 이 그리드 인스턴스의 중첩 깊이(0=최상위, 부모가 자식 생성 시 depth+1 주입). */
   getDepth: () => number;
   /** masterDetail.renderer 의 DetailRenderApi.grid 에 실어줄 인스턴스. */
@@ -134,7 +136,7 @@ export class DetailManager<T extends Record<string, any> = any> {
     const ok = this._state.expand(id);
     if (!ok) {
       // CON-4/FR-10: maxDepth 초과 — 렌더러 진입 전 거부, 자식 패널 미생성.
-      this._d.announce(`중첩 깊이 한계(${this._state.maxDepth})로 상세 패널을 열 수 없습니다.`);
+      this._d.announce(this._d.t('detail.depthLimitOpen', { max: this._state.maxDepth }));
       return;
     }
     this._afterToggle(id, 'expanded');
@@ -171,7 +173,7 @@ export class DetailManager<T extends Record<string, any> = any> {
         rowId: id, row: this._d.getRowById(id), host: null,
       });
     }
-    this._d.announce('모든 상세 패널을 접었습니다.');
+    this._d.announce(this._d.t('detail.collapsedAllAnnounce'));
   }
 
   getDetailInstance<D = any>(ref: DetailRowRef): D | undefined {
@@ -226,7 +228,7 @@ export class DetailManager<T extends Record<string, any> = any> {
     }
     if (opts.subgridOptions) {
       if (depth + 1 > this._state.maxDepth) {
-        this._d.announce(`중첩 깊이 한계(${this._state.maxDepth})로 서브 그리드를 생성하지 않습니다.`);
+        this._d.announce(this._d.t('detail.depthLimitSubgrid', { max: this._state.maxDepth }));
         return { destroy: () => {} };
       }
       if (this._d.createSubgrid) return this._d.createSubgrid(host, opts.subgridOptions, depth + 1);
@@ -293,7 +295,7 @@ export class DetailManager<T extends Record<string, any> = any> {
     const host = kind === 'expanded' ? (this._hosts.get(rowId) ?? null) : null;
     const payload = { rowIndex, rowId, row: this._d.getRowById(rowId), host };
     this._d.emit(kind === 'expanded' ? 'rowExpand' : 'rowCollapse', payload);
-    this._d.announce(kind === 'expanded' ? '행 상세 패널을 펼쳤습니다.' : '행 상세 패널을 접었습니다.');
+    this._d.announce(this._d.t(kind === 'expanded' ? 'detail.expandedAnnounce' : 'detail.collapsedAnnounce'));
   }
 
   private _rebuildAndRender(): void {

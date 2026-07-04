@@ -1,7 +1,10 @@
 import type { FilterItem } from './types.js';
+import { t as _globalT } from './i18n/LocaleRegistry.js';
 
 export type FilterApplyFn = (field: string, items: FilterItem[]) => void;
 export type FilterClearFn = (field: string) => void;
+/** i18n: 필터 라벨 로케일 해석기(주입 없으면 전역 t). / i18n: filter-label resolver (global t when not injected). */
+export type FilterPanelT = (key: string, params?: Record<string, string | number>) => string;
 
 /**
  * 컬럼 헤더 필터 드롭다운 패널.
@@ -12,11 +15,13 @@ export class FilterPanel {
   private _field = '';
   private _onApply: FilterApplyFn;
   private _onClear: FilterClearFn;
+  private _t: FilterPanelT;
   private _outsideHandler: ((e: MouseEvent) => void) | null = null;
 
-  constructor(container: HTMLElement, onApply: FilterApplyFn, onClear: FilterClearFn) {
+  constructor(container: HTMLElement, onApply: FilterApplyFn, onClear: FilterClearFn, t?: FilterPanelT) {
     this._onApply = onApply;
     this._onClear = onClear;
+    this._t = t ?? _globalT;
 
     this._el = document.createElement('div');
     this._el.className = 'og-filter-panel';
@@ -35,7 +40,7 @@ export class FilterPanel {
 
     // 제목
     const title = document.createElement('div');
-    title.textContent = '필터';
+    title.textContent = this._t('filter.title');
     title.style.cssText = `font-weight:600;margin-bottom:8px;color:var(--og-text-color,#333);`;
     this._el.appendChild(title);
 
@@ -46,15 +51,15 @@ export class FilterPanel {
     const condSel = document.createElement('select');
     condSel.style.cssText = `flex:1;padding:3px 4px;border:1px solid var(--og-border-color,#e0e0e0);border-radius:3px;font-size:12px;`;
     const conditions: Array<{ label: string; value: FilterItem['operator'] }> = [
-      { label: '포함', value: 'contains' },
-      { label: '같음', value: '=' },
-      { label: '같지 않음', value: '!=' },
-      { label: '시작', value: 'startsWith' },
-      { label: '끝남', value: 'endsWith' },
-      { label: '보다 큼', value: '>' },
-      { label: '보다 작음', value: '<' },
-      { label: '이상', value: '>=' },
-      { label: '이하', value: '<=' },
+      { label: this._t('filter.opContains'), value: 'contains' },
+      { label: this._t('filter.opEq'), value: '=' },
+      { label: this._t('filter.opNe'), value: '!=' },
+      { label: this._t('filter.opStartsWith'), value: 'startsWith' },
+      { label: this._t('filter.opEndsWith'), value: 'endsWith' },
+      { label: this._t('filter.opGt'), value: '>' },
+      { label: this._t('filter.opLt'), value: '<' },
+      { label: this._t('filter.opGte'), value: '>=' },
+      { label: this._t('filter.opLte'), value: '<=' },
     ];
     for (const c of conditions) {
       const opt = document.createElement('option');
@@ -69,7 +74,7 @@ export class FilterPanel {
     // 값 입력
     const valueInput = document.createElement('input');
     valueInput.type = 'text';
-    valueInput.placeholder = '필터 값 입력...';
+    valueInput.placeholder = this._t('filter.valuePlaceholder');
     valueInput.value = currentFilters[0]?.value ?? '';
     valueInput.style.cssText = `
       width:100%;padding:4px 6px;border:1px solid var(--og-border-color,#e0e0e0);
@@ -87,7 +92,7 @@ export class FilterPanel {
     btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
 
     const clearBtn = document.createElement('button');
-    clearBtn.textContent = '초기화';
+    clearBtn.textContent = this._t('filter.clear');
     clearBtn.style.cssText = `
       padding:3px 10px;border:1px solid var(--og-border-color,#e0e0e0);
       border-radius:3px;background:#fff;cursor:pointer;font-size:12px;color:#666;
@@ -98,7 +103,7 @@ export class FilterPanel {
     });
 
     const applyBtn = document.createElement('button');
-    applyBtn.textContent = '적용';
+    applyBtn.textContent = this._t('filter.apply');
     applyBtn.style.cssText = `
       padding:3px 10px;border:1px solid var(--og-primary,#1976d2);
       border-radius:3px;background:var(--og-primary,#1976d2);

@@ -34,9 +34,21 @@ export interface FormulaControllerDeps<T extends Record<string, any> = any> {
   emit: (event: string, payload?: any) => void;
   /** aria-live announce(C8.1 공용 인프라). */
   announce: (msg: string) => void;
+  /** i18n: 수식 오류 announce/셀 라벨 해석(formulaError.* 통합 키). / i18n: resolve formula error announce/labels. */
+  t: (key: string, params?: Record<string, string | number>) => string;
   /** 현재 가시 범위 렌더(this._doRender(...this._visRange())). afterRecalc 가 !skipRender 시 유발. */
   doRenderWindow: () => void;
 }
+
+/** F3: 에러코드 → 카탈로그 키(GridRenderer 와 동일 formulaError.* 통합, 중복 맵 해소). */
+const _FORMULA_ERROR_KEY: Record<string, string> = {
+  '#REF': 'formulaError.ref',
+  '#CYCLE': 'formulaError.cycle',
+  '#VALUE': 'formulaError.value',
+  '#DIV0': 'formulaError.div0',
+  '#NAME': 'formulaError.name',
+  '#NUM': 'formulaError.num',
+};
 
 export class FormulaController<T extends Record<string, any> = any> {
   private _deps: FormulaControllerDeps<T>;
@@ -79,19 +91,12 @@ export class FormulaController<T extends Record<string, any> = any> {
     const evt = { rowIndex, field, error };
     this._deps.emit('formulaError', evt);
     this._deps.getOptions().formula?.onFormulaError?.(evt);
-    this._deps.announce(`${field} 셀 오류: ${this._formulaErrorMessageKo(error)}`);
+    this._deps.announce(this._deps.t('formula.cellErrorAnnounce', { field, message: this._formulaErrorMessageKo(error) }));
   }
 
   private _formulaErrorMessageKo(error: FormulaErrorCode): string {
-    switch (error) {
-      case '#REF': return '참조 대상이 삭제됨';
-      case '#CYCLE': return '순환 참조';
-      case '#VALUE': return '숫자가 아닌 값에 산술 연산';
-      case '#DIV0': return '0으로 나눔';
-      case '#NAME': return '알 수 없는 함수/이름';
-      case '#NUM': return '수치 도메인 오류';
-      default: return '수식 오류';
-    }
+    const key = _FORMULA_ERROR_KEY[error] ?? 'formulaError.fallback';
+    return this._deps.t(key);
   }
 
   /** F3 accessor(C0/C0.5/C1) — FlatRowModel + ColumnLayout.visibleLeaves + DataLayer(rowId 기반)만 본다. */

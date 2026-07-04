@@ -5,6 +5,13 @@ import { evaluateFormula } from '../FormulaEngine.js';
 import { applyMask } from '../MaskingEngine.js';
 import { defaultAppearance } from '../AppearanceResolver.js';
 import { iconRegistry } from '../IconRegistry.js';
+import { t as _globalT } from '../i18n/LocaleRegistry.js';
+
+/** i18n: 렌더 컨텍스트 로케일 해석기(주입 없으면 전역 t). 인스턴스 로케일이 전역보다 우선.
+ *  / i18n: render-context locale resolver (global t when not injected). Instance locale wins over global. */
+export function ctxT(ctx: RenderContext, key: string, params?: Record<string, string | number>): string {
+  return ctx.t ? ctx.t(key, params) : _globalT(key, params);
+}
 
 export interface RenderContext<T = any> {
   value: any;
@@ -14,6 +21,8 @@ export interface RenderContext<T = any> {
   colIndex: number;
   isSelected: boolean;
   rowState: 'none' | 'added' | 'edited' | 'removed';
+  /** i18n: 인스턴스 로케일 해석기(GridRenderer/CellEditManager 가 주입, 미주입 시 전역 t 폴백). / i18n: instance locale resolver (injected; global-t fallback). */
+  t?: (key: string, params?: Record<string, string | number>) => string;
   displayValue?: string | null;
   /** R1b: per-instance displayFormatter 전략(값·필드·행 → 표시문자열|null). Number/Date 렌더러가
    *  ctx.value 위에 적용한다(모듈전역 없이 멀티그리드 격리). null 반환/미설정 시 기본 포맷 폴백.
@@ -155,7 +164,7 @@ export function formatDate(value: any, format = 'yyyy-MM-dd', field?: string, ro
  *
  * 재렌더 시 col._maskRevealedRows에 rowIndex가 있으면 원문이 유지된다.
  */
-function _renderMasked(original: string, col: ColumnDef, rowIndex: number): HTMLElement {
+function _renderMasked(original: string, col: ColumnDef, rowIndex: number, ctx: RenderContext): HTMLElement {
   const masked = applyMask(original, col.mask!);
 
   const wrap = document.createElement('span');
@@ -171,8 +180,8 @@ function _renderMasked(original: string, col: ColumnDef, rowIndex: number): HTML
   // 눈 아이콘 — IconRegistry role 'mask.reveal'(글리프 = 커스텀 eye-reveal, 시각 동일).
   // R12c: 하드코딩 인라인 SVG 를 시맨틱 role 로 대체 — 스킨(--og-icon-corner) 결합, 글리프 SSOT 단일화.
   const eye = document.createElement('button');
-  eye.title = '클릭하면 원문 표시';
-  eye.setAttribute('aria-label', '마스킹 해제');
+  eye.title = ctxT(ctx, 'cell.revealTooltip');
+  eye.setAttribute('aria-label', ctxT(ctx, 'cell.revealAria'));
   eye.innerHTML = iconRegistry.render('mask.reveal', { size: 13 }) as string;
   eye.style.cssText =
     'flex-shrink:0;background:none;border:none;cursor:pointer;' +
@@ -239,7 +248,7 @@ export class TextRenderer implements CellRenderer {
       const colRevealed = (column as any)._maskRevealed === true;
       const rowRevealed = ((column as any)._maskRevealedRows as Set<number> | undefined)?.has(rowIndex) === true;
       if (!colRevealed && !rowRevealed) {
-        return _renderMasked(displayText, column, rowIndex);
+        return _renderMasked(displayText, column, rowIndex, ctx);
       }
     }
 
@@ -655,7 +664,7 @@ export class RadioRenderer implements CellRenderer {
     radio.type = 'radio';
     radio.checked = !!ctx.value;
     radio.setAttribute('aria-checked', ctx.value ? 'true' : 'false');
-    radio.setAttribute('aria-label', ctx.column.header ?? '선택');
+    radio.setAttribute('aria-label', ctx.column.header ?? ctxT(ctx, 'cell.radioAria'));
     if (ctx.column.group) radio.name = `og-radio-${ctx.rowIndex}-${ctx.column.group}`;
     radio.style.cssText = 'width:14px;height:14px;cursor:pointer;accent-color:var(--og-primary,#1976d2);';
     wrap.appendChild(radio);
@@ -751,7 +760,7 @@ export class BarcodeRenderer implements CellRenderer {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;overflow:hidden;gap:1px;';
     wrap.setAttribute('role', 'img');
-    wrap.setAttribute('aria-label', `바코드: ${val}`);
+    wrap.setAttribute('aria-label', ctxT(ctx, 'cell.barcodeAria', { value: val }));
     wrap.innerHTML = _barcodeSvg(val, h);
     const label = document.createElement('span');
     label.textContent = val;

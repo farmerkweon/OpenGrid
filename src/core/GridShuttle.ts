@@ -47,15 +47,17 @@ export class GridShuttle {
     };
 
     const L = opts.labels ?? {};
-    wrap.appendChild(mk(L.toRight ?? '▶', '체크한 행을 오른쪽 그리드로 이동',
+    // i18n: 버튼 title 은 왼쪽 그리드 인스턴스 로케일로 해석(라벨 옵션이 있으면 그 값이 우선).
+    const t = (key: string) => this._left.t(key);
+    wrap.appendChild(mk(L.toRight ?? '▶', t('shuttle.toRight'),
       () => { void this._left.moveCheckedTo(this._right); }));
-    wrap.appendChild(mk(L.toLeft ?? '◀', '체크한 행을 왼쪽 그리드로 이동',
+    wrap.appendChild(mk(L.toLeft ?? '◀', t('shuttle.toLeft'),
       () => { void this._right.moveCheckedTo(this._left); }));
 
     if (opts.includeAll) {
-      wrap.appendChild(mk(L.allRight ?? '⏩', '왼쪽 전체를 오른쪽으로 이동',
+      wrap.appendChild(mk(L.allRight ?? '⏩', t('shuttle.allRight'),
         () => { void this._moveAll(this._left, this._right); }));
-      wrap.appendChild(mk(L.allLeft ?? '⏪', '오른쪽 전체를 왼쪽으로 이동',
+      wrap.appendChild(mk(L.allLeft ?? '⏪', t('shuttle.allLeft'),
         () => { void this._moveAll(this._right, this._left); }));
     }
 

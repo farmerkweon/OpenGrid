@@ -14,6 +14,8 @@ export interface SortFilterDeps<T extends Record<string, any>> {
   renderHeader: () => void;
   doRender: () => void;
   announce: (msg: string) => void;
+  /** i18n: 정렬 상태어 + announce 해석. / i18n: resolve sort state words + announce. */
+  t: (key: string, params?: Record<string, string | number>) => string;
   emit: (event: string, ...args: any[]) => void;
   /** C0.5/§2.5: 정렬/필터 후 F1 범위 선택을 rowId 집합 기준으로 재투영(해제 아님). */
   onReproject?: () => void;
@@ -53,8 +55,8 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     this._d.renderHeader();
     this._d.doRender();
     const sortedItem = this._sortList.find(s => s.field === field);
-    const dirLabel = sortedItem ? (sortedItem.dir === 'asc' ? '오름차순' : '내림차순') : '정렬 해제';
-    this._d.announce(`${field} ${dirLabel} 정렬`);
+    const dirLabel = this._d.t(sortedItem ? (sortedItem.dir === 'asc' ? 'sort.asc' : 'sort.desc') : 'sort.none');
+    this._d.announce(this._d.t('sort.announce', { field, dir: dirLabel }));
     this._d.emit('sortChange', { sortList: this._sortList });
     opts.onSortChange?.({ field, dir: sortedItem?.dir ?? 'asc', sortList: this._sortList });
   }

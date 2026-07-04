@@ -16,6 +16,9 @@ import type {
 import { niceScale } from './scales.js';
 import { hitTest, type PointGeom } from './hittest.js';
 import { resolveSeriesStyles } from './palette.js';
+// i18n: CanvasAdapter 는 ChartManager 가 per-chart 로 생성하는 어댑터라 인스턴스 로케일 주입
+//   경로가 없다 → canvas aria·툴팁 폴백 문구를 전역 t 로 해석(설계 §3 헬퍼 예외).
+import { t } from '../i18n/LocaleRegistry.js';
 
 const VISUALLY_HIDDEN =
   'position:absolute;width:1px;height:1px;overflow:hidden;' +
@@ -64,7 +67,7 @@ export class CanvasAdapter implements ChartAdapter {
     canvas.style.cssText = 'display:block;';
     canvas.setAttribute('role', 'img');
     canvas.tabIndex = 0;
-    canvas.setAttribute('aria-label', spec.title ?? '차트');
+    canvas.setAttribute('aria-label', spec.title ?? t('chart.canvasDefault'));
     this._canvas = canvas;
 
     // 시각숨김 a11y 테이블(§B.1) — canvas 와 형제, aria-describedby 로 연결
@@ -120,7 +123,7 @@ export class CanvasAdapter implements ChartAdapter {
       ? Math.min(Math.max(this._cursor.series, 0), model.series.length - 1)
       : 0;
     if (this._canvas) {
-      this._canvas.setAttribute('aria-label', spec.a11y?.caption ?? spec.title ?? '차트');
+      this._canvas.setAttribute('aria-label', spec.a11y?.caption ?? spec.title ?? t('chart.canvasDefault'));
     }
     this._renderA11yTable(model, spec);
     this._renderLegend(model, spec);
@@ -513,7 +516,7 @@ export class CanvasAdapter implements ChartAdapter {
     const s = model.series[this._cursor.series];
     const cat = model.categories[this._cursor.cat];
     const v = s?.data[this._cursor.cat] ?? null;
-    const msg = `${s?.name ?? ''}, ${cat ?? ''}: ${fmt(v, this._spec, 'tooltip') || '없음'}`;
+    const msg = `${s?.name ?? ''}, ${cat ?? ''}: ${fmt(v, this._spec, 'tooltip') || t('chart.tooltipEmpty')}`;
     if (this._live) this._live.textContent = msg;
     const g = this._cursorPoint();
     if (g) this._showTooltip(g, g.cx, g.cy);

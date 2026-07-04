@@ -68,6 +68,8 @@ export interface MutationServiceDeps<T extends Record<string, any> = any> {
   emit: (event: string, payload?: any) => void;
   /** aria-live announce (C8.1 공용 인프라). */
   announce: (msg: string) => void;
+  /** i18n: 데이터 로드/스킵 announce 해석. / i18n: resolve data load/skip announces. */
+  t: (key: string, params?: Record<string, string | number>) => string;
   /** sort/filter 재적용(setData). */
   applyFilters: () => void;
   /** writeCell/endBatch 커밋 emit 직전 수식 dirty seed 소비. */
@@ -158,7 +160,7 @@ export class MutationService<T extends Record<string, any> = any> {
     const container = this._deps.getContainer();
     container.setAttribute('aria-rowcount', String(dl.rowCount));
     container.setAttribute('aria-colcount', String(this._deps.getColLayout().visibleLeaves.length));
-    this._deps.announce(`${dl.rowCount}행 데이터 로드됨`);
+    this._deps.announce(this._deps.t('data.loadedAnnounce', { count: dl.rowCount }));
     // R4: setData 는 렌더를 setTotalRows/rebuild(VS rAF, 비동기)로 이미 처리 → 커밋은 emit 만.
     // onDataChange 는 bound listener 로 ONCE(명시 재호출 없음).
     this.commit({ renderMode: 'async-vs', emitPayload: () => dl.getData() });
@@ -291,7 +293,7 @@ export class MutationService<T extends Record<string, any> = any> {
     }
     this.endBatch();
     if (skipped > 0) {
-      this._deps.announce(`쓰기 대상이 아닌 셀 ${skipped}개를 건너뛰었습니다`);
+      this._deps.announce(this._deps.t('data.skippedCellsAnnounce', { count: skipped }));
       this._deps.emit('writeCellsSkip', { skipped, total: patches.length });
     }
     return skipped;

@@ -3,6 +3,10 @@
 // RowDragDrop 에서 분리해 단일 책임으로 캡슐화한다.
 // ============================================================
 
+// i18n: DragGhost 는 RowDragDrop 이 인스턴스 컨텍스트 없이 생성하는 순수 시각 헬퍼라
+//   per-instance 로케일 경로가 없다 → 전역 t 로 해석(설계 §3 헬퍼 예외, 전역 활성 로케일).
+import { t } from './i18n/LocaleRegistry.js';
+
 /** 커서를 따라다니는 점선 고스트. transform 으로 X·Y 모두 이동(부드럽게). */
 export class DragGhost {
   private _el: HTMLElement;
@@ -22,7 +26,7 @@ export class DragGhost {
       'pointer-events:none;z-index:10000;border-radius:3px;opacity:0.92;' +
       'display:flex;align-items:center;padding-left:10px;font-size:12px;color:#1565c0;font-weight:600;' +
       'white-space:nowrap;overflow:hidden;';
-    if (count > 1) el.textContent = `${count}개 행 이동`;
+    if (count > 1) el.textContent = t('drag.rowCount', { count });
     document.body.appendChild(el);
     this._el = el;
   }

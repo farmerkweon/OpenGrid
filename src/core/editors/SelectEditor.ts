@@ -1,5 +1,6 @@
 import type { CellEditor } from './CellEditor.js';
 import type { RenderContext } from '../renderers/CellRenderer.js';
+import { ctxT } from '../renderers/CellRenderer.js';
 
 export type SelectOption = string | { label?: string; text?: string; value: any };
 
@@ -37,7 +38,7 @@ export class SelectEditor implements CellEditor {
 
     this.select = document.createElement('select');
     this.select.className = 'og-cell-select';
-    this.select.setAttribute('aria-label', ctx.column.header ?? '선택');
+    this.select.setAttribute('aria-label', ctx.column.header ?? ctxT(ctx, 'editor.select'));
 
     const resolved = this._optionsFn
       ? normalizeOptions(this._optionsFn(ctx.row, ctx.rowIndex))

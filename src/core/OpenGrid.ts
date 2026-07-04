@@ -8,6 +8,8 @@ import type { RendererCallbacks, DetailRenderContext } from './GridRenderer.js';
 import { AppearanceResolver, ThemeContext } from './AppearanceResolver.js';
 import { skinRegistry } from './SkinRegistry.js';
 import { iconRegistry, IconRegistry } from './IconRegistry.js';
+import { localeRegistry, LocaleRegistry } from './i18n/LocaleRegistry.js';
+import type { PartialLocaleMessages, LocaleMessageKey, MessageValue } from './i18n/types.js';
 import type { SkinTokenDelta } from './types.js';
 import { RenderController } from './RenderController.js';
 import { GridComposer } from './GridComposer.js';
@@ -60,6 +62,28 @@ import type {
 
 const ROW_ID_FIELD = '_ogRowId';
 
+/**
+ * OPEN_GRID 코어 그리드 클래스. / The OPEN_GRID core grid class.
+ *
+ * 컨테이너 요소에 마운트되어 가상 스크롤로 대량 행을 렌더하는 초경량 데이터 그리드.
+ * 정렬·필터·그룹/트리·병합·범위선택(F1)·마스터/디테일(F2)·셀 수식(F3)·통합 차트(F4)·
+ * override/strategy 확장 커널을 제공한다.
+ * / An ultra-light data grid that mounts into a container element and renders large row sets
+ * through virtual scrolling. Provides sorting, filtering, group/tree, merging, range selection
+ * (F1), master/detail (F2), cell formulas (F3), integrated charts (F4), and the
+ * override/strategy extension kernel.
+ *
+ * @typeParam T - 행 데이터 타입 / Row data type
+ * @example
+ * const grid = new OpenGrid('#host', {
+ *   columns: [
+ *     { field: 'name', header: '이름' },
+ *     { field: 'qty', header: '수량', type: 'number' },
+ *   ],
+ *   height: 400,
+ * });
+ * grid.setData([{ name: 'Kim', qty: 3 }]);
+ */
 export class OpenGrid<T extends Record<string, any> = any>
   extends EventEmitter
   implements OpenGridInstance<T>
@@ -77,6 +101,8 @@ export class OpenGrid<T extends Record<string, any> = any>
   private _appearance: AppearanceResolver | null = null;
   /** R12c: per-instance 아이콘 오버라이드 레지스트리(전역 iconRegistry 의 child). 첫 setIcon 때 지연 생성. */
   private _icons: IconRegistry | null = null;
+  /** i18n: per-instance 로케일 오버라이드 레지스트리(전역 localeRegistry 의 child). locale/messages 옵션 또는 첫 setLocale/setMessage 때 지연 생성. */
+  private _locales: LocaleRegistry | null = null;
   private _sfMgr!: SortFilterManager<T>;
   private _rowMgr!: RowManager<T>;
   private _editMgr!: CellEditManager<T>;
@@ -127,26 +153,36 @@ export class OpenGrid<T extends Record<string, any> = any>
 
   // grid.override() 확장 커널 (생성자 말미에 초기화)
   private _ovk!: OverrideKernel;
-  /** 공개 override API (호출가능 + .strategy). 생성자 말미에 부착. */
+  /** 공개 override API (호출가능 + .strategy). 생성자 말미에 부착. / Public override API (callable + .strategy). Attached at the end of the constructor. */
   override!: OverrideApi<T>;
   /** R11(§3.1 C7): 커널 위 타입드 확장점 레지스트리. _mount 초입에 생성(커널 준비 후). */
   private _extensions!: ExtensionPointRegistry<T>;
-  /** R11: 타입드 확장점 레지스트리 정면(렌더훅 등록·strategy/override 타입드 카탈로그·MutationHook·catalog). */
+  /** R11: 타입드 확장점 레지스트리 정면(렌더훅 등록·strategy/override 타입드 카탈로그·MutationHook·catalog). / R11: typed extension-point registry facade (render-hook registration, typed strategy/override catalog, MutationHook, catalog). */
   get extensions(): ExtensionPointRegistry<T> { return this._extensions; }
 
-  // ── grid.override() 정적 전역 레지스트리 ──────────────────
+  // ── grid.override() 정적 전역 레지스트리 / static global override registry ──────────────────
   /** 정적 전역 override 레이어 (모든 신규 인스턴스에 생성자 말미 적용). */
   private static _defaultOverrides: Array<[string, OverrideLayer, OverrideCallOptions]> = [];
   /** 정적 전역 strategy 슬롯. */
   private static _defaultStrategies: Array<[string, Function]> = [];
 
-  /** 정적: 모든 신규 그리드에 적용될 override 레이어 등록. */
+  /**
+   * 정적: 모든 신규 그리드에 적용될 override 레이어 등록. / Static: register an override layer
+   * applied to every newly created grid.
+   *
+   * @param name - 대상 공개 메서드 이름 / Target public method name
+   * @param fn - override 레이어 함수(첫 인자 orig) / Override layer function (first arg = orig)
+   * @param opts - 재진입/에러 정책 / Reentrancy & error policy
+   * @returns 체이닝용 OpenGrid 클래스 / The OpenGrid class for chaining
+   * @example
+   * OpenGrid.defaultOverride('getDisplayValue', (orig, ri, field) => orig(ri, field).toUpperCase());
+   */
   static defaultOverride(name: string, fn: OverrideLayer, opts: OverrideCallOptions = {}): typeof OpenGrid {
     OpenGrid._defaultOverrides.push([name, fn, opts]);
     return OpenGrid;
   }
 
-  /** 정적 전역 defaults 네임스페이스 (strategy 슬롯). */
+  /** 정적 전역 defaults 네임스페이스 (strategy 슬롯). / Static global defaults namespace (strategy slots). */
   static defaults = {
     strategy(slot: string, fn: Function): typeof OpenGrid {
       OpenGrid._defaultStrategies.push([slot, fn]);
@@ -155,16 +191,33 @@ export class OpenGrid<T extends Record<string, any> = any>
   };
 
   // ── R10(OCP): 렌더러/에디터 개방 등록소 (프로세스 전역, defaultOverride 와 동형) ──
+  // ── R10(OCP): open renderer/editor registry (process-global, same shape as defaultOverride) ──
   /**
    * 커스텀 셀 렌더러 타입을 코어 편집 없이 등록. `col.type`/`col.renderer`(문자열 또는 `{type}`)가
    * `typeName` 과 일치하면 등록 팩토리가 렌더러를 생성한다. 프로세스 전역(모든 그리드 인스턴스 공유).
+   * / Register a custom cell renderer type without editing the core. When `col.type`/`col.renderer`
+   * (string or `{type}`) matches `typeName`, the registered factory creates the renderer.
+   * Process-global (shared by all grid instances).
+   *
+   * @param typeName - 렌더러 타입 이름 / Renderer type name
+   * @param factory - 렌더러 팩토리 / Renderer factory
+   * @returns 체이닝용 OpenGrid 클래스 / The OpenGrid class for chaining
+   * @example
+   * OpenGrid.registerRenderer('stars', () => ({ render: (ctx) => '★'.repeat(ctx.value) }));
    */
   static registerRenderer(typeName: string, factory: RendererFactory): typeof OpenGrid {
     registerRenderer(typeName, factory);
     return OpenGrid;
   }
 
-  /** 커스텀 셀 에디터 타입을 코어 편집 없이 등록(OCP). 프로세스 전역. */
+  /**
+   * 커스텀 셀 에디터 타입을 코어 편집 없이 등록(OCP). 프로세스 전역.
+   * / Register a custom cell editor type without editing the core (OCP). Process-global.
+   *
+   * @param typeName - 에디터 타입 이름 / Editor type name
+   * @param factory - 에디터 팩토리 / Editor factory
+   * @returns 체이닝용 OpenGrid 클래스 / The OpenGrid class for chaining
+   */
   static registerEditor(typeName: string, factory: EditorFactory): typeof OpenGrid {
     registerEditor(typeName, factory);
     return OpenGrid;
@@ -178,6 +231,16 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 예) Neumorph 는 기본 카탈로그에서 컷(HANMS §1.3)됐으나 여기서 레시피로 재현 가능:
    *   OpenGrid.defineSkin('neumorph', { '--og-radius-md':'14px', '--og-elevation-inset':'inset -4px -4px 8px', … })
+   *
+   * / R12b (item3 §6.2): register a custom skin without editing the core (global policy, same
+   * shape as defaultOverride). After FORM-only validation (color literals rejected = color⊥form
+   * orthogonality) plus accessibility guardrails (focus <2px/none clamped), a runtime `<style>`
+   * block for `.og-container[data-og-skin="name"]` is injected. Any instance can then call
+   * `grid.setSkin(name)`. **Throws** when the delta contains color values.
+   *
+   * @param name - 스킨 id / Skin id
+   * @param delta - FORM 전용 토큰 델타 / FORM-only token delta
+   * @returns 체이닝용 OpenGrid 클래스 / The OpenGrid class for chaining
    */
   static defineSkin(name: string, delta: SkinTokenDelta): typeof OpenGrid {
     skinRegistry.define(name, delta);
@@ -190,12 +253,49 @@ export class OpenGrid<T extends Record<string, any> = any>
    * 이거나 원시 SVG 본문 마크업. 이후 모든 인스턴스의 아이콘 해석에 반영된다. per-instance 교체는
    * `grid.setIcon(role, svg)` 참조.
    *   예) OpenGrid.defineIconSet({ 'sort.asc': 'arrow-up', 'row.delete': '<path d="…"/>' })
+   *
+   * / R12c (item3 §5.1, contract C13): register/replace semantic icon role sets **globally**
+   * without editing the core (process-global policy, same shape as defineSkin/registerRenderer).
+   * Values are either known icon keys (`BOOTSTRAP_ICONS`) or raw SVG body markup. Affects icon
+   * resolution of all instances. For per-instance replacement see `grid.setIcon(role, svg)`.
+   *
+   * @param map - role → 아이콘 key 또는 원시 SVG / role → icon key or raw SVG
+   * @returns 체이닝용 OpenGrid 클래스 / The OpenGrid class for chaining
    */
   static defineIconSet(map: Record<string, string>): typeof OpenGrid {
     for (const [role, svgOrKey] of Object.entries(map)) iconRegistry.register(role, svgOrKey);
     return OpenGrid;
   }
 
+  /**
+   * i18n: UI 문자열 로케일을 코어 편집 없이 **전역** 등록/교체(defineSkin/defineIconSet 와 동형의
+   * 얇은 위임 파사드 — 정본은 `localeRegistry.register`). 부분 카탈로그 허용(폴백이 ko 로 메움).
+   * 이후 모든 인스턴스가 `grid.setLocale(id)` 로 사용. per-instance 오버라이드는 `grid.setMessage` 참조.
+   *   예) OpenGrid.defineLocale('ja', { contextMenu: { find: '検索' } })
+   *
+   * / i18n: register/replace a UI-string locale **globally** without editing the core (thin
+   * delegation façade isomorphic to defineSkin/defineIconSet — the canonical entry is
+   * `localeRegistry.register`). Partial catalogs are allowed (ko fills the gaps via fallback).
+   * Any instance can then call `grid.setLocale(id)`. For per-instance overrides see `grid.setMessage`.
+   *
+   * @param id - 로케일 id(예 'ja') / Locale id (e.g. 'ja')
+   * @param messages - 메시지 부분/전체 카탈로그 / Partial or full message catalog
+   * @param opts - `extends`: ko 이전에 시도할 폴백 로케일 / `extends`: fallback locale tried before ko
+   * @returns 체이닝용 OpenGrid 클래스 / The OpenGrid class for chaining
+   */
+  static defineLocale(id: string, messages: PartialLocaleMessages, opts?: { extends?: string }): typeof OpenGrid {
+    localeRegistry.register(id, messages, opts);
+    return OpenGrid;
+  }
+
+  /**
+   * 그리드를 생성해 컨테이너에 마운트한다. / Create the grid and mount it into the container.
+   *
+   * @param container - CSS 셀렉터 또는 호스트 요소 / CSS selector or host element
+   * @param options - 그리드 옵션(columns 필수) / Grid options (columns required)
+   * @example
+   * const grid = new OpenGrid('#host', { columns: [{ field: 'id', header: 'ID' }] });
+   */
   constructor(container: string | HTMLElement, options: GridOptions<T>) {
     super();
     // R8(§3.1 C2, §3.3): 객체그래프 조립(구 생성자 ~235줄 + _ovk 선생성 + mount)을 GridComposer 로
@@ -238,11 +338,16 @@ export class OpenGrid<T extends Record<string, any> = any>
     });
   }
 
-  // ── grid.override() 위임 메서드 ──────────────────────────
+  // ── grid.override() 위임 메서드 / grid.override() delegation methods ──────────────────────────
+  /** 단일 메서드의 override 를 원본으로 복구. / Restore a single overridden method to the original. */
   restore(name: string): this { this._ovk.restore(name); return this; }
+  /** 모든 override·strategy 를 복구(destroy 시 자동 수행). / Restore all overrides & strategies (run automatically on destroy). */
   restoreAll(): this { this._ovk.restoreAll(); return this; }
+  /** 해당 메서드가 override 되어 있는지 확인. / Whether the method is currently overridden. */
   hasOverride(name: string): boolean { return this._ovk.hasOverride(name); }
+  /** override 등록된 메서드 이름 목록. / Names of currently overridden methods. */
   getOverrideNames(): string[] { return this._ovk.getOverrideNames(); }
+  /** strategy 슬롯 조회(미등록 시 fallback 반환). / Read a strategy slot (returns fallback when unset). */
   getStrategy<F extends Function>(slot: string, fallback: F): F { return this._ovk.getStrategy(slot, fallback); }
   private _mount(): void {
     // R11(§3.1 C7, §4): 커널 위 타입드 확장점 레지스트리 생성(커널은 이미 준비됨 — _ovk-before-_mount).
@@ -327,6 +432,8 @@ export class OpenGrid<T extends Record<string, any> = any>
       getDisplayFormatter: () => this._ovk.getStrategy('displayFormatter', null as any) ?? null,
       // F3(§7.4/C7/C8.3): 마커·에러 툴팁·aria-label 을 위한 셀별 수식 메타(없으면 null).
       getFormulaMeta: (ri, field) => this._formula.getFormulaMeta(ri, field),
+      // i18n: 렌더 컨텍스트 로케일 해석기 — 인스턴스 로케일이 전역보다 우선(그룹배지/셀 aria/빈상태/수식 라벨).
+      t: (key, params) => this.t(key, params),
     }, this._appearance);
     // R5(§3.1 C4): 렌더 루프 컨트롤러 배선. 협력자(renderer/vs/pagination)는 여전히
     // 이 _mount 가 소유·생성하며, 값·협력자는 전부 getter 클로저로 주입(늦은-null / colLayout
@@ -369,6 +476,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       getOptions: () => this._options,
       emit: (event, payload) => { this.emit(event, payload); },
       announce: (msg) => this._announce(msg),
+      t: (key, params) => this.t(key, params),
       applyFilters: () => this._applyFilters(),
       flushFormula: () => this._formula.flushRecalc(),
       doRenderWindow: () => this._doRender(...this._visRange()),
@@ -401,12 +509,13 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._filterPanel = new FilterPanel(
       this._container,
       (field, items) => this.setFilter(field, items),
-      (field) => this.resetFilter(field)
+      (field) => this.resetFilter(field),
+      (key, params) => this.t(key, params)
     );
     // 웹 접근성 속성 설정 (role, aria 레이블, 행/열 수 알림)
     // ?묎렐?? role, aria-label, aria-rowcount, aria-colcount
     this._container.setAttribute('role', 'grid');
-    this._container.setAttribute('aria-label', this._options.ariaLabel ?? this._options.cssVars?.['aria-label'] ?? 'OPEN_GRID 데이터 그리드');
+    this._container.setAttribute('aria-label', this._options.ariaLabel ?? this._options.cssVars?.['aria-label'] ?? this.t('grid.containerAria'));
     this._container.setAttribute('aria-rowcount', '0');
     this._container.setAttribute('aria-colcount', String(this._options.columns.filter(c => !c.hidden).length));
     // aria-live 영역(C8.1 공용 announce 인프라): 스크린리더에게 상태 변화를 알린다.
@@ -480,7 +589,8 @@ export class OpenGrid<T extends Record<string, any> = any>
         (e) => {
           this.emit('pageChange', e);
           this._doRender(...this._visRange());
-        }
+        },
+        (key, params) => this.t(key, params),
       );
     }
     // 찾기 바 초기화 (헤더 위에 삽입)
@@ -519,7 +629,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       onExcel:   () => this.exportExcel(),
       onCsv:     () => this.exportCsv(),
       onPrint:   () => this.print(),
-    });
+    }, (key, params) => this.t(key, params));
 
     this._cmHandler = (e: MouseEvent) => {
       const cell = (e.target as HTMLElement).closest<HTMLElement>('.og-cell');
@@ -550,13 +660,24 @@ export class OpenGrid<T extends Record<string, any> = any>
     };
     this._container.addEventListener('keydown', this._cmKbdHandler);
   }
-  // openContextMenu / closeContextMenu 공개 API
+  // openContextMenu / closeContextMenu 공개 API / public context-menu API
+  /**
+   * 컨텍스트 메뉴를 지정 좌표에 연다. / Open the context menu at the event position.
+   *
+   * @param e - 좌표를 제공할 마우스 이벤트 / Mouse event providing coordinates
+   * @param items - 커스텀 메뉴 항목(생략 시 기본 메뉴) / Custom items (default menu when omitted)
+   */
   openContextMenu(e: MouseEvent, items?: import('./types').ContextMenuItem[]): void {
     this._ctxMenu?.open(e, items);
   }
+  /** 컨텍스트 메뉴를 닫는다. / Close the context menu. */
   closeContextMenu(): void {
     this._ctxMenu?.close();
   }
+  /**
+   * 캐스케이딩 필터 셀렉트 패널 설정(null = 제거). / Configure the cascading filter-select panel
+   * (null removes it).
+   */
   setFilterSelect(config: FilterSelectConfig | null): void {
     this._filterSelect?.destroy();
     this._filterSelect = null;
@@ -568,10 +689,16 @@ export class OpenGrid<T extends Record<string, any> = any>
       this._container, config,
       (field, items) => this.setFilter(field, items),
       (field?)       => this.resetFilter(field),
-      this._container.id
+      this._container.id,
+      (key, params) => this.t(key, params)
     );
   }
-  // 옵션을 런타임에 바꿀 때 호출 (contextMenu 재초기화, groupBy 재구성 등)
+  /**
+   * 옵션을 런타임에 부분 갱신한다 (contextMenu 재초기화, groupBy 재구성 등).
+   * / Partially update options at runtime (re-inits contextMenu, rebuilds groupBy, etc.).
+   *
+   * @param opts - 갱신할 옵션 부분집합 / Subset of options to update
+   */
   setOptions(opts: Partial<GridOptions<T>>): void {
     Object.assign(this._options, opts);
     if ('contextMenu' in opts) {
@@ -594,9 +721,12 @@ export class OpenGrid<T extends Record<string, any> = any>
   }
 
   /**
-   * 컬럼 마스킹 ON/OFF 전환.
-   * enabled=true  → 마스킹 적용 (기본 상태)
-   * enabled=false → 컬럼 전체 마스킹 해제 (원문 표시)
+   * 컬럼 마스킹 ON/OFF 전환. / Toggle column masking on/off.
+   * enabled=true  → 마스킹 적용 (기본 상태) / apply masking (default state)
+   * enabled=false → 컬럼 전체 마스킹 해제 (원문 표시) / reveal the whole column (show raw values)
+   *
+   * @param field - 대상 컬럼 field / Target column field
+   * @param enabled - 마스킹 활성 여부 / Whether masking is active
    */
   setMaskEnabled(field: string, enabled: boolean): void {
     const col = this._colLayout.getColumnByField(field) as any;
@@ -612,7 +742,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._doRender(...this._visRange());
   }
 
-  /** 현재 컬럼 마스킹 활성 여부 반환. true=마스킹 중, false=해제됨 */
+  /** 현재 컬럼 마스킹 활성 여부 반환. true=마스킹 중, false=해제됨 / Return whether masking is active for the column (true = masked, false = revealed). */
   getMaskEnabled(field: string): boolean {
     const col = this._colLayout.getColumnByField(field) as any;
     if (!col) return false;
@@ -623,6 +753,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._wsManager = new WorksheetManager<T>(
       this._container,
       (_name, state) => this._loadWorksheetState(state),
+      (key, params) => this.t(key, params),
     );
     for (const sheet of sheets) {
       this._wsManager.add(sheet.name, sheet.columns ?? this._options.columns, sheet.data ?? []);
@@ -651,36 +782,50 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._doRender(...this._visRange());
   }
 
+  /**
+   * 워크시트(탭)를 추가한다. / Add a worksheet (tab).
+   *
+   * @param name - 시트 이름 / Sheet name
+   * @param columns - 시트 전용 컬럼(생략 시 그리드 columns) / Sheet columns (grid columns when omitted)
+   * @param data - 시트 데이터 / Sheet data
+   */
   addWorksheet(name: string, columns?: import('./types').ColumnDef<T>[], data?: T[]): void {
     if (!this._wsManager) {
       this._wsManager = new WorksheetManager<T>(
         this._container,
         (_n, state) => this._loadWorksheetState(state),
+        (key, params) => this.t(key, params),
       );
     }
     this._wsManager.add(name, columns ?? this._options.columns, data ?? []);
   }
 
+  /** 워크시트를 제거한다. / Remove a worksheet. */
   removeWorksheet(name: string): void {
     this._wsManager?.remove(name);
   }
 
+  /** 지정 워크시트로 전환한다. / Switch to the given worksheet. */
   switchWorksheet(name: string): void {
     this._wsManager?.switch(name);
   }
 
+  /** 워크시트 이름을 변경한다. / Rename a worksheet. */
   renameWorksheet(oldName: string, newName: string): void {
     this._wsManager?.rename(oldName, newName);
   }
 
+  /** 워크시트 상태 스냅샷 조회(없으면 undefined). / Get a worksheet state snapshot (undefined when absent). */
   getWorksheet(name: string): import('./types').WorksheetState<T> | undefined {
     return this._wsManager?.get(name);
   }
 
+  /** 워크시트 이름 목록. / List of worksheet names. */
   getWorksheetNames(): string[] {
     return this._wsManager?.getNames() ?? [];
   }
 
+  /** 모든 워크시트를 다중 시트 엑셀로 내보낸다. / Export all worksheets as a multi-sheet Excel file. */
   exportSheetsExcel(filename?: string): void { this._exportMgr.exportSheetsExcel(filename); }
 
   // R5(§3.1 C4): 렌더 루프는 RenderController 로 이관. 아래는 동일 시그니처의 얇은 위임 —
@@ -698,11 +843,11 @@ export class OpenGrid<T extends Record<string, any> = any>
     const opts: MasterDetailOptions<T> = this._options.masterDetail ?? {};
     return {
       toggleMode: opts.toggle ?? 'expander-col',
-      ariaLabel: opts.ariaLabel ?? '상세 내용',
+      ariaLabel: opts.ariaLabel ?? this.t('grid.detailRegion'),
       getRowId: (row: any) => row?.[ROW_ID_FIELD],
       isExpanded: (rowId: string) => this._detailMgr.isExpandedId(rowId),
       onToggle: (_rowIndex: number, rowId: string) => this._detailMgr.toggleRow({ id: rowId }),
-      getGlyph: (expanded: boolean) => getDetailGlyph(expanded),
+      getGlyph: (expanded: boolean) => getDetailGlyph(expanded, (key, params) => this.t(key, params)),
       getPanelHost: (rowId: string) => this._detailMgr.getPanelHost(rowId),
       onBeforeTeardown: () => this._detailMgr.onBeforeTeardown(),
     };
@@ -752,8 +897,8 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._options.onRowDrop?.({ fromIndex, toIndex });
   }
 
-  // ── 크로스그리드 내부 헬퍼 ──
-  /** 드래그/셔틀이 참조하는 바디 엘리먼트 (레지스트리 해석용) */
+  // ── 크로스그리드 내부 헬퍼 / cross-grid internal helpers ──
+  /** @internal 드래그/셔틀이 참조하는 바디 엘리먼트 (레지스트리 해석용) / Body element referenced by drag/shuttle (registry resolution). */
   _crossBodyEl(): HTMLElement { return this._renderer!.bodyWrapper; }
   /** fromIndex 를 잡고 드래그할 때 함께 이동할 행 집합 (다중선택에 포함되면 선택 전체) */
   private _dragRowSet(fromIndex: number): number[] {
@@ -769,18 +914,24 @@ export class OpenGrid<T extends Record<string, any> = any>
   /**
    * 이 그리드의 행들을 다른 그리드로 이동(move)한다. 드래그·화살표 셔틀 공통 경로.
    * 3단계 이벤트(before→after→complete)와 crossGridMapping(필드 매핑)을 적용한다.
+   * / Move rows from this grid to another grid (shared path for drag and arrow shuttle).
+   * Applies the three-phase events (before→after→complete) and crossGridMapping (field mapping).
+   *
+   * @param target - 대상 그리드 / Target grid
+   * @param sourceIndexes - 이동할 소스 행 인덱스들 / Source row indexes to move
+   * @param targetIndex - 삽입 시작 인덱스(생략 시 끝) / Insertion start index (end when omitted)
+   * @returns 이동 성공 여부 / Whether the move succeeded
    */
   moveRowsTo(target: OpenGridInstance<T>, sourceIndexes: number[], targetIndex?: number): Promise<boolean> {
     return this._cross.moveRowsTo(target, sourceIndexes, targetIndex);
   }
 
-  /** 체크된 행을 다른 그리드로 이동 (화살표 셔틀용). 체크 없으면 무시. */
+  /** 체크된 행을 다른 그리드로 이동 (화살표 셔틀용). 체크 없으면 무시. / Move checked rows to another grid (arrow-shuttle use). No-op when nothing is checked. */
   moveCheckedTo(target: OpenGridInstance<T>): Promise<boolean> {
     return this._cross.moveCheckedTo(target);
   }
 
-  /** 행을 드롭으로 이동할 때 실행된다 */
-  /** ???꾩튂 ?대룞 */
+  /** 행 위치 이동(드롭 경로에서 실행). / Move a row to a new position (executed on the drop path). */
   reorderRow(fromIndex: number, toIndex: number): void {
     this._data.moveRow(fromIndex, toIndex);
     this._doRender(...this._visRange());
@@ -839,11 +990,23 @@ export class OpenGrid<T extends Record<string, any> = any>
     if (this._options.onRowCollapse)    this.on('rowCollapse',    this._options.onRowCollapse);
   }
   // R6(§3.1 C5): 데이터 변경 표면은 MutationService 로 이관. 아래는 얇은 위임(공개 API 불변).
+  // / R6 (§3.1 C5): the mutation surface moved to MutationService; below are thin delegations (public API unchanged).
+  /**
+   * 그리드 데이터를 통째로 교체한다(행 id 재발급, F3 수식 상태 초기화).
+   * / Replace the entire data set (row ids reissued; F3 formula state reset).
+   *
+   * @param data - 새 행 배열 / New array of rows
+   * @example
+   * grid.setData([{ name: 'Kim' }, { name: 'Lee' }]);
+   */
   setData(data: T[]): void { this._mutation.setData(data); }
 
+  /** 현재(정렬/필터 반영) 데이터 배열. / Current data array (sort/filter applied). */
   getData(): T[] { return this._data.getData(); }
+  /** 원본(정렬/필터 미반영) 데이터 배열. / Original data array (before sort/filter). */
   getSourceRows(): T[] { return this._data.getOriginalData(); }
 
+  /** 데이터 뒤에 행들을 추가한다. / Append rows after the existing data. */
   pushData(data: T[]): void {
     const combined = [...this._data.getAllData(), ...data];
     this._data.setData(combined);
@@ -852,6 +1015,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._pagination?.setTotalRows(n);
   }
 
+  /** 데이터 앞에 행들을 추가한다. / Prepend rows before the existing data. */
   prefixData(data: T[]): void {
     const combined = [...data, ...this._data.getAllData()];
     this._data.setData(combined);
@@ -860,6 +1024,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._pagination?.setTotalRows(n);
   }
 
+  /** 모든 행을 제거한다(컬럼·옵션 유지). / Remove all rows (columns & options kept). */
   clearData(): void {
     this._rowMgr.reset();
     this._data.clearData();
@@ -868,13 +1033,22 @@ export class OpenGrid<T extends Record<string, any> = any>
   }
 
   // R6(§3.1 C5): 얇은 위임 — 실제 구현은 MutationService.
+  // / R6 (§3.1 C5): thin delegation — actual implementation lives in MutationService.
+  /**
+   * 지정 위치에 행 1건을 삽입한다. / Insert one row at the given position.
+   *
+   * @param item - 행 데이터(부분 객체 허용) / Row data (partial object allowed)
+   * @param position - 삽입 위치(기본 'last') / Insertion position (default 'last')
+   */
   insertRow(item: Partial<T>, position: Position = 'last'): void { this._mutation.insertRow(item, position); }
 
+  /** 행(들)을 끝에 추가한다. / Append row(s) at the end. */
   pushRow(items: Partial<T> | Partial<T>[]): void { this._mutation.pushRow(items); }
 
-  /** @deprecated 하위호환 alias → pushRow */
+  /** @deprecated 하위호환 alias → pushRow / Backward-compat alias → pushRow */
   appendRows(items: Partial<T> | Partial<T>[]): void { this.pushRow(items); }
 
+  /** 행(들)을 맨 앞에 추가한다. / Prepend row(s) at the beginning. */
   unshiftRow(items: Partial<T> | Partial<T>[]): void {
     const arr = Array.isArray(items) ? items : [items];
     arr.forEach(it => this._data.addRow(it, 'first'));
@@ -885,20 +1059,28 @@ export class OpenGrid<T extends Record<string, any> = any>
     });
   }
 
-  /** @deprecated 하위호환 alias → unshiftRow */
+  /** @deprecated 하위호환 alias → unshiftRow / Backward-compat alias → unshiftRow */
   prependRows(items: Partial<T> | Partial<T>[]): void { this.unshiftRow(items); }
 
+  /** 행(단건 또는 복수 인덱스)을 삭제한다. / Delete row(s) by index (single or array). */
   deleteRow(rowIndex: number | number[]): void { this._mutation.deleteRow(rowIndex); }
 
   /**
    * @deprecated no-op stub — id 기반 삭제는 미구현(본문 없음). 인덱스로 지우려면 `deleteRow(rowIndex)`
    *   를, id→인덱스 변환은 `getFlatRowModel()`/`getData()` 조회 후 `deleteRow` 를 사용.
+   *   / no-op stub — id-based deletion is not implemented (empty body). Use `deleteRow(rowIndex)`;
+   *   resolve id→index via `getFlatRowModel()`/`getData()` first.
    */
   deleteById(_ids: string[]): void { /* 異뷀썑 援ы쁽 */ }
 
+  /** 원시 셀 값을 읽는다. / Read the raw cell value. */
   readCell(rowIndex: number, field: string): any {
     return this._data.getCellValue(rowIndex, field);
   }
+  /**
+   * 셀 표시 텍스트를 해석한다(displayFormatter strategy 반영). / Resolve the cell display text
+   * (honors the displayFormatter strategy).
+   */
   getDisplayValue(rowIndex: number, field: string): string {
     const val = this.readCell(rowIndex, field);
     // Phase 2 슬롯 #3: displayFormatter(본문 1줄 — C1 최소 침습 예외). default = 현행(null→'', else String).
@@ -909,59 +1091,81 @@ export class OpenGrid<T extends Record<string, any> = any>
     return fmt(val, field, this._data.getRowByIndex(rowIndex));
   }
 
+  /** 셀 값을 쓰고 변경 추적·수식 dirty 적립·재렌더한다. / Write a cell value (change tracking, formula dirty seeding, re-render). */
   writeCell(rowIndex: number, field: string, value: any): void { this._mutation.writeCell(rowIndex, field, value); }
 
+  /** 지정 인덱스의 행 객체. / Row object at the given index. */
   getRowAt(rowIndex: number): T { return this._data.getRowByIndex(rowIndex) as T; }
 
-  // ── Phase 0 인프라 ──────────────────────────────────────
+  // ── Phase 0 인프라 / Phase 0 infrastructure ──────────────────────────────────────
 
-  /** flat/visual index ↔ data 리졸버(C0.3). F1/F3/F4 는 이 모델만 경유해야 한다. */
+  /** flat/visual index ↔ data 리졸버(C0.3). F1/F3/F4 는 이 모델만 경유해야 한다. / flat/visual index ↔ data resolver (C0.3). F1/F3/F4 must go through this model. */
   getFlatRowModel(): FlatRowModel { return this._flatModel; }
 
   // R6(§3.1 C5): 배치 API 도 MutationService 로 이관. 얇은 위임(공개 API 불변).
+  /** 배치 쓰기 시작 — 이후 writeCell 의 렌더/이벤트를 지연·병합. / Begin a write batch — subsequent writeCell renders/events are deferred & coalesced. */
   beginBatch(): void { this._mutation.beginBatch(); }
 
+  /** 배치 종료 — 쓰기가 있었으면 1회 렌더 + 1회 dataChange. / End the batch — one render + one coalesced dataChange if anything was written. */
   endBatch(): void { this._mutation.endBatch(); }
 
   // R7(§3.1 C9): F3 수식 표면은 FormulaController 로 이관. 아래는 얇은 위임(공개 API 불변).
   // accessor 조립/에러 표현/flush/afterRecalc/getFormulaMeta 등 내부 훅은 _formula 를 통해 배선됨.
 
   // ── F3: 공개 API(§8.2) — rowIndex 는 flat(C0), 내부 즉시 stable rowId 로 정규화 ──────
+  // ── F3: public API (§8.2) — rowIndex is flat (C0), normalized to stable rowId internally ──
+  /**
+   * 셀에 수식을 설정한다("=A1+B2" 형태). / Set a cell formula (e.g. "=A1+B2").
+   *
+   * @param rowIndex - flat index(C0) / flat index (C0)
+   * @param field - 컬럼 field / Column field
+   * @param formula - '=' 로 시작하는 수식 원문 / Formula source starting with '='
+   * @example
+   * grid.setCellFormula(2, 'total', '=A1+B1');
+   */
   setCellFormula(rowIndex: number, field: string, formula: string): void {
     this._formula.setCellFormula(rowIndex, field, formula);
   }
 
+  /** 셀 수식 원문(없으면 null). / Formula source of the cell (null when absent). */
   getCellFormula(rowIndex: number, field: string): string | null {
     return this._formula.getCellFormula(rowIndex, field);
   }
 
+  /** 셀에 수식이 있는지. / Whether the cell has a formula. */
   hasCellFormula(rowIndex: number, field: string): boolean {
     return this._formula.hasCellFormula(rowIndex, field);
   }
 
+  /** 수식 제거(마지막 계산값은 유지). / Remove the formula (last computed value kept). */
   clearCellFormula(rowIndex: number, field: string): void {
     this._formula.clearCellFormula(rowIndex, field);
   }
 
+  /** 셀 수식 에러 코드(없으면 null). / Formula error code of the cell (null when none). */
   getCellError(rowIndex: number, field: string): FormulaErrorCode | null {
     return this._formula.getCellError(rowIndex, field);
   }
 
+  /** 디버깅용 — 이 셀을 참조하는(종속) 셀들. / Debugging — cells that depend on this cell. */
   getDependents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }> {
     return this._formula.getDependents(rowIndex, field);
   }
 
+  /** 디버깅용 — 이 셀이 참조하는(선행) 셀들. / Debugging — cells this cell references (precedents). */
   getPrecedents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }> {
     return this._formula.getPrecedents(rowIndex, field);
   }
 
+  /** 전체 수식 위상 재계산. / Recalculate all formulas in topological order. */
   recalculate(): void { this._formula.recalculate(); }
 
+  /** 단일 셀 + 종속 폐포만 재계산. / Recalculate one cell plus its dependent closure. */
   recalculateCell(rowIndex: number, field: string): void {
     this._formula.recalculateCell(rowIndex, field);
   }
 
-  /** C3(F1 fill 전용): srcRowId/srcField 수식의 상대축만 dRow/dCol 오프셋한 새 수식 원문. */
+  /** C3(F1 fill 전용): srcRowId/srcField 수식의 상대축만 dRow/dCol 오프셋한 새 수식 원문. / C3 (F1 fill only): new formula source with only the relative axes of the srcRowId/srcField formula offset by dRow/dCol. */
   offsetFormula(srcRowId: string, srcField: string, dRow: number, dCol: number): string {
     return this._formula.offsetFormula(srcRowId, srcField, dRow, dCol);
   }
@@ -971,36 +1175,70 @@ export class OpenGrid<T extends Record<string, any> = any>
    * FlatRowModel.resolveFlatRow 로 해소해 kind!=='data' (group/tree/detail 의사행)이면
    * 쓰기 전에 skip 한다(C0.3 쓰기 안전, filler 에 writeCell 절대 금지).
    * 건너뛴 셀 수를 반환하고, 1건이라도 있으면 announce + 'writeCellsSkip' 이벤트로 표면화한다.
+   * / beginBatch+loop+endBatch wrapper (C2.1). Each patch rowIndex is a flat index — targets
+   * resolving to kind!=='data' (group/tree/detail pseudo-rows) are skipped before writing
+   * (C0.3 write safety). Returns the skipped-cell count and surfaces it via announce +
+   * a 'writeCellsSkip' event when non-zero.
+   *
+   * @param patches - 쓰기 목록 / List of writes
+   * @returns 건너뛴 셀 수 / Number of skipped cells
    */
   writeCells(patches: Array<{ rowIndex: number; field: string; value: any }>): number {
     return this._mutation.writeCells(patches);
   }
 
   // ── F1: 범위 선택 + 채우기 핸들(11_design_F1_v2.md §6.2, C4) ────────────
+  // ── F1: range selection + fill handle (11_design_F1_v2.md §6.2, C4) ────────────
+  /** 정규화된 선택 범위 rects(없으면 []). MVP 는 길이 ≤1. / Normalized selection rects ([] when none). Length ≤1 in MVP. */
   getRangeSelection(): CellRange[] { return this._rangeMgr.getRangeSelection(); }
+  /** 활성 범위(= getRangeSelection()[0] ?? null). / Active range (= getRangeSelection()[0] ?? null). */
   getActiveRange(): CellRange | null { return this._rangeMgr.getActiveRange(); }
+  /** 범위 선택을 프로그램적으로 설정. / Set the range selection programmatically. */
   setRangeSelection(range: CellRange | CellRange[]): void { this._rangeMgr.setRangeSelection(range); }
+  /** 범위 선택 해제. / Clear the range selection. */
   clearRangeSelection(): void { this._rangeMgr.clearRangeSelection(); }
+  /** 활성 범위의 값 2D 배열. / 2D value array of the active range. */
   getRangeValues(): any[][] { return this._rangeMgr.getRangeValues(); }
+  /** 활성 범위 숫자 셀의 통계(합계/평균 등, OGDecimal 기반). / Stats of numeric cells in the active range (sum/avg…, OGDecimal-based). */
   getRangeStats(): RangeStats | null { return this._rangeMgr.getRangeStats(); }
+  /**
+   * source→target 채우기(배치 경유, C2). axis 는 두 rect 상대 위치로 추론.
+   * / Fill from source into target (batched, C2). The axis is inferred from the two rects.
+   *
+   * @param source - 원본 범위 / Source range
+   * @param target - 대상 범위 / Target range
+   * @param mode - 'copy'(기본) 또는 'series' / 'copy' (default) or 'series'
+   */
   fillRange(source: CellRange, target: CellRange, mode: 'copy' | 'series' = 'copy'): void {
     this._rangeMgr.fillRange(source, target, mode);
   }
 
   // ── F4: 그리드 데이터 통합 차트(11_design_F4_v2.md §6, C5) ──────────────
+  // ── F4: grid-data integrated chart (11_design_F4_v2.md §6, C5) ──────────────
+  /** 그리드 데이터 소스 차트를 생성한다. / Create a chart backed by grid data. */
   createChart(config: ChartConfig): ChartInstance { return this._chartMgr.createChart(config); }
+  /** 살아있는 차트 인스턴스 목록. / Live chart instances. */
   getCharts(): ChartInstance[] { return this._chartMgr.getCharts(); }
+  /** 모든 차트 파괴(구독 해제 포함). / Destroy all charts (including subscriptions). */
   destroyCharts(): void { this._chartMgr.destroyCharts(); }
 
+  /** 변경 추적 요약(추가/수정/삭제 행). / Change-tracking summary (added/edited/removed rows). */
   getChanges(): { added: T[]; edited: T[]; removed: T[] } { return this._data.getChanges(); }
+  /** 수정된 행 목록. / Edited rows. */
   getEditedRows(): T[] { return this._data.getEditedRows(); }
-  getChangedRows(): T[] { return this._data.getChangedRows(); }  // ?섏쐞 ?명솚
+  /** @deprecated 하위 호환 — getEditedRows() 권장. / Backward compat — prefer getEditedRows(). */
+  getChangedRows(): T[] { return this._data.getChangedRows(); }
+  /** 행별 변경 필드·old/new 값 상세. / Per-row changed fields with old/new values. */
   getChangedColumns(): Array<{ row: T; fields: string[]; diff: Array<{ field: string; oldValue: any; newValue: any }> }> {
     return this._data.getChangedColumns();
   }
+  /** 추가된 행 목록. / Added rows. */
   getAddedRows(): T[] { return this._data.getAddedRows(); }
+  /** 삭제된 행 목록. / Removed rows. */
   getRemovedRows(): T[] { return this._data.getRemovedRows(); }
+  /** 행의 원본(수정 전) 스냅샷. / Original (pre-edit) snapshot of the row. */
   getOriginalRow(rowIndex: number): T | undefined { return this._data.getOriginalRow(rowIndex); }
+  /** stateField 값이 있는 행 목록. / Rows having a value in stateField. */
   getRowsWithState(stateField: string): T[] { return this._data.getRowsWithState(stateField); }
   // ── R13(§2.8 R-7a, M8): 죽은 no-op 스텁 정직성 표기 ──────────────────────
   //   아래 메서드들은 공개 API 표면에 존재하지만 본문이 비어 아무 동작도 하지 않는다(하위호환 계약상
@@ -1008,15 +1246,21 @@ export class OpenGrid<T extends Record<string, any> = any>
   //   목록: undo/redo/clearHistory · deleteById · checkById/addCheckById/uncheckById ·
   //         setColWidths/calcColWidths · freezeRows · addTreeRow · jumpToCol.
   /** @deprecated no-op stub — undo/redo 히스토리는 미구현. 변이 가드는 TriggerManager `before:*` 훅,
-   *   변경 추적은 `getChanges()`/`getOriginalRow()` 를 사용. */
+   *   변경 추적은 `getChanges()`/`getOriginalRow()` 를 사용.
+   *   / no-op stub — undo/redo history is not implemented. Use TriggerManager `before:*` hooks
+   *   for mutation guards and `getChanges()`/`getOriginalRow()` for change tracking. */
   undo(): void {}
-  /** @deprecated no-op stub — undo/redo 히스토리 미구현(위 `undo()` 참조). */
+  /** @deprecated no-op stub — undo/redo 히스토리 미구현(위 `undo()` 참조). / no-op stub — see `undo()` above. */
   redo(): void {}
-  /** @deprecated no-op stub — undo/redo 히스토리 자체가 없어 비울 것도 없음(위 `undo()` 참조). */
+  /** @deprecated no-op stub — undo/redo 히스토리 자체가 없어 비울 것도 없음(위 `undo()` 참조). / no-op stub — there is no history to clear (see `undo()`). */
   clearHistory(): void {}
+  /** 보이는 리프 컬럼 정의 목록. / Visible leaf column definitions. */
   getColumnDefs(): ColumnDef<T>[] { return this._colLayout.visibleLeaves; }
+  /** 숨김 포함 전체 리프 컬럼 정의. / All leaf column definitions including hidden. */
   getAllColumnDefs(): ColumnDef<T>[] { return this._colLayout.leaves; }
+  /** 보이는 컬럼 수. / Number of visible columns. */
   getColumnCount(): number { return this._colLayout.visibleLeaves.length; }
+  /** 컬럼 구성을 통째로 교체하고 재렌더한다. / Replace the whole column set and re-render. */
   applyColumns(columns: ColumnDef<T>[]): void {
     const ctx = this._trigMgr.mkCtx('applyColumns', [columns]);
     if (!this._trigMgr.exec('before:applyColumns', ctx)) return;
@@ -1027,11 +1271,13 @@ export class OpenGrid<T extends Record<string, any> = any>
     ctx.result = { columnCount: columns.length };
     this._trigMgr.exec('after:applyColumns', ctx);
   }
+  /** 컬럼 1개를 삽입한다. / Insert one column. */
   insertColumn(colDef: ColumnDef<T>, position?: Position): void {
     this._colLayout.addColumn(colDef, position as any);
     this._recalcWidths(this._container.getBoundingClientRect().width);
     this._renderHeader(); this._doRender(...this._visRange());
   }
+  /** 컬럼을 삭제한다(해당 field 참조 수식은 #REF 처리). / Delete a column (formulas referencing the field become #REF). */
   deleteColumn(field: string): void {
     this._colLayout.removeColumn(field);
     this._recalcWidths(this._container.getBoundingClientRect().width);
@@ -1050,42 +1296,65 @@ export class OpenGrid<T extends Record<string, any> = any>
     this.applyColumns(reordered);
     this._options.onColumnReorder?.({ fromIndex: fromIdx, toIndex: toIdx, field: moved.field ?? '' });
   }
+  /** 컬럼(들)을 숨긴다. / Hide column(s). */
   hideColumn(field: string | string[]): void {
     this._colLayout.hideColumn(field);
     this._recalcWidths(this._container.getBoundingClientRect().width);
     this._renderHeader(); this._doRender(...this._visRange());
   }
+  /** 숨긴 컬럼(들)을 다시 표시한다. / Show hidden column(s). */
   showColumn(field: string | string[]): void {
     this._colLayout.showColumn(field);
     this._recalcWidths(this._container.getBoundingClientRect().width);
     this._renderHeader(); this._doRender(...this._visRange());
   }
+  /** field 의 보이는 컬럼 인덱스(-1 = 없음). / Visible column index of the field (-1 when absent). */
   getColumnIndex(field: string): number { return this._colLayout.getColumnIndex(field); }
+  /** 인덱스 위치의 field 명(없으면 ''). / Field name at the index ('' when absent). */
   getFieldAt(idx: number): string { return this._colLayout.getColumnByIndex(idx)?.field ?? ''; }
+  /** 해당 컬럼의 값 배열. / Values of the column. */
   getColValues(field: string, _all = false): any[] { return this._data.getData().map(r => r[field]); }
+  /** 해당 컬럼의 고유 값 배열. / Unique values of the column. */
   getUniqueValues(field: string, all = false): any[] { return [...new Set(this.getColValues(field, all))]; }
   /** @deprecated no-op stub — 컬럼 폭 일괄 설정 미구현. 폭은 `ColumnDef.width` 또는 헤더 드래그로
-   *   지정하며 내부 `_recalcWidths` 가 자동 배분한다. */
+   *   지정하며 내부 `_recalcWidths` 가 자동 배분한다.
+   *   / no-op stub — bulk width setting is not implemented. Set widths via `ColumnDef.width`
+   *   or header drag; internal `_recalcWidths` distributes automatically. */
   setColWidths(_widths: number[]): void {}
-  /** @deprecated no-op stub — 항상 빈 배열 반환(폭 계산 미구현). 자동 배분은 내부 `_recalcWidths` 담당. */
+  /** @deprecated no-op stub — 항상 빈 배열 반환(폭 계산 미구현). 자동 배분은 내부 `_recalcWidths` 담당. / no-op stub — always returns [] (width calculation not implemented). */
   calcColWidths(_fitToGrid = false): number[] { return []; }
+  /** 선택된 행 데이터 목록. / Selected row data. */
   getSelections(): T[] { return this._rowMgr.getSelections(); }
+  /** 활성 행 인덱스(-1 = 없음). / Active row index (-1 when none). */
   getActiveRow(): number { return this._rowMgr.getActiveRow(); }
+  /** 지정 행을 활성/선택한다. / Activate (select) the given row. */
   activate(index: number): void { this._rowMgr.activate(index); this._doRender(...this._visRange()); }
+  /** 선택 해제. / Clear the selection. */
   deselect(): void { this._rowMgr.deselect(); this._doRender(...this._visRange()); }
+  /** 체크된 행 목록({row, rowIndex}). / Checked rows ({row, rowIndex}). */
   getChecked(): Array<{ row: T; rowIndex: number }> { return this._rowMgr.getChecked(); }
+  /** 체크된 행 데이터만 배열로. / Checked row data only. */
   getAllChecked(): T[] { return this._rowMgr.getAllChecked(); }
-  /** @deprecated no-op stub — id 기반 체크 미구현. 값 기준 체크는 `checkByValue(field, values)` 사용. */
+  /** @deprecated no-op stub — id 기반 체크 미구현. 값 기준 체크는 `checkByValue(field, values)` 사용. / no-op stub — id-based checking not implemented; use `checkByValue(field, values)`. */
   checkById(_ids: string[]): void {}
-  /** @deprecated no-op stub — id 기반 체크 추가 미구현(위 `checkById()` 참조). `checkByValue` 사용. */
+  /** @deprecated no-op stub — id 기반 체크 추가 미구현(위 `checkById()` 참조). `checkByValue` 사용. / no-op stub — see `checkById()`; use `checkByValue`. */
   addCheckById(_ids: string[]): void {}
+  /** field 값이 values 에 포함되는 행을 체크한다. / Check rows whose field value is in values. */
   checkByValue(field: string, values: any[]): void {
     this._rowMgr.checkByValue(field, values);
     this._doRender(...this._visRange());
   }
-  /** @deprecated no-op stub — id 기반 체크 해제 미구현. 전체 해제는 `uncheckAll()` 사용. */
+  /** @deprecated no-op stub — id 기반 체크 해제 미구현. 전체 해제는 `uncheckAll()` 사용. / no-op stub — id-based unchecking not implemented; use `uncheckAll()`. */
   uncheckById(_ids: string[]): void {}
+  /** 전체 체크 해제. / Uncheck all rows. */
   uncheckAll(): void { this._rowMgr.uncheckAll(); this._doRender(...this._visRange()); }
+  /**
+   * 정렬을 적용한다(단일 field+dir 또는 SortItem 배열). / Apply sorting (single field+dir or a
+   * SortItem list).
+   *
+   * @param fieldOrList - field 명 또는 정렬 목록 / Field name or sort list
+   * @param dir - 단일 field 일 때 방향(기본 'asc') / Direction for single-field form (default 'asc')
+   */
   orderBy(fieldOrList: string | SortItem[], dir: 'asc' | 'desc' = 'asc'): void {
     const ctx = this._trigMgr.mkCtx('orderBy', [fieldOrList, dir]);
     if (!this._trigMgr.exec('before:orderBy', ctx)) return;
@@ -1094,7 +1363,9 @@ export class OpenGrid<T extends Record<string, any> = any>
     ctx.result = { sortList: this._sfMgr.sortList };
     this._trigMgr.exec('after:orderBy', ctx);
   }
+  /** 정렬을 초기 상태로 되돌린다. / Reset sorting to the initial state. */
   resetOrder(): void { this._sfMgr.resetSort(); this._recalcRangeBearingFormulas(); }
+  /** 컬럼 필터를 설정한다. / Set filters for a column. */
   setFilter(field: string, filterItems: FilterItem[]): void {
     const ctx = this._trigMgr.mkCtx('setFilter', [field, filterItems]);
     if (!this._trigMgr.exec('before:setFilter', ctx)) return;
@@ -1103,23 +1374,26 @@ export class OpenGrid<T extends Record<string, any> = any>
     ctx.result = { field, filteredCount: this._data.rowCount };
     this._trigMgr.exec('after:setFilter', ctx);
   }
+  /** 필터 해제(field 생략 시 전체). / Clear filters (all when field omitted). */
   resetFilter(field?: string): void { this._sfMgr.resetFilter(field); this._recalcRangeBearingFormulas(); }
 
   /** F3-R13/MCCONNELL-03(P0): 정렬/필터 후 범위-보유(hasRangeRef) 수식 전부 dirty(§3.5). */
   private _recalcRangeBearingFormulas(): void {
     this._formula.recalcRangeBearingFormulas();
   }
+  /** 현재 필터 상태 스냅샷. / Snapshot of the current filter state. */
   getFilterState(): Record<string, FilterItem[]> { return this._sfMgr.getFilterState(); }
+  /** 필터 상태를 복원한다. / Restore a saved filter state. */
   restoreFilter(state: Record<string, FilterItem[]>): void { this._sfMgr.restoreFilter(state); }
   private _applyFilters(): void { this._sfMgr.applyFilters(); }
+  /** 왼쪽 n개 컬럼을 고정한다. / Freeze the leftmost n columns. */
   freeze(n: number): void { this._colLayout.setFrozen(n); this._renderHeader(); this._doRender(...this._visRange()); }
-  /** ?섎룞 蹂묓빀: [{row, col, rowSpan?, colSpan?}] */
+  /** 수동 병합: [{row, col, rowSpan?, colSpan?}] / Manual merge: [{row, col, rowSpan?, colSpan?}] */
   mergeCells(cells: MergeCell[]): void {
     this._mergeEngine.applyMergeCells(cells);
     this._doRender(...this._visRange());
   }
-  /** 자동 병합: 지정 필드 컬럼에서 연속 같은 값을 rowSpan으로 묶는다 */
-  /** ?먮룞 蹂묓빀: 吏??field 而щ읆?먯꽌 ?곗냽 媛숈? 媛믪쓣 rowSpan */
+  /** 자동 병합: 지정 필드 컬럼에서 연속 같은 값을 rowSpan으로 묶는다. / Auto merge: consecutive equal values in the given field columns are merged via rowSpan. */
   autoMerge(fields: string[]): void {
     const leaves = this._colLayout.visibleLeaves;
     const colIndexes: number[] = [];
@@ -1132,13 +1406,14 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._doRender(...this._visRange());
   }
 
-  /** 蹂묓빀 ?댁젣 */
+  /** 병합 해제. / Clear all merges. */
   clearMerge(): void {
     this._mergeEngine.clear();
     this._doRender(...this._visRange());
   }
-  /** @deprecated no-op stub — 행 고정(freeze rows) 미구현. 컬럼 고정만 지원하며 `freeze(n)` 사용. */
+  /** @deprecated no-op stub — 행 고정(freeze rows) 미구현. 컬럼 고정만 지원하며 `freeze(n)` 사용. / no-op stub — frozen rows are not implemented; only column freezing via `freeze(n)`. */
   freezeRows(_n: number): void {}
+  /** 지정 필드들로 그룹핑한다. / Group rows by the given fields. */
   groupBy(fields: string[]): void {
     const ctx = this._trigMgr.mkCtx('groupBy', [fields]);
     if (!this._trigMgr.exec('before:groupBy', ctx)) return;
@@ -1146,69 +1421,105 @@ export class OpenGrid<T extends Record<string, any> = any>
     ctx.result = { fields };
     this._trigMgr.exec('after:groupBy', ctx);
   }
+  /** 그룹핑 해제. / Clear grouping. */
   clearGroup(): void { this._grpMgr.clearGroup(); }
+  /** 모든 그룹 펼침. / Expand all groups. */
   expandAll(): void { this._grpMgr.expandAll(); }
+  /** 모든 그룹 접힘. / Collapse all groups. */
   collapseAll(): void { this._grpMgr.collapseAll(); }
+  /** 트리 모드 활성화. / Enable tree mode. */
   enableTree(): void { this._grpMgr.enableTree(); }
+  /** 트리 모드 비활성화. / Disable tree mode. */
   disableTree(): void { this._grpMgr.disableTree(); }
+  /** 지정 트리 노드 펼침/접힘. / Expand/collapse the given tree nodes. */
   expandNodes(ids: any | any[], open = true): void { this._grpMgr.expandNodes(ids, open); }
+  /** 모든 트리 노드 펼침. / Expand all tree nodes. */
   expandAllNodes(): void { this._grpMgr.expandAllNodes(); }
+  /** 모든 트리 노드 접힘. / Collapse all tree nodes. */
   collapseAllNodes(): void { this._grpMgr.collapseAllNodes(); }
 
-  // ── F2: 마스터/디테일(11_design_F2_v2.md §6.2) ────────────────────────
+  // ── F2: 마스터/디테일(11_design_F2_v2.md §6.2) / F2: master/detail ────────────────────────
+  /** 행 상세 패널 펼침(rowRef = flat index 또는 {id}). / Expand the detail panel (rowRef = flat index or {id}). */
   expandRow(rowRef: number | { id: string }): void { this._detailMgr.expandRow(rowRef); }
+  /** 행 상세 패널 접힘. / Collapse the detail panel. */
   collapseRow(rowRef: number | { id: string }): void { this._detailMgr.collapseRow(rowRef); }
+  /** 행 상세 패널 토글. / Toggle the detail panel. */
   toggleRow(rowRef: number | { id: string }): void { this._detailMgr.toggleRow(rowRef); }
+  /** 행 상세 패널 펼침 여부. / Whether the detail panel is expanded. */
   isRowExpanded(rowRef: number | { id: string }): boolean { return this._detailMgr.isRowExpanded(rowRef); }
+  /** 모든 상세 패널 접힘. / Collapse all detail panels. */
   collapseAllDetails(): void { this._detailMgr.collapseAllDetails(); }
+  /** 상세 인스턴스(renderer 반환값 또는 자동 서브그리드; 펼친 적 없으면 undefined). / Detail instance (renderer result or auto subgrid; undefined if never expanded). */
   getDetailInstance<D = any>(rowRef: number | { id: string }): D | undefined { return this._detailMgr.getDetailInstance<D>(rowRef); }
+  /** 열린 상세 패널 폭 강제 재동기(FR-11). / Force re-sync of open detail panel widths (FR-11). */
   resyncPanelWidths(): void { this._detailMgr.resyncPanelWidths(); }
   /** @deprecated no-op stub — 부모 지정 트리행 삽입 미구현. 평면 삽입은 `insertRow(item, pos)`,
-   *   트리 구성은 `enableTree()`/`groupBy(fields)` 사용. */
+   *   트리 구성은 `enableTree()`/`groupBy(fields)` 사용.
+   *   / no-op stub — parented tree-row insertion is not implemented. Use `insertRow(item, pos)`
+   *   for flat insertion and `enableTree()`/`groupBy(fields)` for tree structure. */
   addTreeRow(_item: Partial<T>, _pid: string, _pos?: Position): void {}
+  /** 엑셀(xlsx)로 내보낸다. / Export as Excel (xlsx). */
   exportExcel(options?: ExportOptions | string): void { this._exportMgr.exportExcel(options); }
+  /** CSV 로 내보낸다. / Export as CSV. */
   exportCsv(options?: ExportOptions | string): void { this._exportMgr.exportCsv(options); }
+  /** JSON 으로 내보낸다. / Export as JSON. */
   exportJson(options?: ExportOptions | string): void { this._exportMgr.exportJson(options); }
+  /** 인쇄용 창을 연다. / Open the print view. */
   print(options?: { title?: string; excludeFields?: string[] }): void { this._exportMgr.print(options); }
 
+  /**
+   * 데이터 배열 변환. / Convert the data set.
+   *
+   * @param keyValue - true = 객체 배열(기본), false = 값 2D 배열 / true = object array (default), false = 2D value array
+   */
   toArray(keyValue = true): any[] {
     const data = this._data.getData();
     if (keyValue) return data;
     const cols = this._colLayout.visibleLeaves;
     return data.map(row => cols.map(c => row[c.field]));
   }
+  /** 지정 행으로 스크롤·선택한다. / Scroll to and select the given row. */
   jumpToRow(rowIndex: number): void {
     this._rowMgr.selectSingle(rowIndex);
     this._vs?.scrollToRow(rowIndex);
     this._doRender(...this._visRange());
   }
-  /** @deprecated no-op stub — 특정 컬럼으로 가로 스크롤 이동 미구현. 행 이동은 `jumpToRow(rowIndex)` 사용. */
+  /** @deprecated no-op stub — 특정 컬럼으로 가로 스크롤 이동 미구현. 행 이동은 `jumpToRow(rowIndex)` 사용. / no-op stub — horizontal jump-to-column is not implemented; use `jumpToRow(rowIndex)`. */
   jumpToCol(_field: string): void {}
+  /** 현재 스크롤 좌표. / Current scroll position. */
   getScrollPos(): { x: number; y: number } {
     return { x: this._renderer?.bodyWrapper.scrollLeft ?? 0, y: this._renderer?.bodyWrapper.scrollTop ?? 0 };
   }
+  /** 푸터 정의를 교체하고 다시 그린다. / Replace footer definitions and re-render the footer. */
   setFooter(fd: any[]): void {
     this._options.footer = fd as any;
     this._renderFooterEl();
   }
+  /** 푸터 집계값 목록. / Computed footer values. */
   getFooterData(): any[] { return this._footerMgr.computeValues(); }
+  /** 특정 field 의 푸터 집계값(없으면 null). / Footer value of the field (null when absent). */
   getFooterValue(field: string): any {
     return this._footerMgr.computeValues().find((r: any) => r._field === field)?._value ?? null;
   }
   private _renderFooterEl(): void { this._footerMgr.render(); }
 
+  /** 그리드 크기를 변경하고 재배치한다. / Resize the grid and relayout. */
   resize(w?: number, h?: number): void {
     if (w) this._container.style.width = `${w}px`;
     if (h) this._container.style.height = `${h}px`;
     this._onResize();
   }
+  /** 색 테마(data-og-theme)를 전환한다. / Switch the color theme (data-og-theme). */
   setTheme(theme: string): void { this._container.setAttribute('data-og-theme', theme); }
+  /** 색 축 CSS 변수 1개를 런타임 설정한다. / Set one color-axis CSS variable at runtime. */
   setThemeVar(k: string, v: string): void { this._container.style.setProperty(k, v); }
 
   /**
    * R12b: 스킨(FORM 축) 전환. data-og-skin 설정 + resolver 컨텍스트 교체 + 인라인 form 사이트 재해석.
    * 색 테마와 직교(색 토큰 무변경). default→named 전환 시 인라인 보더가 리터럴→var() 로 승격되므로
    * 헤더/본문을 한 번 재렌더한다(opt-in 비용). named→named/…→default 도 동일 경로로 안전.
+   * / R12b: switch the skin (FORM axis). Sets data-og-skin, swaps the resolver context and
+   * re-resolves inline form sites. Orthogonal to color themes (no color tokens touched).
    */
   setSkin(skin: string): void {
     this._options.skin = skin;
@@ -1221,7 +1532,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._renderHeader();
     this._doRender(...this._visRange());
   }
-  /** R12b: 현재 스킨 id('default' = 오늘). */
+  /** R12b: 현재 스킨 id('default' = 오늘). / R12b: current skin id ('default' = stock look). */
   getSkin(): string { return this._options.skin ?? 'default'; }
 
   /**
@@ -1229,6 +1540,13 @@ export class OpenGrid<T extends Record<string, any> = any>
    * 전역 iconRegistry 를 부모로 하는 child 에만 기록). svgOrKey 는 알려진 아이콘 key 또는 원시 SVG 본문.
    * R11 확장점과의 연결: 오버라이드를 `extensions.iconResolver` strategy 슬롯으로도 표면화해 발견가능하게 한다.
    * 반환은 this(체이닝). 미지정 role/글리프는 안전 폴백(never throw).
+   * / R12c (contract C13): replace a semantic icon role for this instance only (multi-grid
+   * isolation — written to a child of the global iconRegistry). svgOrKey is a known icon key or
+   * raw SVG body. Returns this for chaining. Unknown roles/glyphs fall back safely (never throw).
+   *
+   * @param role - 시맨틱 아이콘 role / Semantic icon role
+   * @param svgOrKey - 아이콘 key 또는 원시 SVG / Icon key or raw SVG
+   * @returns 체이닝용 this / this for chaining
    */
   setIcon(role: string, svgOrKey: string): this {
     if (!this._icons) this._icons = iconRegistry.child();
@@ -1240,13 +1558,74 @@ export class OpenGrid<T extends Record<string, any> = any>
     return this;
   }
 
-  /** R12c: 이 인스턴스의 아이콘 role 해석(오버라이드 우선, 없으면 전역). 렌더 마크업/SVGElement. */
+  /** R12c: 이 인스턴스의 아이콘 role 해석(오버라이드 우선, 없으면 전역). 렌더 마크업/SVGElement. / R12c: resolve an icon role for this instance (override first, then global). Returns render markup or an SVGElement. */
   renderIcon(role: string, opts?: { size?: number; title?: string; el?: boolean }): string | SVGElement {
     return (this._icons ?? iconRegistry).render(role, opts);
+  }
+
+  /**
+   * i18n: 이 인스턴스의 UI 로케일을 전환한다. setSkin 진영 — 데이터 불변 + 크롬/가시창 부분 재렌더.
+   * `lang` 속성을 로케일 Intl 태그로 갱신(스크린리더 발음 전환), 상주 크롬(페이지네이션/찾기)의
+   * 라벨을 새로 그리고, 캐시된 필터 패널을 무효화한 뒤 헤더+가시창을 1회 재렌더한다.
+   * 미등록 로케일은 throw 하지 않고 폴백 유지(never-throw). 전환 후 `localeChange` 이벤트 발화.
+   * / i18n: switch this instance's UI locale. setSkin camp — data-immutable + partial chrome/viewport
+   * re-render. Updates `lang` to the locale's Intl tag (screen-reader pronunciation), refreshes
+   * resident chrome labels (pagination/find), invalidates the cached filter panel, then re-renders
+   * the header + visible window once. Unknown locales never throw. Emits `localeChange` afterwards.
+   *
+   * @param locale - 로케일 id(예 'en') / Locale id (e.g. 'en')
+   * @example
+   * grid.setLocale('en');
+   */
+  setLocale(locale: string): void {
+    const prev = this.getLocale();
+    (this._locales ??= localeRegistry.child()).setActive(locale);
+    this._options.locale = locale;
+    this._container.setAttribute('lang', (this._locales ?? localeRegistry).meta().intlLocale);
+    this._pagination?.refreshLabels();
+    this._findMgr?.refreshLabels();
+    this._filterPanel = null; // 다음 open 때 새 로케일로 재구축 / rebuilt with the new locale on next open
+    this._renderHeader();
+    this._doRender(...this._visRange());
+    this.emit('localeChange', { locale, prev });
+  }
+
+  /** i18n: 현재 인스턴스 로케일 id('ko' = 기본). / i18n: current instance locale id ('ko' = default). */
+  getLocale(): string { return (this._locales ?? localeRegistry).active(); }
+
+  /**
+   * i18n: 이 인스턴스만 단일 메시지를 오버라이드(setIcon 동형 — 첫 호출 때 child 지연 생성, 멀티그리드 격리).
+   * 자동 재렌더는 하지 않는다(다음 렌더/setLocale 때 반영). / i18n: override a single message for this
+   * instance only (isomorphic to setIcon — lazy child on first call, multi-grid isolation). No auto
+   * re-render (applied on the next render/setLocale).
+   *
+   * @param key - dot-key 메시지 키(예 'filter.apply') / dot-key message key (e.g. 'filter.apply')
+   * @param value - 문자열('{name}' 보간) 또는 함수 / string ('{name}' interpolation) or a function
+   * @returns 체이닝용 this / this for chaining
+   */
+  setMessage(key: LocaleMessageKey | string, value: MessageValue): this {
+    (this._locales ??= localeRegistry.child()).setOverride(key, value);
+    return this;
+  }
+
+  /**
+   * i18n: 메시지를 해석한다(인스턴스 오버라이드 우선 → 활성 로케일 → ko → 키 원문). 절대 throw 안 함 —
+   * 렌더 루프(셀 aria) 소비자용. / i18n: resolve a message (instance override → active locale → ko →
+   * the key itself). Never throws — for render-loop consumers (cell aria).
+   *
+   * @param key - dot-key 메시지 키 / dot-key message key
+   * @param params - `{name}` 보간 파라미터 / `{name}` interpolation params
+   * @returns 해석된 문자열(미등록 키면 키 원문) / Resolved string (the key itself when unknown)
+   */
+  t(key: LocaleMessageKey | string, params?: Record<string, string | number>): string {
+    return (this._locales ?? localeRegistry).t(key, params);
   }
   /**
    * R12b: FORM 축 단일 토큰 런타임 오버라이드(setThemeVar 의 형태-축 형제). 컨테이너 인라인이라
    * 스타일시트를 항상 이긴다. 색⊥형태 직교성 보호를 위해 색 값은 거부한다.
+   * / R12b: runtime override of a single FORM-axis token (form-axis sibling of setThemeVar).
+   * Container-inline, so it always beats stylesheets. Color values are rejected to protect
+   * color⊥form orthogonality (throws).
    */
   setSkinVar(k: string, v: string): void {
     if (/#[0-9a-fA-F]{3,8}\b/.test(v) || /\b(?:rgba?|hsla?)\(\s*\d/.test(v)) {
@@ -1254,18 +1633,34 @@ export class OpenGrid<T extends Record<string, any> = any>
     }
     this._container.style.setProperty(k, v);
   }
+  /**
+   * 트리거 등록('before:{op}' 취소 가능, 'after:{op}' 결과 수신). / Register a trigger
+   * ('before:{op}' can cancel, 'after:{op}' receives the result).
+   *
+   * @param event - 트리거 이벤트명 / Trigger event name
+   * @param handler - 핸들러(ctx.cancel() 지원) / Handler (supports ctx.cancel())
+   * @returns 체이닝용 this / this for chaining
+   * @example
+   * grid.addTrigger('before:insertRow', ctx => { if (!ctx.args[0]?.name) ctx.cancel(); });
+   */
   addTrigger(event: TriggerEvent | string, handler: TriggerHandler): this {
     this._trigMgr.add(event, handler); return this;
   }
+  /** 트리거 제거. / Remove a trigger. */
   removeTrigger(event: TriggerEvent | string, handler: TriggerHandler): this {
     this._trigMgr.remove(event, handler); return this;
   }
+  /** 트리거 전체 또는 특정 이벤트 클리어. / Clear all triggers or those of one event. */
   clearTriggers(event?: TriggerEvent | string): this {
     this._trigMgr.clear(event); return this;
   }
   private _mkCtx(operation: string, args: any[]): TriggerContext { return this._trigMgr.mkCtx(operation, args); }
   private _trig(event: string, ctx: TriggerContext): boolean { return this._trigMgr.exec(event, ctx); }
 
+  /**
+   * 그리드를 파괴한다(옵저버/이벤트/차트/패널 해제, DOM 정리, override 전체 복구).
+   * / Destroy the grid (detach observers/events/charts/panels, clean the DOM, restore all overrides).
+   */
   destroy(): void {
     if (this._destroyed) return;
     this._destroyed = true;

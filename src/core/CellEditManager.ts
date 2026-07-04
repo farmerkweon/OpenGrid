@@ -15,6 +15,8 @@ export interface CellEditDeps<T extends Record<string, any>> {
   emit: (event: string, ...args: any[]) => void;
   doRender: () => void;
   announce: (msg: string) => void;
+  /** i18n: 편집 셀 위치 announce 해석 + 에디터 ctx 로케일 주입. / i18n: resolve edit-cell announce + inject locale into editor ctx. */
+  t: (key: string, params?: Record<string, string | number>) => string;
   writeCell: (ri: number, field: string, value: any) => void;
   scrollToRow: (ri: number) => void;
   getVisibleLeaves: () => ColumnDef<T>[];
@@ -54,7 +56,10 @@ export class CellEditManager<T extends Record<string, any> = any> {
     if (col && row) {
       const val = (row as any)[col.field];
       this._d.announce(
-        `${ri + 1}행 ${ci + 1}열, ${col.header}: ${val == null ? '빈 값' : String(val)}`
+        this._d.t('editor.cellPositionAnnounce', {
+          row: ri + 1, col: ci + 1, header: col.header as any,
+          value: val == null ? this._d.t('cell.emptyValue') : String(val),
+        })
       );
     }
   }
@@ -102,7 +107,8 @@ export class CellEditManager<T extends Record<string, any> = any> {
     const formulaSrc = this._d.hasCellFormula?.(rowIndex, col.field) ? this._d.getCellFormula?.(rowIndex, col.field) : null;
     const ctx = {
       value: formulaSrc ?? row?.[col.field], row: row as any, rowIndex,
-      column: col as any, colIndex, isSelected: true, rowState: 'none' as any
+      column: col as any, colIndex, isSelected: true, rowState: 'none' as any,
+      t: (key: string, params?: Record<string, string | number>) => this._d.t(key, params),
     };
     editor.mount(cellEl, ctx,
       (value) => this.commitEditWithValue(rowIndex, colIndex, value),
@@ -148,7 +154,8 @@ export class CellEditManager<T extends Record<string, any> = any> {
     const formulaSrc = this._d.hasCellFormula?.(rowIndex, col.field) ? this._d.getCellFormula?.(rowIndex, col.field) : null;
     const ctx = {
       value: formulaSrc ?? row?.[col.field], row: row as any, rowIndex,
-      column: col as any, colIndex, isSelected: true, rowState: 'none' as any
+      column: col as any, colIndex, isSelected: true, rowState: 'none' as any,
+      t: (key: string, params?: Record<string, string | number>) => this._d.t(key, params),
     };
     editor.mount(cellEl, ctx,
       (value) => this.commitEditWithValue(rowIndex, colIndex, value),

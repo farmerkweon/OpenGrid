@@ -1,5 +1,7 @@
 import type { SummaryOp } from './types.js';
 import { OGDecimal } from './OGDecimal.js';
+// i18n: GroupEngine 은 그룹 flat 을 만드는 순수 엔진(인스턴스 컨텍스트 없음) → null 그룹 라벨을 전역 t 로 해석.
+import { t } from './i18n/LocaleRegistry.js';
 
 export interface GroupRow<T = any> {
   _isGroup: true;
@@ -83,7 +85,7 @@ function _groupByFields<T extends Record<string, any>>(
       _isGroup: true,
       _groupField: field,
       _groupValue: value,
-      _groupLabel: value == null ? '(없음)' : String(value),
+      _groupLabel: value == null ? t('group.nullLabel') : String(value),
       _depth: depth,
       _expanded: expanded,
       _childCount: rows.length,

@@ -14,6 +14,10 @@ export interface ExportDeps<T extends Record<string, any>> {
   getWsManager: () => WorksheetManager<T> | null;
   /** Phase 2: OverrideKernel.getStrategy 주입(슬롯 cellSerializer 도달용). */
   getStrategy?: <F extends Function>(slot: string, fallback: F) => F;
+  /** i18n: 인쇄 요약행 해석(미주입 시 ko 폴백). / i18n: resolve print summary row (ko fallback when absent). */
+  t?: (key: string, params?: Record<string, string | number>) => string;
+  /** i18n: 로케일 포맷 메타(인쇄 lang·날짜 로케일·Excel 폰트). / i18n: locale format meta (print lang, date locale, Excel font). */
+  getMeta?: () => { intlLocale: string; exportFont?: string };
 }
 
 export class ExportManager<T extends Record<string, any> = any> {
@@ -103,9 +107,11 @@ export class ExportManager<T extends Record<string, any> = any> {
       }
 
       const noStyle = styleMode === 'none';
+      // i18n: Excel 헤더/데이터 폰트를 활성 로케일 meta.exportFont 로(ko='맑은 고딕', byte-identical).
+      const exportFont = this._d.getMeta?.().exportFont ?? '맑은 고딕';
       const S = {
-        hdrFont:   noStyle ? {} : { bold: true, color: { rgb: hdrFgRgb }, sz: fontSize, name: '맑은 고딕' },
-        dataFont:  noStyle ? {} : { sz: fontSize, color: { rgb: rowFgRgb }, name: '맑은 고딕' },
+        hdrFont:   noStyle ? {} : { bold: true, color: { rgb: hdrFgRgb }, sz: fontSize, name: exportFont },
+        dataFont:  noStyle ? {} : { sz: fontSize, color: { rgb: rowFgRgb }, name: exportFont },
         hdrFill:   noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: hdrBgRgb } },
         evenFill:  noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: rowBgRgb } },
         oddFill:   noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: rowAltRgb } },
@@ -191,8 +197,15 @@ export class ExportManager<T extends Record<string, any> = any> {
       ? `<div class="og-print-footer">${footerText}</div>`
       : '';
 
+    // i18n: 인쇄 문서 lang·날짜 로케일·요약행을 활성 로케일 meta/카탈로그로(ko=ko-KR·byte-identical 요약).
+    const meta = this._d.getMeta?.() ?? { intlLocale: 'ko-KR' };
+    const lang = meta.intlLocale;
+    const summary = this._d.t
+      ? this._d.t('export.printSummary', { rows: data.length, cols: cols.length, date: new Date().toLocaleString(lang) })
+      : `${data.length}행 × ${cols.length}열 · ${new Date().toLocaleString(lang)}`;
+
     const html = `<!DOCTYPE html>
-<html lang="ko"><head>
+<html lang="${lang}"><head>
 <meta charset="UTF-8"><title>${title}</title>
 <style>
   @page{margin:0;}
@@ -207,7 +220,7 @@ export class ExportManager<T extends Record<string, any> = any> {
 </style>
 </head><body>
 <h2>${title}</h2>
-<p>${data.length}행 × ${cols.length}열 · ${new Date().toLocaleString('ko-KR')}</p>
+<p>${summary}</p>
 <table>
   <thead><tr>${headerRow}</tr></thead>
   <tbody>${bodyRows}</tbody>

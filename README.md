@@ -9,7 +9,7 @@ High-performance, framework-agnostic data grid with virtual scrolling, inline ed
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![npm](https://img.shields.io/badge/npm-1.0.4-orange)](https://www.npmjs.com/package/open-grid)
+[![npm](https://img.shields.io/badge/npm-1.2.0-orange)](https://www.npmjs.com/package/open-grid)
 
 📖 **[개발 가이드](https://foxnail.kr/open-grid/demo/v2/guide/index.php)** — 설치부터 고급 API까지 단계별 가이드
 🔗 **[데모/홈페이지](https://foxnail.kr/open-grid/demo/v2/index.php)**
@@ -28,6 +28,7 @@ High-performance, framework-agnostic data grid with virtual scrolling, inline ed
 | Column Reorder (drag header, `columnReorder: true`) | ✅ |
 | Frozen Columns | ✅ |
 | Row/Column Groups (header merge) | ✅ |
+| Localization / i18n (built-in `ko`·`en`, `setLocale`, custom locales) | ✅ |
 | Grouping + Summary (SUM/AVG/MIN/MAX/COUNT) | ✅ |
 | Tree Grid (flat → hierarchy, expand/collapse) | ✅ |
 | OrgChart (organization chart with theme) | ✅ |
@@ -349,6 +350,34 @@ CSS 변수로 완전한 테마 커스터마이즈 가능:
   --og-tree-toggle-color: #1976d2;
 }
 ```
+
+## Localization (i18n)
+
+All built-in UI strings — labels, `aria-label`s, live-region announcements, tooltips, placeholders —
+are kept in swappable locale catalogs, separated from the core. Ships with **`ko` (default) and `en`**.
+Existing apps are unaffected: without a `locale`/`messages` option, output is byte-identical to before.
+
+```ts
+import { OpenGrid, localeRegistry } from 'open-grid';
+
+// 1) Pick a built-in locale per instance
+const grid = new OpenGrid(el, { columns, locale: 'en' });
+
+// 2) Switch at runtime (re-labels chrome, updates the `lang` attribute, emits `localeChange`)
+grid.setLocale('ko');
+
+// 3) Override just a few messages for one instance
+new OpenGrid(el, { locale: 'en', messages: { contextMenu: { sortAsc: 'Sort A→Z' } } });
+
+// 4) Register a custom locale globally (partial dictionaries are fine — missing keys fall back)
+localeRegistry.register('ja', { contextMenu: { find: '検索' }, pagination: { rowsPerPage: '行/ページ:' } });
+new OpenGrid(el, { locale: 'ja' });
+```
+
+Fallback chain: instance override → active locale → `ko` (complete catalog) → raw key.
+Number/date formatting and developer-facing error messages are intentionally out of scope
+(use `Intl` and keep logs grep-stable). See the
+[Localization guide](https://foxnail.kr/open-grid/demo/v2/guide/index.php) for the full key reference.
 
 ## Changelog
 

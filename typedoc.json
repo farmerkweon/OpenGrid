@@ -1,0 +1,19 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api",
+  "name": "OPEN_GRID API",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "readme": "none",
+  "hideGenerator": true,
+  "cleanOutputDir": true,
+  "skipErrorChecking": false,
+  "tsconfig": "tsconfig.typedoc.json",
+  "navigationLinks": {
+    "GitHub": "https://github.com/farmerkweon/OpenGrid"
+  }
+}

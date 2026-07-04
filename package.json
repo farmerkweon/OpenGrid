@@ -1,6 +1,6 @@
 {
   "name": "open-grid",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Ultra-light data grid with a zero-dependency core — works with React, Vue, Angular, jQuery, or vanilla JS. MIT-licensed, endlessly customizable, with an AI-friendly override guide.",
   "type": "module",
   "main": "dist/open-grid.cjs",
@@ -40,6 +40,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "docs": "typedoc",
     "lint": "eslint src --ext .ts,.tsx,.vue",
     "preview": "vite preview",
     "build:deploy": "vite build --config vite.config.deploy.ts",
@@ -77,6 +78,7 @@
     "jsdom": "^29.1.1",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "typedoc": "^0.28.19",
     "typescript": "^5.4.0",
     "vite": "^5.2.0",
     "vite-plugin-dts": "^4.5.4",

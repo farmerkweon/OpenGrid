@@ -43,6 +43,8 @@ export interface RangeSelectionDeps<T extends Record<string, any>> {
   emit: (event: string, ...args: any[]) => void;
   doRender: () => void;
   announce: (msg: string) => void;
+  /** i18n: 범위 선택/채우기 announce·aria 해석. / i18n: resolve range selection/fill announce & aria. */
+  t: (key: string, params?: Record<string, string | number>) => string;
   // C3(15_cross_contracts.md, F3 제공): fill 커밋 시 수식 합동 3규칙(FillEngine.FillPlanContext) 연결.
   hasCellFormula?: (rowId: string, field: string) => boolean;
   offsetFormula?: (rowId: string, field: string, dRow: number, dCol: number) => string;
@@ -241,7 +243,7 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     if (!r) return;
     const rows = r.endRow - r.startRow + 1;
     const cols = r.endCol - r.startCol + 1;
-    this._d.announce(`${r.startRow + 1}행 ${r.startCol + 1}열 ~ ${r.endRow + 1}행 ${r.endCol + 1}열, ${rows * cols}개 셀 선택`);
+    this._d.announce(this._d.t('range.selectionAnnounce', { r1: r.startRow + 1, c1: r.startCol + 1, r2: r.endRow + 1, c2: r.endCol + 1, n: rows * cols }));
   }
 
   // ── 키보드 채우기(UR-5, Ctrl+D/R, §3.3, C9) ───────────────────
@@ -319,9 +321,9 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     // C3.1: 소스가 수식인 셀 복제 — setCellFormula 경유(값 write 아님, §C3).
     for (const fi of formulaItems) this._d.setCellFormulaByRowId?.(fi.rowId, fi.field, fi.formula);
 
-    if (plan.skippedFormula > 0) this._d.announce(`수식 셀 ${plan.skippedFormula}개 보존`);
+    if (plan.skippedFormula > 0) this._d.announce(this._d.t('range.formulaPreserved', { count: plan.skippedFormula }));
     const otherSkips = plan.items.filter(i => i.action === 'skip' && i.reason !== 'formula-preserved').length;
-    if (otherSkips > 0) this._d.announce(`채우기 대상이 아닌 셀 ${otherSkips}개를 건너뛰었습니다`);
+    if (otherSkips > 0) this._d.announce(this._d.t('range.fillSkipped', { count: otherSkips }));
   }
 
   // ── 클립보드(UR-4/UC-6, §5, M-4/M-5) ──────────────────────────
@@ -417,7 +419,7 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     const handle = document.createElement('div');
     handle.className = 'og-range-fill-handle';
     handle.setAttribute('role', 'button');
-    handle.setAttribute('aria-label', '채우기 핸들');
+    handle.setAttribute('aria-label', this._d.t('range.fillHandleAria'));
     // background-color(shorthand 아님) — base.css 의 @media(pointer:coarse) background-clip:content-box
     // 확대 히트박스 트릭을 인라인 shorthand 리셋이 깨뜨리지 않도록 한다(C8.4).
     handle.style.cssText = 'position:absolute;display:none;pointer-events:auto;background-color:var(--og-fill-handle-bg,#1976d2);';

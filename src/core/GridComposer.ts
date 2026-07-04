@@ -16,6 +16,7 @@ import { GroupTreeManager } from './GroupTreeManager.js';
 import { DetailManager } from './DetailManager.js';
 import { ChartManager } from './ChartManager.js';
 import { OverrideKernel } from './OverrideKernel.js';
+import { localeRegistry, LocaleRegistry } from './i18n/LocaleRegistry.js';
 import type { GridRenderer } from './GridRenderer.js';
 import type { VirtualScroll } from './VirtualScroll.js';
 import type { Pagination } from './Pagination.js';
@@ -54,6 +55,8 @@ export interface ComposerHost<T extends Record<string, any> = any> {
   _detailMgr: DetailManager<T>;
   _chartMgr: ChartManager;
   _ovk: OverrideKernel;
+  /** i18n: per-instance 로케일 오버라이드 child(전역 localeRegistry 의 child). 미지정 시 null → 전역 직행. */
+  _locales: LocaleRegistry | null;
   // ── mount 단계에서 채워지는(늦은-null) 협력자 — 조립 시엔 lazy 클로저로만 참조 ──
   _renderer: GridRenderer | null;
   _vs: VirtualScroll | null;
@@ -66,6 +69,8 @@ export interface ComposerHost<T extends Record<string, any> = any> {
   on(event: string, cb: (...args: any[]) => void): any;
   off(event: string, cb: (...args: any[]) => void): any;
   _announce(msg: string): void;
+  /** i18n: 메시지 해석(인스턴스 오버라이드 우선 → 활성 로케일 → ko → 키). / i18n: resolve a message. */
+  t(key: string, params?: Record<string, string | number>): string;
   _doRender(startIndex: number, endIndex: number): void;
   _visRange(): [number, number];
   _renderHeader(): void;
@@ -167,6 +172,21 @@ export class GridComposer {
     host._rowMgr = new RowManager<T>(host._data);
     host._colLayout = new ColumnLayout<T>(host._options.columns, host._options.frozenColumns);
 
+    // i18n(I18N_DESIGN.md §3.2): locale/messages 지정 시에만 per-instance child 지연 생성 —
+    // 미지정 사용자는 전역 localeRegistry 로 직행(추가 상태 0, ko byte-identical). messages 는
+    // child 오버라이드로 기록하고 locale 은 setActive(never-throw), lang 속성으로 SR 발음을 맞춘다.
+    if (options.locale || options.messages) {
+      const child = localeRegistry.child();
+      if (options.messages) child.applyOverrides(options.messages);
+      if (options.locale) {
+        child.setActive(options.locale);
+        host._container.setAttribute('lang', child.meta().intlLocale);
+      }
+      host._locales = child;
+    } else {
+      host._locales = null;
+    }
+
     return { _phase: 'core' };
   }
 
@@ -186,6 +206,7 @@ export class GridComposer {
       getOptions: () => host._options,
       emit: (event, payload) => { host.emit(event, payload); },
       announce: (msg) => host._announce(msg),
+      t: (key, params) => host.t(key, params),
       doRenderWindow: () => host._doRender(...host._visRange()),
     });
 
@@ -219,6 +240,7 @@ export class GridComposer {
       emit: (ev, ...args) => host.emit(ev, ...args),
       doRender: () => host._doRender(...host._visRange()),
       announce: (msg) => host._announce(msg),
+      t: (key, params) => host.t(key, params),
       writeCell: (ri, field, value) => host.writeCell(ri, field, value),
       scrollToRow: (ri) => host._vs?.scrollToRow(ri),
       getVisibleLeaves: () => host._colLayout.visibleLeaves,
@@ -237,6 +259,8 @@ export class GridComposer {
       getMaskEnabled: (field) => host.getMaskEnabled(field),
       getWsManager: () => host._wsManager,
       getStrategy: (slot, fb) => host._ovk.getStrategy(slot, fb),
+      t: (key, params) => host.t(key, params),
+      getMeta: () => (host._locales ?? localeRegistry).meta(),
     });
     host._footerMgr = new FooterManager<T>({
       getData: () => host._data.getData(),
@@ -256,6 +280,7 @@ export class GridComposer {
       handleRowDrop: (from, to) => host._handleRowDrop(from, to),
       doRender: () => host._doRender(...host._visRange()),
       announce: (msg) => host._announce(msg),
+      t: (key, params) => host.t(key, params),
       emit: (ev, ...args) => host.emit(ev, ...args),
       visRange: () => host._visRange(),
       handleCellKeyEvt: (name, e) => host._handleCellKeyEvt(name, e),
@@ -272,6 +297,7 @@ export class GridComposer {
       renderHeader: () => host._renderHeader(),
       doRender: () => host._doRender(...host._visRange()),
       announce: (msg) => host._announce(msg),
+      t: (key, params) => host.t(key, params),
       emit: (ev, ...args) => host.emit(ev, ...args),
       onReproject: () => host._rangeMgr.reproject(),
     });
@@ -282,6 +308,7 @@ export class GridComposer {
       getVs: () => host._vs,
       getPagination: () => host._pagination,
       doRender: () => host._doRender(...host._visRange()),
+      t: (key, params) => host.t(key, params),
     });
     host._cellEvt = new CellEventHandler<T>({
       getData: () => host._data,
@@ -312,6 +339,7 @@ export class GridComposer {
       emit: (ev, ...args) => host.emit(ev, ...args),
       doRender: () => host._doRender(...host._visRange()),
       announce: (msg) => host._announce(msg),
+      t: (key, params) => host.t(key, params),
       // C3(15_cross_contracts.md): F3 이 제공하는 hasCellFormula/offsetFormula/setCellFormula 를
       // fill 커밋 경로(FillEngine.FillPlanContext)에 연결한다.
       hasCellFormula: (rowId, field) => host._recalc.hasCellFormula(rowId, field),
@@ -340,6 +368,7 @@ export class GridComposer {
       doRenderFull: (n) => host._doRender(0, n - 1),
       emit: (ev, payload) => host.emit(ev, payload),
       announce: (msg) => host._announce(msg),
+      t: (key, params) => host.t(key, params),
       getDepth: () => (host._options as any)._detailDepth ?? 0,
       getGridInstance: () => host,
       // 순환 import 회피: DetailManager.ts 는 OpenGrid 를 모르고, 이 클로저만 주입받는다.
@@ -364,6 +393,7 @@ export class GridComposer {
       off: (ev, cb) => { host.off(ev, cb); },
       emit: (ev, ...args) => host.emit(ev, ...args),
       announce: (msg) => host._announce(msg),
+      t: (key, params) => host.t(key, params),
     });
 
     return { _phase: 'managers' };
