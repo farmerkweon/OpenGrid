@@ -567,8 +567,10 @@ export interface GridOptions<T = any> {
   // 접근성
   ariaLabel?: string;
 
-  // 테마
+  // 테마 (COLOR 축)
   theme?: string;
+  // 스킨 (FORM 축, R12b) — data-og-skin. 미지정 시 'default'(오늘과 byte-identical).
+  skin?: string;
   cssVars?: Record<string, string>;
 
   // F3: 우클릭 컨텍스트 메뉴
@@ -654,14 +656,50 @@ export interface OverrideCallOptions {
 }
 
 // ─── Phase 2: strategy 슬롯 6종 ───────────────────────────
-/** 등록 가능한 알고리즘 슬롯 이름(6종). */
+/** 등록 가능한 알고리즘 슬롯 이름. */
 export type StrategySlot =
   | 'sortComparator'
   | 'filterPredicate'
   | 'displayFormatter'
   | 'cellSerializer'
   | 'groupKeyFn'
-  | 'summaryOp';
+  | 'summaryOp'
+  | 'cellClassResolver'
+  | 'ariaLabelResolver'
+  | 'skinResolver';
+
+// ─── R12b: 스킨(FORM) 축 타입 계약 (item3 §1.2 / §6.2, item2 C14) ───
+/**
+ * SKIN 토큰 이름 집합 — **형태(FORM)만** 소유(색 0). COLOR 토큰과 disjoint name set 이라
+ * 색⊥형태 직교성이 이름 충돌 부재로 물리적으로 보장된다(item3 §1.1~1.2, HANMS §4).
+ */
+export type SkinTokenName =
+  // radius
+  | '--og-radius-none' | '--og-radius-sm' | '--og-radius-md' | '--og-radius-lg' | '--og-radius-pill'
+  | '--og-radius-container' | '--og-radius-control' | '--og-radius-widget' | '--og-container-radius'
+  // border
+  | '--og-border-width' | '--og-border-width-strong' | '--og-border-style'
+  | '--og-divider-style' | '--og-divider-repeat'
+  // elevation
+  | '--og-elevation-sm' | '--og-elevation-md' | '--og-elevation-lg'
+  | '--og-elevation-alpha-sm' | '--og-elevation-alpha-md' | '--og-elevation-alpha-lg' | '--og-elevation-inset'
+  // spacing / density(권장 밀도 힌트 — relayout 은 data-og-density 소유, item4 C1)
+  | '--og-cell-padding-x' | '--og-cell-padding-y'
+  | '--og-density-row-height' | '--og-density-header-height' | '--og-density-footer-height'
+  | '--og-scrollbar-size'
+  // texture
+  | '--og-texture-bg' | '--og-texture-size' | '--og-texture-opacity'
+  // focus ring
+  | '--og-focus-width' | '--og-focus-style' | '--og-focus-offset' | '--og-focus-radius'
+  // icon
+  | '--og-icon-size' | '--og-icon-fill' | '--og-icon-stroke-width' | '--og-icon-corner'
+  // motion(form-adjacent)
+  | '--og-transition-fast' | '--og-transition-base'
+  // accent
+  | '--og-row-accent-width';
+
+/** FORM-only 스킨 델타. 값에 색 리터럴이 있으면 SkinRegistry 가 런타임 거부(Rule 2, 직교성). */
+export type SkinTokenDelta = Partial<Record<SkinTokenName, string>>;
 
 /** 단일키 정렬 비교자. dir 부호는 호출자(DataLayer)가 적용 — 슬롯은 비교만 반환. */
 export type SortComparatorFn = (a: any, b: any, field: string, dir: 'asc' | 'desc') => number;
@@ -675,6 +713,10 @@ export type CellSerializerFn = (value: any, col: any, row: any) => any;
 export type GroupKeyFn = (row: any, remainingFields: string[]) => any;
 /** 집계 연산. null 반환 시 기본 SUM/AVG/COUNT/MAX/MIN 분기로 폴백. */
 export type SummaryOpFn = (op: string, nums: any[], field: string) => number | null;
+/** R11(§4.2): 셀 클래스 렌더훅 리졸버. 렌더층이 셀 element 에 추가할 className(null=미참여). */
+export type CellClassResolverFn = (value: any, field: string, row: any) => string | null;
+/** R11(§4.2): 셀 aria-label 렌더훅 리졸버. 렌더층이 셀 aria-label 을 대체(null=기본 유지). */
+export type AriaLabelResolverFn = (value: any, field: string, row: any) => string | null;
 /**
  * F1 채우기 시리즈 커스텀 리졸버 슬롯(C5.3, 예약). 사용자가 날짜/커스텀 시리즈를 주입할 수 있다.
  * ⚠️ 슬롯 등록 경로만 확보되어 있으며, RangeSelectionManager/FillEngine 소비 배선은 F1-b(Full) 대상.
@@ -690,11 +732,35 @@ export interface StrategyMap {
   groupKeyFn: GroupKeyFn;
   summaryOp: SummaryOpFn;
   fillSeriesResolver: FillSeriesResolverFn;
+  cellClassResolver: CellClassResolverFn;
+  ariaLabelResolver: AriaLabelResolverFn;
+  skinResolver: SkinResolverFn;
+}
+
+/**
+ * R12b(item3 §6.1): 스킨 FORM 해석 인터셉트 슬롯. AppearanceResolver 가 fallback 과 함께 읽어(제로코스트)
+ * 오버라이드가 form 토큰 델타를 통째로 가로챌 수 있다. 미설정 시 내장 스킨 카탈로그가 그대로 적용.
+ */
+export type SkinResolverFn = (skinId: string) => SkinTokenDelta | null;
+
+/**
+ * R11(§4.3, T-ζ): SemVer 보증되는 **타입드 override 카탈로그**(좁은 "지원됨" 문).
+ * `override("anyMethod", fn)` 문자열 탈출구(UC-11, best-effort)는 그대로 열려 있고 —
+ * 이 인터페이스는 축복된(blessed) 확장점 이름을 IDE 발견가능하게 좁게 표시할 뿐, 넓은 문을 닫지 않는다.
+ * 각 항목은 소비 테스트를 동반한다(유령 확장점 금지, DeMarco M9b).
+ */
+export interface OverridePoints<T = any> {
+  /** 셀 표시 텍스트 해석(렌더훅 displayText 의 근원). */
+  getDisplayValue(rowIndex: number, field: string): string;
+  /** 원시 셀 값 접근. */
+  readCell(rowIndex: number, field: string): any;
 }
 
 /** 호출가능 + .strategy 멤버를 가진 하이브리드 override API. */
 export interface OverrideApi<T = any> {
-  /** 메서드 본문 무수정 런타임 래핑(C1-clean). 체이닝 위해 grid 인스턴스 반환. */
+  /** R11(§4.3): 타입드 오버로드 — 축복된 확장점 이름(IDE 발견). SemVer 보증 카탈로그. */
+  <K extends keyof OverridePoints<T>>(name: K, fn: OverrideLayerFn, opts?: OverrideCallOptions): OpenGridInstance<T>;
+  /** 메서드 본문 무수정 런타임 래핑(C1-clean, 탈출구 UC-11). 체이닝 위해 grid 인스턴스 반환. */
   (name: string, fn: OverrideLayerFn, opts?: OverrideCallOptions): OpenGridInstance<T>;
   /** 알고리즘 슬롯 등록(Phase 2 매니저 훅포인트). 체이닝 위해 grid 인스턴스 반환. */
   strategy<K extends StrategySlot>(slot: K, fn: StrategyMap[K]): OpenGridInstance<T>;
@@ -897,6 +963,12 @@ export interface OpenGridInstance<T = any> {
   resize(width?: number, height?: number): void;
   setTheme(theme: string): void;
   setThemeVar(varName: string, value: string): void;
+  /** R12b: 스킨(FORM 축) 전환 — data-og-skin 설정 + 인라인 form 사이트 재해석. 색 테마와 직교. */
+  setSkin(skin: string): void;
+  /** R12b: 현재 스킨 id('default' = 오늘). */
+  getSkin(): string;
+  /** R12b: FORM 축 단일 토큰 런타임 오버라이드(setThemeVar 의 형태-축 형제). 색 값은 거부. */
+  setSkinVar(varName: string, value: string): void;
   destroy(): void;
 
   // 런타임 옵션 갱신

@@ -2,7 +2,48 @@ import { DataLayer } from './DataLayer.js';
 import { RowDragDrop } from './RowDragDrop.js';
 import { MergeEngine } from './MergeEngine.js';
 import { createRenderer } from './renderers/CellRenderer.js';
-import type { ColumnDef, SortItem, TreeNodeIconDef, CellRange } from './types.js';
+import { AppearanceResolver, ThemeContext } from './AppearanceResolver.js';
+import type { ColumnDef, SortItem, TreeNodeIconDef, CellRange, GridOptions, FilterItem } from './types.js';
+
+// ─── RenderOptions ────────────────────────────────────────
+// R9(90_final_design §6-R9 / §2.5 R-4a): 렌더러가 소비하는 opts 타입.
+// 공개 GridOptions(생성 시 기본값 병합 완료 = Required) 위에, 렌더 파이프라인이 매 프레임
+// 주입하는 내부 증강 필드(언더스코어 접두)를 얹은 것. 내부 필드는 RenderController.renderHeader/
+// renderBody 에서만 채워지며 공개 API 가 아니다(값은 항상 매니저 최신값).
+export interface RenderOptions extends Required<GridOptions> {
+  /** ColumnLayout.frozenCount — 고정 컬럼 수(헤더/본문 좌측 오프셋 계산). */
+  _frozenCount?: number;
+  /** SortFilterManager.filters — 필터 아이콘 활성 표시용. */
+  _activeFilters?: Record<string, FilterItem[]>;
+  /** DnD 핸들에 넘길 총 행수. */
+  _totalRows?: number;
+  /** CellEditManager.focusCell — 포커스 셀 하이라이트. */
+  _focusCell?: { ri: number; ci: number } | null;
+  /** RangeSelectionManager — 범위 선택 rect 하이라이트 재적용 재료(비-'cells' 모드면 없음). */
+  _rangeRects?: CellRange[];
+}
+
+// ─── RenderFrame ──────────────────────────────────────────
+// R3(90_final_design §6-R3 / §2.5 R-4b): renderBody 의 위치 인자 묶음을 단일 파라미터 객체로.
+// R9: opts 필드 타입 복원(any → RenderOptions). 나머지 필드는 기존 위치 인자의 타입 그대로.
+export interface RenderFrame {
+  startIndex: number;
+  endIndex: number;
+  data: DataLayer<any>;
+  leaves: ColumnDef[];
+  widths: number[];
+  opts: RenderOptions;
+  offsetY: number;
+  totalHeight: number;
+  selectedRows: Set<number>;
+  checkedRows: Set<number>;
+  groupFlatRows?: Array<any> | null;
+  onGroupToggle?: ((key: string) => void) | undefined;
+  onTreeToggle?: ((nodeId: any) => void) | undefined;
+  extraOpts?: Record<string, any>;
+  mergeEngine?: MergeEngine | undefined;
+  detailApi?: DetailRenderContext | undefined;
+}
 
 // ─── RendererCallbacks ────────────────────────────────────
 export interface RendererCallbacks {
@@ -24,6 +65,11 @@ export interface RendererCallbacks {
   getColDragIdx: () => number | null;
   // 추가: override/strategy 활성 시 string, 미등록이면 null → 기존 경로 폴백
   getDisplayText?: (rowIndex: number, field: string) => string | null;
+  // R11(§4.2): 렌더훅 레지스트리 진입점. 채널별(displayText/cellClass/ariaLabel …) 등록된 훅을
+  // 게이트와 함께 해석한다(미등록/게이트닫힘 → null, 제로코스트). 하드코딩 분기 대신 데이터 구동.
+  resolveRenderHook?: (channel: string, rowIndex: number, field: string) => any;
+  // R1b: 렌더러측 Number/Date 가 ctx.value 위에 적용할 per-instance displayFormatter 전략. 미설정 시 null → 기본 포맷.
+  getDisplayFormatter?: () => ((value: any, field: string, row: any) => string | null) | null;
   // F3(11_design_F3_v2.md §7.4/§7.5/§7.6, C7): 셀 수식 메타(마커/에러 툴팁/aria-label). 없으면 null.
   getFormulaMeta?: (rowIndex: number, field: string) => { src: string; error: string | null; approx: boolean } | null;
 }
@@ -62,23 +108,27 @@ export class GridRenderer {
   private _header: HTMLElement;
   private _bodyWrap: HTMLElement;
   private _body: HTMLElement;
-  private _opts: any;
+  private _opts: RenderOptions;
   private _cbs: RendererCallbacks;
+  // R12a(C10): 스타일 해결 단일 초크포인트. 인라인 격리는 유지하고 "무엇을 인라인할지" 결정만 경유.
+  private _ap: AppearanceResolver;
   // rowIndex → {colIndex → cellEl} 맵
   private _cellMap: Map<number, Map<number, HTMLElement>> = new Map();
 
   get bodyWrapper() { return this._bodyWrap; }
 
-  constructor(root: HTMLElement, opts: any, cbs: RendererCallbacks) {
+  constructor(root: HTMLElement, opts: RenderOptions, cbs: RendererCallbacks, appearance?: AppearanceResolver) {
     this._root = root;
     this._opts = opts;
     this._cbs = cbs;
+    // 컴포지션 루트(OpenGrid)가 주입. 직접 생성(테스트 등) 시 테마 컨텍스트로 기본 resolver.
+    this._ap = appearance ?? new AppearanceResolver(new ThemeContext(opts.theme ?? 'default'));
 
     this._header = _el('div', 'og-header');
     // host isolation: border:0 로 4변 폭을 먼저 0 으로 못박는다. WordPress 전역 스타일
     //   `:where([style*="border-color"]){border-style:solid}` 이 인라인의 var(--og-border-color)
     //   문자열에 매칭되어, 폭 미지정 변에 medium(3px) 기본 보더를 강제하는 것을 차단(헤더 좌/우/상 굵은선 방지).
-    this._header.style.cssText = `flex-shrink:0;overflow-x:auto;overflow-y:hidden;border:0;border-bottom:1px solid var(--og-border-color,#e0e0e0);scrollbar-width:none;`;
+    this._header.style.cssText = `flex-shrink:0;overflow-x:auto;overflow-y:hidden;border:0;border-bottom:${this._ap.divider()};scrollbar-width:none;`;
 
     this._bodyWrap = _el('div', 'og-body-wrapper');
     this._bodyWrap.style.cssText = `flex:1;overflow:auto;position:relative;`;
@@ -111,9 +161,10 @@ export class GridRenderer {
     leaves: ColumnDef[],
     widths: number[],
     sortList: SortItem[],
-    opts: any
+    opts: RenderOptions
   ): void {
     this._header.innerHTML = '';
+    const ap = this._ap; // R12a: 스타일 결정 초크포인트(값은 오늘과 동일 = byte-identical)
     const frozenCount: number = opts._frozenCount ?? 0;
 
     // 헤더·바디 정렬을 위해 총 컬럼 너비를 계산 — 헤더 table은 이 너비로 고정
@@ -147,8 +198,8 @@ export class GridRenderer {
       th.textContent = label;
       _style(th, {
         width: `${w}px`, minWidth: `${w}px`, textAlign: 'center',
-        borderRight: '1px solid var(--og-border-color,#e0e0e0)',
-        borderBottom: '1px solid var(--og-border-color,#e0e0e0)',
+        borderRight: ap.border(),
+        borderBottom: ap.border(),
         // host isolation: extra 컬럼 th 도 호스트 th{} 침범 차단 (border/line-height)
         borderTop: '0', borderLeft: '0', lineHeight: 'normal', verticalAlign: 'middle',
         padding: '0', fontSize: '11px', color: '#999',
@@ -178,7 +229,7 @@ export class GridRenderer {
         if (opts.checkColumn) {
           const th = _el('th', 'og-header-cell og-extra-col');
           th.setAttribute('rowspan', String(extraRows));
-          th.style.cssText = `width:36px;min-width:36px;text-align:center;border-right:1px solid var(--og-border-color,#e0e0e0);border-bottom:1px solid var(--og-border-color,#e0e0e0);border-top:0;border-left:0;line-height:normal;vertical-align:middle;background:var(--og-header-bg,#f5f5f5);box-sizing:border-box;`;
+          th.style.cssText = `width:36px;min-width:36px;text-align:center;border-right:${ap.border()};border-bottom:${ap.border()};border-top:0;border-left:0;line-height:normal;vertical-align:middle;background:var(--og-header-bg,#f5f5f5);box-sizing:border-box;`;
           if (frozenCount > 0) {
             th.style.position = 'sticky';
             th.style.left = `${extraHeaderLeft}px`;
@@ -267,8 +318,8 @@ export class GridRenderer {
           fontSize: 'var(--og-font-size)',
           textAlign: col.headerAlign ?? 'center',
           borderTop: '0', borderLeft: '0',
-          borderRight: '1px solid var(--og-border-color,#e0e0e0)',
-          borderBottom: '1px solid var(--og-border-color,#e0e0e0)',
+          borderRight: ap.border(),
+          borderBottom: ap.border(),
           userSelect: 'none', cursor: sortable ? 'pointer' : 'default',
           // 줄바꿈 컬럼: nowrap+ellipsis 대신 여러 줄 허용(word-break). 미설정 컬럼은 기존 동작 유지.
           whiteSpace: headerWrap ? 'normal' : 'nowrap',
@@ -308,7 +359,7 @@ export class GridRenderer {
         const filterable = col.filterable !== false && opts.filterable && cell.colSpan === 1;
         if (filterable) {
           const filterIcon = _el('span', 'og-filter-icon');
-          const hasFilter = opts._activeFilters?.[col.field]?.length > 0;
+          const hasFilter = (opts._activeFilters?.[col.field]?.length ?? 0) > 0;
           filterIcon.textContent = hasFilter ? '⊿' : '▿';
           filterIcon.title = '필터';
           filterIcon.style.cssText = 'margin-left:3px;cursor:pointer;font-size:10px;opacity:0.6;';
@@ -375,23 +426,16 @@ export class GridRenderer {
     this._header.appendChild(table);
   }
 
-  renderBody(
-    startIndex: number, endIndex: number,
-    data: DataLayer<any>,
-    leaves: ColumnDef[],
-    widths: number[],
-    opts: any,
-    offsetY: number,
-    totalHeight: number,
-    selectedRows: Set<number>,
-    checkedRows: Set<number>,
-    groupFlatRows: Array<any> | null = null,
-    onGroupToggle?: (key: string) => void,
-    onTreeToggle?: (nodeId: any) => void,
-    extraOpts: Record<string, any> = {},
-    mergeEngine?: MergeEngine,
-    detailApi?: DetailRenderContext
-  ): void {
+  renderBody(frame: RenderFrame): void {
+    // R3: 위치 인자 → 파라미터 객체. opts 는 아래에서 재할당되므로 let 지역, 나머지는 구조분해.
+    const {
+      startIndex, endIndex, data, leaves, widths,
+      offsetY, totalHeight, selectedRows, checkedRows,
+      groupFlatRows = null, onGroupToggle, onTreeToggle,
+      extraOpts = {}, mergeEngine, detailApi,
+    } = frame;
+    let opts = frame.opts;
+    const ap = this._ap; // R12a: 스타일 결정 초크포인트(값은 오늘과 동일 = byte-identical)
     // opts에 extraOpts 병합 (DnD _totalRows 등)
     if (Object.keys(extraOpts).length) opts = { ...opts, ...extraOpts };
     // F2(§5 skip-rebuild): teardown(아래 innerHTML='') 전에 편집중 host 를 hoist, 나머지는 detach.
@@ -461,7 +505,7 @@ export class GridRenderer {
           `padding-left:${4 + g._depth * 12}px;`,
           'background:var(--og-header-bg,#f5f5f5);',
           // host isolation: border:0 선행 (WP :where([style*=border-color]) 의 3px 강제 차단)
-          'border:0;border-bottom:1px solid var(--og-border-color,#e0e0e0);',
+          `border:0;border-bottom:${ap.divider()};`,
         ].join('');
         rowEl.setAttribute('role', 'row');
         rowEl.setAttribute('aria-expanded', g._expanded ? 'true' : 'false');
@@ -483,12 +527,12 @@ export class GridRenderer {
             `width:${extraW}px;min-width:${extraW}px;flex-shrink:0;`,
             'display:flex;align-items:center;justify-content:center;',
             'font-size:10px;font-weight:700;gap:2px;',
-            'border-right:1px solid var(--og-border-color,#e0e0e0);',
+            `border-right:${ap.border()};`,
           ].join('');
           const st = g._states ?? { added: 0, edited: 0, removed: 0 };
-          if (st.added > 0)   { const b = _el('span'); b.textContent=`+${st.added}`; b.style.cssText='color:var(--og-row-added-bg,#2e7d32);background:#e8f5e9;padding:1px 3px;border-radius:3px;'; stCell.appendChild(b); }
-          if (st.edited > 0)  { const b = _el('span'); b.textContent=`M${st.edited}`; b.style.cssText='color:#e65100;background:#fff8e1;padding:1px 3px;border-radius:3px;'; stCell.appendChild(b); }
-          if (st.removed > 0) { const b = _el('span'); b.textContent=`D${st.removed}`; b.style.cssText='color:var(--og-row-removed-bg,#c62828);background:#ffebee;padding:1px 3px;border-radius:3px;'; stCell.appendChild(b); }
+          if (st.added > 0)   { const b = _el('span'); b.textContent=`+${st.added}`; b.style.cssText=`color:var(--og-row-added-bg,#2e7d32);background:#e8f5e9;padding:1px 3px;border-radius:${ap.radius(3)};`; stCell.appendChild(b); }
+          if (st.edited > 0)  { const b = _el('span'); b.textContent=`M${st.edited}`; b.style.cssText=`color:#e65100;background:#fff8e1;padding:1px 3px;border-radius:${ap.radius(3)};`; stCell.appendChild(b); }
+          if (st.removed > 0) { const b = _el('span'); b.textContent=`D${st.removed}`; b.style.cssText=`color:var(--og-row-removed-bg,#c62828);background:#ffebee;padding:1px 3px;border-radius:${ap.radius(3)};`; stCell.appendChild(b); }
           rowEl.appendChild(stCell);
         }
 
@@ -502,8 +546,8 @@ export class GridRenderer {
           const cell = _el('div', 'og-group-cell');
           cell.style.cssText = [
             `width:${w}px;min-width:${w}px;flex-shrink:0;`,
-            'padding:2px 8px;box-sizing:border-box;overflow:hidden;',
-            'border-right:1px solid var(--og-border-color,#e0e0e0);',
+            `padding:${ap.cellPadding()};box-sizing:border-box;overflow:hidden;`,
+            `border-right:${ap.border()};`,
             'display:flex;align-items:center;',
             'white-space:nowrap;text-overflow:ellipsis;',
           ].join('');
@@ -756,6 +800,8 @@ export class GridRenderer {
           // host isolation: 미지정 변 폭 0 명시 (WP :where([style*=border-color]) 의 3px 강제 차단)
           cellEl.style.borderTop = '0';
           cellEl.style.borderLeft = '0';
+          // R12a: 이 사이트만 폴백에 공백(`, #e0e0e0`)이 있는 레거시 표기 — byte-identical 보존을 위해
+          //   ap.border()(무공백)로 통일하지 않고 원문 그대로 둔다(R12b 스킨 토큰화 시 흡수).
           cellEl.style.borderBottom = `1px solid var(--og-border-color, #e0e0e0)`;
         } else if (isFrozenCell) {
           cellEl.style.position = 'sticky';
@@ -780,7 +826,7 @@ export class GridRenderer {
         }
         // M-2/M-6(§4.2, F1): 범위 선택 면 하이라이트 — renderBody 클래스 재적용(가상스크롤/frozen/merged 자연 상속).
         // opts._rangeRects 가 없으면(비-'cells' 모드) 기존 렌더와 동일(회귀 0).
-        const rangeRects = opts._rangeRects as CellRange[] | undefined;
+        const rangeRects: CellRange[] | undefined = opts._rangeRects;
         if (rangeRects?.some(r => ri >= r.startRow && ri <= r.endRow && ci >= r.startCol && ci <= r.endCol)) {
           cellEl.classList.add('og-range-selected');
           cellEl.style.background = 'var(--og-range-bg, rgba(25,118,210,0.12))';
@@ -829,6 +875,13 @@ export class GridRenderer {
             if (prevBg) cellEl.style.backgroundColor = prevBg;
           }
         }
+
+        // ── R11(§4.2): 렌더훅 레지스트리 참여 — 등록된 셀 클래스/aria 훅이 있으면 셀에 적용 ──
+        // (미등록/게이트닫힘이면 resolveRenderHook 이 null → 제로코스트. 표시텍스트 훅과 같은 어휘.)
+        const _hookClass = this._cbs.resolveRenderHook?.('cellClass', ri, col.field);
+        if (_hookClass) cellEl.className += ' ' + _hookClass;
+        const _hookAria = this._cbs.resolveRenderHook?.('ariaLabel', ri, col.field);
+        if (_hookAria != null) cellEl.setAttribute('aria-label', String(_hookAria));
 
         // ── 트리 첫 컬럼: 탐색기 스타일 렌더링 ──────────────
         let _treeRenderTarget: HTMLElement = cellEl;
@@ -907,7 +960,9 @@ export class GridRenderer {
           value: rowData[col.field], row: rowData, rowIndex: ri,
           column: col as any, colIndex: ci,
           isSelected: selectedRows.has(ri), rowState,
-          displayValue: this._cbs.getDisplayText?.(ri, col.field) ?? null,
+          displayValue: (this._cbs.resolveRenderHook?.('displayText', ri, col.field)
+            ?? this._cbs.getDisplayText?.(ri, col.field)) ?? null,
+          displayFormatter: this._cbs.getDisplayFormatter?.() ?? null,
           // C7(15_cross_contracts.md/F3-R14): 셀 수식 있으면 렌더러가 ColumnDef.formula 재평가를 skip.
           hasCellFormula: _formulaMeta != null,
         });
@@ -931,7 +986,7 @@ export class GridRenderer {
           ph.style.cssText = [
             `width:${w}px;min-width:${w}px;height:${opts.rowHeight}px;`,
             'flex-shrink:0;box-sizing:border-box;',
-            'border-right:1px solid var(--og-border-color,#e0e0e0);',
+            `border-right:${ap.border()};`,
           ].join('');
           rowEl.appendChild(ph);
 
@@ -994,7 +1049,7 @@ export class GridRenderer {
       'overflow-y:auto;overflow-x:auto;',
       'overscroll-behavior:contain;', // HANMS-07: 중첩 스크롤 체이닝 차단
       'background:var(--og-detail-bg,#fff);',
-      'border:0;border-bottom:1px solid var(--og-border-color,#e0e0e0);',
+      `border:0;border-bottom:${this._ap.divider()};`,
       'z-index:var(--og-z-detail,2);',
     ].join('');
     const host = detailApi.getPanelHost(rowId);

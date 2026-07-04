@@ -110,6 +110,10 @@ export class ContextMenuManager {
     const themeEl = this._anchor.closest('[data-og-theme]') as HTMLElement | null;
     const theme = themeEl?.getAttribute('data-og-theme');
     if (theme) menu.setAttribute('data-og-theme', theme);
+    // R12b: FORM(스킨) 축도 함께 복사 — 색 축만 복사하면 분리 UI 가 스킨만 안 먹는 조용한 사고(§6-9).
+    const skinEl = this._anchor.closest('[data-og-skin]') as HTMLElement | null;
+    const skin = skinEl?.getAttribute('data-og-skin');
+    if (skin) menu.setAttribute('data-og-skin', skin);
     document.body.appendChild(menu);
     this._el = menu;
 

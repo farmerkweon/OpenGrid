@@ -1,8 +1,10 @@
-import type { ColumnDef } from '../types.js';
+import type { ColumnDef, RendererDef } from '../types.js';
 import { round } from '../MathUtils.js';
 import { OGDecimal } from '../OGDecimal.js';
 import { evaluateFormula } from '../FormulaEngine.js';
 import { applyMask } from '../MaskingEngine.js';
+import { defaultAppearance } from '../AppearanceResolver.js';
+import { iconRegistry } from '../IconRegistry.js';
 
 export interface RenderContext<T = any> {
   value: any;
@@ -13,6 +15,11 @@ export interface RenderContext<T = any> {
   isSelected: boolean;
   rowState: 'none' | 'added' | 'edited' | 'removed';
   displayValue?: string | null;
+  /** R1b: per-instance displayFormatter 전략(값·필드·행 → 표시문자열|null). Number/Date 렌더러가
+   *  ctx.value 위에 적용한다(모듈전역 없이 멀티그리드 격리). null 반환/미설정 시 기본 포맷 폴백.
+   *  ※ getDisplayValue override(text 경로의 ctx.displayValue)와 달리 **전략만** 적용 — 숫자/날짜의
+   *    기본 포맷(천단위·통화·정밀도)을 보존하고 그룹모드 인덱스 불일치를 피한다. */
+  displayFormatter?: ((value: any, field: string, row: any) => string | null) | null;
   /** C7(15_cross_contracts.md/F3-R14): 이 셀에 F3 셀 수식이 있으면 true — ColumnDef.formula 재평가를 skip. */
   hasCellFormula?: boolean;
 }
@@ -21,24 +28,16 @@ export interface CellRenderer {
   render(ctx: RenderContext): HTMLElement;
 }
 
-// ─── Phase 2 슬롯 #3(렌더러측): displayFormatter ──────────
+// ─── displayFormatter(표시값 override) — per-instance 경로 ──────────
 /**
- * 모듈 함수 formatNumber/formatDate 는 host 참조가 없으므로(렌더러는 createRenderer 로
- * grid 컨텍스트 없이 생성됨) 모듈 레벨 resolver 로 displayFormatter 슬롯에 도달한다.
- * default = null → 기존 포맷 로직으로 폴백(출력 바이트 동일, 회귀 0).
- * OpenGrid 생성자에서 setDisplayFormatterResolver(_ovk.getStrategy) 주입.
- * 주의(멀티 인스턴스): 렌더러측 커스텀 displayFormatter 는 모듈 전역 — 동시 다중 그리드 시
- * 마지막 설치 그리드의 resolver 가 우선. 인스턴스 안전 경로는 OpenGrid.getDisplayValue 슬롯.
+ * R1(OOP 리팩터, DIP 수정): 과거엔 formatNumber/formatDate 가 host 참조가 없어 **모듈 전역**
+ * resolver 로 displayFormatter 슬롯에 도달했다. 그 전역은 매 OpenGrid 생성자가 덮어써,
+ * 한 페이지에 그리드가 여럿이면 마지막 그리드의 포매터가 전 그리드에 새는 P0 정합성 결함이었다.
+ * → 전역을 제거했다. 이제 displayFormatter 는 **per-instance 안전 경로 하나**로만 흐른다:
+ *   OpenGrid.getDisplayValue(슬롯 읽기) → GridRenderer 가 RenderContext.displayValue 로 주입
+ *   → 각 셀 렌더러(Text/Number/Date)가 ctx.displayValue 를 우선 사용.
+ * formatNumber/formatDate 는 전역 상태 0 의 순수 포맷 함수로 환원했다(출력 동일, 회귀 0).
  */
-let _displayFormatterResolver:
-  | ((value: any, field: string, row: any) => string | null)
-  | null = null;
-
-export function setDisplayFormatterResolver(
-  resolver: ((value: any, field: string, row: any) => string | null) | null,
-): void {
-  _displayFormatterResolver = resolver;
-}
 
 // ─── 수식 평가 헬퍼 ───────────────────────────────────────
 /**
@@ -88,12 +87,6 @@ export function resolveFormula(ctx: RenderContext): string | null {
  *  currency: ISO 통화코드('KRW'|'USD'|'EUR'…) 지정 시 Intl.NumberFormat 로케일 통화 포맷 우선.
  */
 export function formatNumber(value: any, format?: string, precision?: number, currency?: string, field?: string, row?: any): string {
-  // Phase 2 슬롯 #3(렌더러측): displayFormatter 가 등록되어 non-null 반환 시 그 값을 사용.
-  //   default(resolver null 또는 null 반환) → 아래 기존 로직(출력 동일). ⚠️ 핫패스 — 예외 비격리.
-  if (_displayFormatterResolver) {
-    const custom = _displayFormatterResolver(value, field ?? '', row);
-    if (custom != null) return custom;
-  }
   if (value == null || value === '') return '';
   let num = Number(value);
   if (isNaN(num)) return String(value);
@@ -142,11 +135,6 @@ export function formatNumber(value: any, format?: string, precision?: number, cu
 
 // ─── 날짜 포맷 유틸 ───────────────────────────────────────
 export function formatDate(value: any, format = 'yyyy-MM-dd', field?: string, row?: any): string {
-  // Phase 2 슬롯 #3(렌더러측): displayFormatter 우선. default → 기존 로직(출력 동일).
-  if (_displayFormatterResolver) {
-    const custom = _displayFormatterResolver(value, field ?? '', row);
-    if (custom != null) return custom;
-  }
   if (!value) return '';
   const d = value instanceof Date ? value : new Date(value);
   if (isNaN(d.getTime())) return String(value);
@@ -180,18 +168,15 @@ function _renderMasked(original: string, col: ColumnDef, rowIndex: number): HTML
     'font-family:monospace;letter-spacing:0.4px;color:var(--og-mask-text,#888);';
   text.textContent = masked;
 
-  // 눈 아이콘 — SVG (Bootstrap Icons eye)
+  // 눈 아이콘 — IconRegistry role 'mask.reveal'(글리프 = 커스텀 eye-reveal, 시각 동일).
+  // R12c: 하드코딩 인라인 SVG 를 시맨틱 role 로 대체 — 스킨(--og-icon-corner) 결합, 글리프 SSOT 단일화.
   const eye = document.createElement('button');
   eye.title = '클릭하면 원문 표시';
   eye.setAttribute('aria-label', '마스킹 해제');
-  eye.innerHTML =
-    '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">' +
-    '<path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8z"/>' +
-    '<path d="M8 5.5A2.5 2.5 0 1 0 8 10.5 2.5 2.5 0 0 0 8 5.5zm0 4A1.5 1.5 0 1 1 8 6.5a1.5 1.5 0 0 1 0 3z" fill="#fff"/>' +
-    '</svg>';
+  eye.innerHTML = iconRegistry.render('mask.reveal', { size: 13 }) as string;
   eye.style.cssText =
     'flex-shrink:0;background:none;border:none;cursor:pointer;' +
-    'color:#c0c0c0;padding:1px 2px;line-height:0;border-radius:3px;' +
+    `color:#c0c0c0;padding:1px 2px;line-height:0;border-radius:${defaultAppearance.radius(3)};` +
     'display:flex;align-items:center;';
 
   eye.addEventListener('mouseover', () => {
@@ -310,6 +295,16 @@ export class NumberRenderer implements CellRenderer {
       span.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;width:100%;text-align:right;';
       return span;
     }
+    // R1b: displayFormatter 전략을 ctx.value 위에 per-instance 적용(과거 모듈전역 경로의 정확한 대체).
+    //      전략만 적용(getDisplayValue override 아님) · ctx.value 사용(그룹/트리모드 정합) · null이면 기본포맷 폴백.
+    if (ctx.displayFormatter) {
+      const custom = ctx.displayFormatter(ctx.value, ctx.column.field ?? '', ctx.row);
+      if (custom != null) {
+        span.textContent = custom;
+        span.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;width:100%;text-align:right;';
+        return span;
+      }
+    }
     // format 미지정 시 기본 천단위 콤마 (#,##0). precision 있으면 F4 epsilon round 적용.
     // currency(ISO 통화코드) 지정 시 Intl 로케일 통화 포맷 우선.
     span.textContent = formatNumber(ctx.value, ctx.column.format ?? '#,##0', ctx.column.precision, ctx.column.currency, ctx.column.field, ctx.row);
@@ -323,7 +318,13 @@ export class DateRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const span = document.createElement('span');
     span.className = 'og-cell-date';
-    span.textContent = formatDate(ctx.value, ctx.column.format, ctx.column.field, ctx.row);
+    // R1b: displayFormatter 전략을 ctx.value 위에 per-instance 적용(전역 없이 멀티그리드 격리, 그룹모드 정합).
+    const dfCustom = ctx.displayFormatter ? ctx.displayFormatter(ctx.value, ctx.column.field ?? '', ctx.row) : null;
+    if (dfCustom != null) {
+      span.textContent = dfCustom;
+    } else {
+      span.textContent = formatDate(ctx.value, ctx.column.format, ctx.column.field, ctx.row);
+    }
     span.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;';
     return span;
   }
@@ -349,6 +350,10 @@ export class CheckboxRenderer implements CellRenderer {
 export interface ButtonRendererDef {
   type: 'button';
   label?: string | ((value: any, row: any) => string);
+  /** R12c: 라벨과 함께 표시할 아이콘 role/key(renderIcon). 미지정 시 라벨만(기존과 동일). */
+  icon?: string;
+  /** 아이콘 위치(기본 'left'). */
+  iconPos?: 'left' | 'right';
   buttonClass?: string;
   style?: string;
 }
@@ -362,14 +367,28 @@ export class ButtonRenderer implements CellRenderer {
     const btn = document.createElement('button');
     btn.className = `og-cell-btn${this.def?.buttonClass ? ' ' + this.def.buttonClass : ''}`;
     const label = this.def?.label;
-    if (typeof label === 'function') btn.textContent = label(ctx.value, ctx.row);
-    else btn.textContent = label ?? String(ctx.value ?? 'btn');
+    const labelText = (typeof label === 'function') ? label(ctx.value, ctx.row) : (label ?? String(ctx.value ?? 'btn'));
     btn.style.cssText = `
       padding:2px 10px;border:1px solid var(--og-primary,#1976d2);
       border-radius:4px;background:var(--og-row-bg,#fff);color:var(--og-primary,#1976d2);
       cursor:pointer;font-size:12px;white-space:nowrap;transition:background 0.12s;
       ${this.def?.style ?? ''}
     `;
+    if (this.def?.icon) {
+      // R12c: 아이콘 + 라벨. 라벨은 textContent(안전), 아이콘은 iconRegistry SVG. 스킨 --og-icon-* 토큰 추종.
+      btn.style.display = 'inline-flex';
+      btn.style.alignItems = 'center';
+      btn.style.gap = '4px';
+      const ic = document.createElement('span');
+      ic.style.cssText = 'display:inline-flex;flex-shrink:0;';
+      ic.innerHTML = iconRegistry.render(this.def.icon, { size: 13 }) as string;
+      const tx = document.createElement('span');
+      tx.textContent = labelText;
+      if (this.def.iconPos === 'right') { btn.appendChild(tx); btn.appendChild(ic); }
+      else { btn.appendChild(ic); btn.appendChild(tx); }
+    } else {
+      btn.textContent = labelText;
+    }
     btn.addEventListener('mouseover', () => btn.style.background = 'var(--og-primary-light,#e3f2fd)');
     btn.addEventListener('mouseout',  () => btn.style.background = 'var(--og-row-bg,#fff)');
     wrap.appendChild(btn);
@@ -394,7 +413,7 @@ export class BadgeRenderer implements CellRenderer {
     badge.textContent = label;
     const color = this.colorMap?.[val] ?? '#666';
     badge.style.cssText = `
-      display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;
+      display:inline-block;padding:2px 8px;border-radius:${defaultAppearance.radius(12)};font-size:11px;
       background:${color}22;color:${color};border:1px solid ${color}66;
       white-space:nowrap;
     `;
@@ -457,7 +476,7 @@ export class ImageRenderer implements CellRenderer {
     const w = this.def?.width ?? 28;
     const h = this.def?.height ?? 28;
     const r = this.def?.radius ?? 4;
-    img.style.cssText = `width:${w}px;height:${h}px;object-fit:cover;border-radius:${r}px;display:block;`;
+    img.style.cssText = `width:${w}px;height:${h}px;object-fit:cover;border-radius:${defaultAppearance.radius(r)};display:block;`;
     const alt = this.def?.alt;
     img.alt = typeof alt === 'function' ? alt(ctx.value, ctx.row) : (alt ?? '');
     img.onerror = () => { img.style.display = 'none'; };
@@ -490,10 +509,10 @@ export class ProgressRenderer implements CellRenderer {
 
     const track = document.createElement('div');
     track.className = 'og-progress-track';
-    track.style.cssText = 'flex:1;height:10px;background:#e0e0e0;border-radius:5px;overflow:hidden;';
+    track.style.cssText = `flex:1;height:10px;background:#e0e0e0;border-radius:${defaultAppearance.radius(5)};overflow:hidden;`;
     const fill = document.createElement('div');
     fill.className = 'og-progress-fill';
-    fill.style.cssText = `width:${pct}%;height:100%;background:${color};border-radius:5px;`;
+    fill.style.cssText = `width:${pct}%;height:100%;background:${color};border-radius:${defaultAppearance.radius(5)};`;
     track.appendChild(fill);
     wrap.appendChild(track);
 
@@ -588,7 +607,7 @@ export class SwitchRenderer implements CellRenderer {
     const on = !!ctx.value;
     const sw = document.createElement('span');
     sw.className = 'og-switch' + (on ? ' og-switch--on' : '');
-    sw.style.cssText = `display:inline-block;width:34px;height:18px;border-radius:9px;
+    sw.style.cssText = `display:inline-block;width:34px;height:18px;border-radius:${defaultAppearance.radius(9)};
       background:${on ? 'var(--og-primary,#1976d2)' : '#bdbdbd'};
       position:relative;transition:background 0.2s;cursor:pointer;flex-shrink:0;pointer-events:none;`;
     const knob = document.createElement('span');
@@ -760,56 +779,64 @@ function _barcodeSvg(text: string, H: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TW.toFixed(2)} ${H}" width="${TW.toFixed(2)}" height="${H}" style="display:block" aria-hidden="true"><g fill="currentColor">${rects.join('')}</g></svg>`;
 }
 
+// ─── Renderer 레지스트리 (R10, OCP — Replace Conditional with Registry) ──────
+/**
+ * R10(§6-R10, §2.5 R-4c, §3.1 C11): `createRenderer` 이중 switch 를 `Map<typeName, factory>`
+ * 레지스트리로 대체한다. 내장 타입은 모듈 로드시 부트스트랩 등록(아래 switch 와 동일 매핑),
+ * `createRenderer` 는 레지스트리로 해석하고 미등록 타입은 기존과 동일하게 TextRenderer 로 폴백한다.
+ * `registerRenderer(typeName, factory)` 로 코어 편집 없이 커스텀 렌더러를 추가할 수 있다(OCP).
+ *
+ * 등록은 **프로세스 전역**(내장은 불변에 가깝고, 커스텀 등록은 defaultOverride 와 동형의 전역 정책).
+ * 인스턴스별 스코핑은 R11/R12(ExtensionPointRegistry)의 후속 작업으로 남긴다.
+ *
+ * 팩토리는 `(col, def)` 를 받는다. `def` 는 RendererDef 객체 경로에서만 채워지며(문자열/col.type
+ * 경로에서는 undefined), 원 switch 의 세 컨텍스트(col.type / 문자열 / 객체) 동작을 정확히 보존한다:
+ *  - image/progress/sparkline/rating/template 은 def(설정 객체) 없이는 원래 TextRenderer 로 떨어졌으므로
+ *    def 유무로 게이트한다(문자열 렌더러명만 준 미완성 설정 = 기존과 동일 폴백).
+ */
+export type RendererFactory = (col: ColumnDef, def?: RendererDef) => CellRenderer;
+
+const _rendererRegistry = new Map<string, RendererFactory>();
+
+/** 커스텀 셀 렌더러 타입을 코어 편집 없이 등록(OCP). 프로세스 전역. */
+export function registerRenderer(typeName: string, factory: RendererFactory): void {
+  _rendererRegistry.set(typeName, factory);
+}
+
+/** 등록 여부 조회(내부/테스트용). */
+export function hasRenderer(typeName: string): boolean {
+  return _rendererRegistry.has(typeName);
+}
+
+// 내장 타입 부트스트랩 등록 — 원 switch 3 컨텍스트의 합집합(동작 동일).
+registerRenderer('number',    () => new NumberRenderer());
+registerRenderer('date',      () => new DateRenderer());
+registerRenderer('boolean',   () => new CheckboxRenderer());
+registerRenderer('checkbox',  () => new CheckboxRenderer());
+registerRenderer('radio',     () => new RadioRenderer());
+registerRenderer('img',       () => new ImgRenderer());
+registerRenderer('html',      () => new HtmlRenderer());
+registerRenderer('barcode',   () => new BarcodeRenderer());
+registerRenderer('switch',    () => new SwitchRenderer());
+registerRenderer('select',    (col) => new SelectRenderer(col.options as any ?? [], col.optionsFn as any));
+registerRenderer('button',    (_col, def) => new ButtonRenderer(def as ButtonRendererDef | undefined));
+registerRenderer('link',      (_col, def) => new LinkRenderer(def?.hrefFn, def?.target));
+registerRenderer('badge',     (_col, def) => new BadgeRenderer(def?.colorMap, def ? (def.labelMap ?? def.valueMap) : undefined));
+// 아래 4종 + template 은 설정 객체(def)가 있어야 의미가 있다 → def 없으면 원 switch 처럼 TextRenderer 폴백.
+registerRenderer('image',     (_col, def) => def ? new ImageRenderer(def as ImageRendererDef) : new TextRenderer());
+registerRenderer('progress',  (_col, def) => def ? new ProgressRenderer(def as ProgressRendererDef) : new TextRenderer());
+registerRenderer('sparkline', (_col, def) => def ? new SparklineRenderer(def as SparklineRendererDef) : new TextRenderer());
+registerRenderer('rating',    (_col, def) => def ? new RatingRenderer(def as RatingRendererDef) : new TextRenderer());
+registerRenderer('template',  (_col, def) => def ? new TemplateRenderer(def.templateFn) : new TextRenderer());
+
 // ─── Renderer 팩토리 ──────────────────────────────────────
 export function createRenderer(col: ColumnDef): CellRenderer {
   const renderer = col.renderer;
-  if (!renderer) {
-    switch (col.type as string) {
-      case 'number':   return new NumberRenderer();
-      case 'date':     return new DateRenderer();
-      case 'boolean':  return new CheckboxRenderer();
-      case 'radio':    return new RadioRenderer();
-      case 'img':      return new ImgRenderer();
-      case 'html':     return new HtmlRenderer();
-      case 'barcode':  return new BarcodeRenderer();
-      case 'select':   return new SelectRenderer(col.options as any ?? [], col.optionsFn as any);
-      default:         return new TextRenderer();
-    }
-  }
-  if (typeof renderer === 'string') {
-    switch (renderer) {
-      case 'number':   return new NumberRenderer();
-      case 'date':     return new DateRenderer();
-      case 'checkbox': return new CheckboxRenderer();
-      case 'button':   return new ButtonRenderer();
-      case 'link':     return new LinkRenderer();
-      case 'badge':    return new BadgeRenderer();
-      case 'switch':   return new SwitchRenderer();
-      case 'radio':    return new RadioRenderer();
-      case 'img':      return new ImgRenderer();
-      case 'html':     return new HtmlRenderer();
-      case 'barcode':  return new BarcodeRenderer();
-      default:         return new TextRenderer();
-    }
-  }
-  // RendererDef 객체
-  switch (renderer.type) {
-    case 'button':    return new ButtonRenderer(renderer as ButtonRendererDef);
-    case 'checkbox':  return new CheckboxRenderer();
-    case 'link':      return new LinkRenderer(renderer.hrefFn, renderer.target);
-    case 'template':  return new TemplateRenderer(renderer.templateFn);
-    case 'badge':     return new BadgeRenderer(renderer.colorMap, renderer.labelMap ?? renderer.valueMap);
-    case 'image':     return new ImageRenderer(renderer as ImageRendererDef);
-    case 'progress':  return new ProgressRenderer(renderer as ProgressRendererDef);
-    case 'sparkline': return new SparklineRenderer(renderer as SparklineRendererDef);
-    case 'switch':    return new SwitchRenderer();
-    case 'rating':    return new RatingRenderer(renderer as RatingRendererDef);
-    case 'number':    return new NumberRenderer();
-    case 'date':      return new DateRenderer();
-    case 'radio':     return new RadioRenderer();
-    case 'img':       return new ImgRenderer();
-    case 'html':      return new HtmlRenderer();
-    case 'barcode':   return new BarcodeRenderer();
-    default:          return new TextRenderer();
-  }
+  let name: string;
+  let def: RendererDef | undefined;
+  if (!renderer)                     { name = String(col.type ?? ''); def = undefined; }
+  else if (typeof renderer === 'string') { name = renderer;               def = undefined; }
+  else                               { name = renderer.type;         def = renderer; }
+  const factory = _rendererRegistry.get(name);
+  return factory ? factory(col, def) : new TextRenderer();
 }

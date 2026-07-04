@@ -2,6 +2,26 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.1.1] - 2026-07-04
+
+### Added
+- **스킨 (형태 축)** — 색 테마와 직교하는 형태 스킨 6종(sharp/rounded/stitch/flat/high-contrast/material).
+  `data-og-skin` 속성 + `grid.setSkin(name)`, `OpenGrid.defineSkin(name, delta)`(FORM 토큰만 허용), `grid.setSkinVar(k,v)`.
+  색 테마와 자유 조합(예: crimson 테마 + stitch 스킨). 접근성 위험이 있는 neumorph는 기본 카탈로그에서 제외.
+- **아이콘 세트** — Bootstrap Icons(MIT) 기반 역할(role) 아이콘 64종. `renderIcon(role, {size})`,
+  `grid.setIcon(role, key)`(인스턴스 격리), `OpenGrid.defineIconSet(map)`(전역). 공개 export 추가:
+  `renderIcon`/`IconRegistry`/`iconRegistry`/`DEFAULT_ICON_ROLES`/`SkinRegistry`/`skinRegistry`.
+- **버튼 렌더러 아이콘** — `renderer:{ type:'button', icon:'search', label:'…', iconPos:'left'|'right' }`로
+  버튼 라벨과 아이콘을 함께 표시.
+
+### Changed
+- 그리드 셀/행/헤더 보더를 `--og-border-style`/`--og-divider-style` 토큰으로 승격 — 스킨이 선(보더 스타일)을 제어한다.
+  토큰 미설정 시 `solid` 폴백(기존 렌더와 동일).
+- 내부 코어 리팩토링(협력자 분리) — 공개 API·동작 변화 없음(행동 보존).
+
+### Notes
+- Bootstrap Icons(MIT) 라이선스를 `THIRD_PARTY_LICENSES.txt`에 포함.
+
 ## [1.1.0] - 2026-07-03
 
 ### Added

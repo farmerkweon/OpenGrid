@@ -4,6 +4,11 @@ export { GridShuttle, createGridShuttle } from './core/GridShuttle.js';
 export type { GridShuttleOptions } from './core/GridShuttle.js';
 export { OrgChart } from './core/OrgChart.js';
 export { XmlConverter } from './core/XmlConverter.js';
+// item3(R12): 외관 스킨(FORM 축) + 아이콘 공개 API
+export { IconRegistry, iconRegistry, renderIcon, DEFAULT_ICON_ROLES } from './core/IconRegistry.js';
+export type { IconRenderOptions } from './core/IconRegistry.js';
+export { SkinRegistry, skinRegistry } from './core/SkinRegistry.js';
+export type { SkinTokenDelta } from './core/types.js';
 export type { OrgChartOptions, OrgChartColumnDef } from './core/OrgChart.js';
 export type { TreeNodeIconDef } from './core/types.js';
 export type { FilterSelectConfig, FilterSelectColumn } from './core/FilterSelect.js';

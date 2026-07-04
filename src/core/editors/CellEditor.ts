@@ -1,4 +1,4 @@
-import type { ColumnDef } from '../types.js';
+import type { ColumnDef, EditorDef } from '../types.js';
 import type { RenderContext } from '../renderers/CellRenderer.js';
 export { DateEditor } from './DateEditor.js';
 export { SelectEditor } from './SelectEditor.js';
@@ -147,39 +147,54 @@ export class CheckboxEditor implements CellEditor {
   destroy(): void {}
 }
 
+// ─── Editor 레지스트리 (R10, OCP — Replace Conditional with Registry) ────────
+/**
+ * R10(§6-R10, §2.5 R-4c, §3.1 C12): `createEditor` 삼중 switch 를 `Map<typeName, factory>`
+ * 레지스트리로 대체한다. 내장 타입은 모듈 로드시 부트스트랩 등록, 미등록 타입은 기존과 동일하게
+ * TextEditor 로 폴백한다. `registerEditor(typeName, factory)` 로 코어 편집 없이 커스텀 에디터를
+ * 추가할 수 있다(OCP). 등록은 렌더러와 동일하게 **프로세스 전역**.
+ *
+ * 팩토리는 `(col, def)` 를 받는다. `def`(EditorDef 객체)는 객체 경로에서만 채워지며, 원 switch 의
+ * 세 컨텍스트(col.type / 문자열 / 객체) 동작을 정확히 보존한다:
+ *  - number 는 def 가 있으면 min/max/step 을 옵션으로, 없으면 기본 NumberEditor.
+ *  - select 는 def 가 있으면 def.options, 없으면 col.options 를 쓴다(원 switch 와 동일).
+ */
+export type EditorFactory = (col: ColumnDef, def?: EditorDef) => CellEditor;
+
+const _editorRegistry = new Map<string, EditorFactory>();
+
+/** 커스텀 셀 에디터 타입을 코어 편집 없이 등록(OCP). 프로세스 전역. */
+export function registerEditor(typeName: string, factory: EditorFactory): void {
+  _editorRegistry.set(typeName, factory);
+}
+
+/** 등록 여부 조회(내부/테스트용). */
+export function hasEditor(typeName: string): boolean {
+  return _editorRegistry.has(typeName);
+}
+
+registerEditor('number', (_col, def) => {
+  const opts: { min?: number; max?: number; step?: number } = {};
+  if (def) {
+    if (def.min != null) opts.min = def.min;
+    if (def.max != null) opts.max = def.max;
+    if (def.step != null) opts.step = def.step;
+  }
+  return new NumberEditor(opts);
+});
+registerEditor('date',     () => new DateEditor());
+registerEditor('boolean',  () => new CheckboxEditor());
+registerEditor('checkbox', () => new CheckboxEditor());
+registerEditor('select',   (col, def) => new SelectEditor((def ? def.options : col.options) ?? [], col.optionsFn as any));
+
 // ─── Editor 팩토리 ────────────────────────────────────────
 export function createEditor(col: ColumnDef): CellEditor {
   const editor = col.editor;
-  if (!editor) {
-    switch (col.type as string) {
-      case 'number':  return new NumberEditor();
-      case 'date':    return new DateEditor();
-      case 'boolean': return new CheckboxEditor();
-      case 'select':  return new SelectEditor(col.options ?? [], col.optionsFn as any);
-      default:        return new TextEditor();
-    }
-  }
-  if (typeof editor === 'string') {
-    switch (editor) {
-      case 'number':   return new NumberEditor();
-      case 'date':     return new DateEditor();
-      case 'select':   return new SelectEditor(col.options ?? [], col.optionsFn as any);
-      case 'checkbox': return new CheckboxEditor();
-      default:         return new TextEditor();
-    }
-  }
-  // EditorDef 객체
-  switch (editor.type) {
-    case 'number': {
-      const opts: { min?: number; max?: number; step?: number } = {};
-      if (editor.min != null) opts.min = editor.min;
-      if (editor.max != null) opts.max = editor.max;
-      if (editor.step != null) opts.step = editor.step;
-      return new NumberEditor(opts);
-    }
-    case 'date':     return new DateEditor();
-    case 'select':   return new SelectEditor(editor.options ?? [], col.optionsFn as any);
-    case 'checkbox': return new CheckboxEditor();
-    default:         return new TextEditor();
-  }
+  let name: string;
+  let def: EditorDef | undefined;
+  if (!editor)                       { name = String(col.type ?? ''); def = undefined; }
+  else if (typeof editor === 'string') { name = editor;                 def = undefined; }
+  else                               { name = editor.type;           def = editor; }
+  const factory = _editorRegistry.get(name);
+  return factory ? factory(col, def) : new TextEditor();
 }

@@ -4,7 +4,7 @@ import { DataLayer } from '../../src/core/DataLayer';
 import { buildGroups } from '../../src/core/GroupEngine';
 import { FooterManager } from '../../src/core/FooterManager';
 import { ExportManager } from '../../src/core/ExportManager';
-import { setDisplayFormatterResolver, formatNumber, formatDate } from '../../src/core/renderers/CellRenderer';
+import { formatNumber, formatDate, NumberRenderer, DateRenderer, type RenderContext } from '../../src/core/renderers/CellRenderer';
 import type { FilterItem, SortItem } from '../../src/core/types';
 
 // ── xlsx-js-style mock: aoa_to_sheet 로 들어온 rows 를 캡처해 cellSerializer 검증 ──
@@ -51,8 +51,7 @@ const sample = [
 ];
 
 afterEach(() => {
-  // 렌더러측 모듈 전역 resolver 누수 방지(다른 테스트 격리).
-  setDisplayFormatterResolver(null);
+  // R1: 렌더러측 displayFormatter 모듈전역 제거됨(per-instance 경로) — 리셋 불필요.
   _capturedRows = [];
 });
 
@@ -144,19 +143,43 @@ describe('strategy: displayFormatter', () => {
     g.destroy();
   });
 
-  it('default 동치성(렌더러측): resolver null 시 formatNumber/formatDate 기존 출력', () => {
-    setDisplayFormatterResolver(null);
+  it('formatNumber/formatDate 는 순수 포맷 함수(R1: 렌더러측 모듈전역 제거 후 전역상태 0)', () => {
     expect(formatNumber(1234.5, '#,##0.00')).toBe('1,234.50');
     expect(formatDate('2024-01-02', 'yyyy-MM-dd')).toBe('2024-01-02');
   });
 
-  it('커스텀(렌더러측): resolver 가 non-null 반환 시 그 값 우선', () => {
-    setDisplayFormatterResolver((v) => `[${v}]`);
-    expect(formatNumber(10, '#,##0')).toBe('[10]');
-    expect(formatDate('2024-01-02')).toBe('[2024-01-02]');
-    // null 반환 시 폴백
-    setDisplayFormatterResolver(() => null);
-    expect(formatNumber(10, '#,##0')).toBe('10');
+  it('커스텀(렌더러측, R1b per-instance): Number/Date 렌더러가 ctx.displayFormatter 전략을 ctx.value 위에 적용', () => {
+    const mkCtx = (value: any, df: ((v: any, f: string, r: any) => string | null) | null, format?: string): RenderContext => ({
+      value, row: {}, rowIndex: 0,
+      column: { field: 'x', header: 'x', ...(format ? { format } : {}) } as any,
+      colIndex: 0, isSelected: false, rowState: 'none', displayFormatter: df,
+    });
+    // 전략 주입 시 그 값 우선(ctx.value 기반)
+    expect(new NumberRenderer().render(mkCtx(10, (v) => `[${v}]`, '#,##0')).textContent).toBe('[10]');
+    expect(new DateRenderer().render(mkCtx('2024-01-02', (v) => `[${v}]`)).textContent).toBe('[2024-01-02]');
+    // 전략이 null 반환 → 기본 포맷 폴백
+    expect(new NumberRenderer().render(mkCtx(1234.5, () => null, '#,##0.00')).textContent).toBe('1,234.50');
+    // 전략 미설정(null) → 기본 포맷
+    expect(new NumberRenderer().render(mkCtx(10, null, '#,##0')).textContent).toBe('10');
+  });
+
+  it('R1b 회귀방지(H1): getDisplayValue override 가 채운 무포맷 ctx.displayValue 를 Number/Date 는 무시하고 기본 포맷 유지', () => {
+    // getDisplayValue override 가 미처리 필드를 orig 로 위임하면 ctx.displayValue = String(v)(무포맷)이 된다.
+    // Number/Date 렌더러는 이를 소비하지 않으므로(전략 채널만 사용) 천단위·정밀도가 유지돼야 한다.
+    const ctxH1: RenderContext = {
+      value: 50000, row: {}, rowIndex: 0,
+      column: { field: 'salary', header: 's', format: '#,##0' } as any,
+      colIndex: 0, isSelected: false, rowState: 'none',
+      displayValue: '50000', displayFormatter: null,
+    };
+    expect(new NumberRenderer().render(ctxH1).textContent).toBe('50,000');
+    const ctxH1d: RenderContext = {
+      value: '2024-01-02', row: {}, rowIndex: 0,
+      column: { field: 'd', header: 'd' } as any,
+      colIndex: 0, isSelected: false, rowState: 'none',
+      displayValue: '2024-01-02T00:00:00.000Z', displayFormatter: null,
+    };
+    expect(new DateRenderer().render(ctxH1d).textContent).toBe('2024-01-02');
   });
 });
 

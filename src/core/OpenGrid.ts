@@ -5,6 +5,16 @@ import { ColumnLayout } from './ColumnLayout.js';
 import { FilterPanel } from './FilterPanel.js';
 import { GridRenderer } from './GridRenderer.js';
 import type { RendererCallbacks, DetailRenderContext } from './GridRenderer.js';
+import { AppearanceResolver, ThemeContext } from './AppearanceResolver.js';
+import { skinRegistry } from './SkinRegistry.js';
+import { iconRegistry, IconRegistry } from './IconRegistry.js';
+import type { SkinTokenDelta } from './types.js';
+import { RenderController } from './RenderController.js';
+import { GridComposer } from './GridComposer.js';
+import type { ComposerHost } from './GridComposer.js';
+import { MutationService } from './MutationService.js';
+import { FormulaController } from './FormulaController.js';
+import { CrossGridController } from './CrossGridController.js';
 import { DetailManager } from './DetailManager.js';
 import { getDetailGlyph } from './detail/DetailGlyph.js';
 import { RowManager } from './RowManager.js';
@@ -15,7 +25,8 @@ import type { FilterSelectConfig } from './FilterSelect.js';
 import { Pagination } from './Pagination.js';
 import { RowDragDrop } from './RowDragDrop.js';
 import { MergeEngine, type MergeCell } from './MergeEngine.js';
-import { createRenderer, setDisplayFormatterResolver } from './renderers/CellRenderer.js';
+import { createRenderer, registerRenderer, type RendererFactory } from './renderers/CellRenderer.js';
+import { registerEditor, type EditorFactory } from './editors/CellEditor.js';
 import { ContextMenuManager, DEFAULT_CONTEXT_ITEMS } from './ContextMenu.js';
 import { WorksheetManager } from './WorksheetManager.js';
 import { ExportManager } from './ExportManager.js';
@@ -32,26 +43,20 @@ import { ChartManager } from './ChartManager.js';
 import type { ChartInstance } from './ChartManager.js';
 import type { ChartConfig } from './chart/types.js';
 import { TriggerManager } from './TriggerManager.js';
-import {
-  openCrossGridMapper, buildTransform, buildMappingScript, sameSchema,
-  type FieldInfo,
-} from './CrossGridMapper.js';
 import { crossGridRegistry } from './CrossGridRegistry.js';
 import { OverrideKernel } from './OverrideKernel.js';
 import type { OverrideLayer } from './OverrideKernel.js';
-import { RecalcCoordinator, type RecalcSummary } from './formula/RecalcCoordinator.js';
-import { cellKey, parseCellKey, type FormulaErrorCode, type FormulaGridAccessor } from './formula/types.js';
+import { ExtensionPointRegistry } from './ExtensionPointRegistry.js';
+import { RecalcCoordinator } from './formula/RecalcCoordinator.js';
+import { cellKey, type FormulaErrorCode } from './formula/types.js';
 import type {
   GridOptions, OpenGridInstance, ColumnDef,
   SortItem, FilterItem, ExportOptions,
-  EditEvent, Position, GridDropEvent, GridMappingEvent,
+  EditEvent, Position,
   TriggerContext, TriggerHandler, TriggerEvent,
   OverrideApi, OverrideCallOptions,
-  CellRange, RangeStats,
+  CellRange, RangeStats, MasterDetailOptions,
 } from './types.js';
-
-/** formulaRecalc 이벤트의 large 플래그 임계(Spike-A §8 교훈 — 누적체인 폐포 폭증 신호). */
-const FORMULA_LARGE_RECALC_THRESHOLD = 500;
 
 const ROW_ID_FIELD = '_ogRowId';
 
@@ -59,19 +64,32 @@ export class OpenGrid<T extends Record<string, any> = any>
   extends EventEmitter
   implements OpenGridInstance<T>
 {
-  private _container: HTMLElement;
-  private _options: Required<GridOptions<T>>;
-  private _data: DataLayer<T>;
-  private _colLayout: ColumnLayout<T>;
+  // R8: 아래 4개 필드는 GridComposer.compose() 가 대입한다(컴파일러가 캐스트 너머 대입을 추적
+  //     못하므로 definite-assignment `!` 부여 — 나머지 협력자 필드와 동일 패턴).
+  private _container!: HTMLElement;
+  private _options!: Required<GridOptions<T>>;
+  private _data!: DataLayer<T>;
+  private _colLayout!: ColumnLayout<T>;
   private _vs: VirtualScroll | null = null;
   private _ro: ResizeObserver | null = null;
   private _renderer: GridRenderer | null = null;
+  // R12a(C10): 스타일 해결 단일 초크포인트. 컴포지션 루트에서 생성해 렌더러에 주입.
+  private _appearance: AppearanceResolver | null = null;
+  /** R12c: per-instance 아이콘 오버라이드 레지스트리(전역 iconRegistry 의 child). 첫 setIcon 때 지연 생성. */
+  private _icons: IconRegistry | null = null;
   private _sfMgr!: SortFilterManager<T>;
   private _rowMgr!: RowManager<T>;
   private _editMgr!: CellEditManager<T>;
   private _trigMgr = new TriggerManager();
   private _destroyed = false;
-  private _autoHeightWarned = false;
+  /** R5(§3.1 C4): 렌더 루프 컨트롤러. `_mount` 에서 renderer/vs 배선 초입에 생성. */
+  private _render!: RenderController<T>;
+  /** R6(§3.1 C5): 데이터 변경 서비스(setData/insert/push/delete/writeCell/writeCells + batch + commit). */
+  private _mutation!: MutationService<T>;
+  /** R7(§3.1 C9): F3 수식 컨트롤러(accessor 조립·recalc flush·에러 표현 + 공개 수식 API). */
+  private _formula!: FormulaController<T>;
+  /** R7(§3.1 C8): 크로스그리드 컨트롤러(moveRowsTo/매핑/3단계 드롭 발화). */
+  private _cross!: CrossGridController<T>;
   private _colWidths: number[] = [];
   /** 사용자가 헤더 드래그로 직접 조절한 컬럼 폭 (field 기준). _recalcWidths 가 덮어쓰지 않도록 보존 */
   private _userWidths = new Map<string, number>();
@@ -105,16 +123,16 @@ export class OpenGrid<T extends Record<string, any> = any>
   /** F3(C2): writeCell 단건 쓰기가 쌓아두는 dirty seed. endBatch/즉시 flush 시 onValuesChanged 1회로 소비. */
   private _formulaDirtySeeds: Set<string> = new Set();
 
-  // ── Phase 0(C2.1): 배치 쓰기 — beginBatch/endBatch 로 render·dataChange 를 coalesce ──
-  /** reentrant 카운터. 0 초과면 배치 중(writeCell 이 render/dataChange 를 지연). */
-  private _batchDepth = 0;
-  /** 배치 구간 중 실제 쓰기가 1건이라도 있었는지(빈 배치는 endBatch 에서 아무 것도 안 함). */
-  private _batchDirty = false;
+  // ── Phase 0(C2.1): 배치 쓰기 상태(_batchDepth/_batchDirty)는 R6 에서 MutationService 로 이관 ──
 
   // grid.override() 확장 커널 (생성자 말미에 초기화)
   private _ovk!: OverrideKernel;
   /** 공개 override API (호출가능 + .strategy). 생성자 말미에 부착. */
   override!: OverrideApi<T>;
+  /** R11(§3.1 C7): 커널 위 타입드 확장점 레지스트리. _mount 초입에 생성(커널 준비 후). */
+  private _extensions!: ExtensionPointRegistry<T>;
+  /** R11: 타입드 확장점 레지스트리 정면(렌더훅 등록·strategy/override 타입드 카탈로그·MutationHook·catalog). */
+  get extensions(): ExtensionPointRegistry<T> { return this._extensions; }
 
   // ── grid.override() 정적 전역 레지스트리 ──────────────────
   /** 정적 전역 override 레이어 (모든 신규 인스턴스에 생성자 말미 적용). */
@@ -136,219 +154,65 @@ export class OpenGrid<T extends Record<string, any> = any>
     },
   };
 
+  // ── R10(OCP): 렌더러/에디터 개방 등록소 (프로세스 전역, defaultOverride 와 동형) ──
+  /**
+   * 커스텀 셀 렌더러 타입을 코어 편집 없이 등록. `col.type`/`col.renderer`(문자열 또는 `{type}`)가
+   * `typeName` 과 일치하면 등록 팩토리가 렌더러를 생성한다. 프로세스 전역(모든 그리드 인스턴스 공유).
+   */
+  static registerRenderer(typeName: string, factory: RendererFactory): typeof OpenGrid {
+    registerRenderer(typeName, factory);
+    return OpenGrid;
+  }
+
+  /** 커스텀 셀 에디터 타입을 코어 편집 없이 등록(OCP). 프로세스 전역. */
+  static registerEditor(typeName: string, factory: EditorFactory): typeof OpenGrid {
+    registerEditor(typeName, factory);
+    return OpenGrid;
+  }
+
+  /**
+   * R12b(item3 §6.2): 커스텀 스킨을 코어 편집 없이 등록(defaultOverride 와 동형의 전역 정책).
+   * FORM-only 검증(색 리터럴 거부 = 색⊥형태 직교성) + HANMS 접근성 가드레일(포커스 <2px/none 클램프)
+   * 적용 후, 런타임 `<style>` 로 `.og-container[data-og-skin="name"]` 블록을 주입한다. 이후 어떤
+   * 인스턴스도 `grid.setSkin(name)` 으로 사용. 색값이 델타에 있으면 **throw**.
+   *
+   * 예) Neumorph 는 기본 카탈로그에서 컷(HANMS §1.3)됐으나 여기서 레시피로 재현 가능:
+   *   OpenGrid.defineSkin('neumorph', { '--og-radius-md':'14px', '--og-elevation-inset':'inset -4px -4px 8px', … })
+   */
+  static defineSkin(name: string, delta: SkinTokenDelta): typeof OpenGrid {
+    skinRegistry.define(name, delta);
+    return OpenGrid;
+  }
+
+  /**
+   * R12c(item3 §5.1, 계약 C13): 시맨틱 아이콘 role 세트를 코어 편집 없이 **전역** 등록/교체
+   * (defineSkin/registerRenderer 와 동형의 프로세스 전역 정책). 값은 알려진 아이콘 key(`BOOTSTRAP_ICONS`)
+   * 이거나 원시 SVG 본문 마크업. 이후 모든 인스턴스의 아이콘 해석에 반영된다. per-instance 교체는
+   * `grid.setIcon(role, svg)` 참조.
+   *   예) OpenGrid.defineIconSet({ 'sort.asc': 'arrow-up', 'row.delete': '<path d="…"/>' })
+   */
+  static defineIconSet(map: Record<string, string>): typeof OpenGrid {
+    for (const [role, svgOrKey] of Object.entries(map)) iconRegistry.register(role, svgOrKey);
+    return OpenGrid;
+  }
+
   constructor(container: string | HTMLElement, options: GridOptions<T>) {
     super();
-    const el = typeof container === 'string'
-      ? (document.querySelector(container) as HTMLElement)
-      : container;
-    if (!el) throw new Error(`OpenGrid: container not found: ${container}`);
-    this._container = el;
-
-    this._options = {
-      height: '100%', width: '100%',
-      rowHeight: 32, headerHeight: 34, footerHeight: 30,
-      autoHeight: false, fillWidth: false, defaultColumnWidth: 100,
-      editable: false, editMode: 'dblclick', history: true, historySize: 100,
-      selection: 'single', clipboard: true,
-      sortable: true, multiSort: true, filterable: true, defaultSort: [],
-      frozenColumns: 0, frozenRows: 0,
-      rowNumber: false, stateColumn: false, checkColumn: false, draggable: false, crossGrid: false, crossGridMapping: 'auto',
-      mergeCells: false, groupBy: [], summary: undefined as any,
-      treeMode: 'auto', treeId: 'id', treeParentId: 'parentId', expandOnLoad: false,
-      pagination: false, pageSize: 50,
-      footer: undefined as any, footerPosition: 'bottom',
-      theme: 'default', cssVars: {}, ariaLabel: 'OPEN_GRID 데이터 그리드',
-      ...options
-    } as Required<GridOptions<T>>;
-
-    this._data = new DataLayer<T>(ROW_ID_FIELD);
-    // Phase 0(C0.3): baseline FlatRowModel — group/tree 등 어떤 기능도 켜지지 않아도 존재.
-    this._flatModel = new FlatRowModel({
-      getDataLayer: () => this._data,
-      rowIdField: ROW_ID_FIELD,
-    });
-    this._rowMgr = new RowManager<T>(this._data);
-    this._colLayout = new ColumnLayout<T>(this._options.columns, this._options.frozenColumns);
-
-    // F3(11_design_F3_v2.md/15_cross_contracts.md): 헤드리스 재계산 오케스트레이터.
-    // accessor 는 FlatRowModel(C0.3)+ColumnLayout.visibleLeaves(C1)+DataLayer(rowId 기반, C0.5)
-    // 로만 "화면/데이터"를 본다 — RecalcCoordinator/FormulaGraph/FormulaEvaluator 자체는 미수정.
-    this._recalc = new RecalcCoordinator({
-      accessor: this._buildFormulaAccessor(),
-      setComputedValue: (rowId, field, value) => this._data.setComputedValueByRowId(rowId, field, value),
-      onFormulaError: (rowId, field, error) => this._handleFormulaError(rowId, field, error),
-      refMode: (this._options as any).formula?.refMode ?? 'stable',
-      divisionPrecision: (this._options as any).formula?.divisionPrecision ?? 30,
-    });
-
-    this._editMgr = new CellEditManager<T>({
-      data: this._data,
-      colLayout: this._colLayout,
-      getRenderer: () => this._renderer,
-      getContainer: () => this._container,
-      getOptions: () => this._options,
-      emit: (ev, ...args) => this.emit(ev, ...args),
-      doRender: () => this._doRender(...this._visRange()),
-      announce: (msg) => this._announce(msg),
-      writeCell: (ri, field, value) => this.writeCell(ri, field, value),
-      scrollToRow: (ri) => this._vs?.scrollToRow(ri),
-      getVisibleLeaves: () => this._colLayout.visibleLeaves,
-      hasCellFormula: (ri, field) => this.hasCellFormula(ri, field),
-      getCellFormula: (ri, field) => this.getCellFormula(ri, field),
-      setCellFormula: (ri, field, formula) => this.setCellFormula(ri, field, formula),
-      clearCellFormula: (ri, field) => this.clearCellFormula(ri, field),
-    });
-
-    this._exportMgr = new ExportManager<T>({
-      getData: () => this._data.getData(),
-      getColLayout: () => this._colLayout,
-      getColWidths: () => this._colWidths,
-      getOptions: () => this._options,
-      getContainer: () => this._container,
-      getMaskEnabled: (field) => this.getMaskEnabled(field),
-      getWsManager: () => this._wsManager,
-      getStrategy: (slot, fb) => this._ovk.getStrategy(slot, fb),
-    });
-    this._footerMgr = new FooterManager<T>({
-      getData: () => this._data.getData(),
-      getColLayout: () => this._colLayout,
-      getColWidths: () => this._colWidths,
-      getOptions: () => this._options,
-      getContainer: () => this._container,
-      getStrategy: (slot, fb) => this._ovk.getStrategy(slot, fb),
-    });
-    this._kbdMgr = new KeyboardManager<T>({
-      getEditMgr: () => this._editMgr,
-      getRowMgr: () => this._rowMgr,
-      getData: () => this._data,
-      getColLayout: () => this._colLayout,
-      getOptions: () => this._options,
-      setFocusCell: (ri, ci) => this._setFocusCell(ri, ci),
-      handleRowDrop: (from, to) => this._handleRowDrop(from, to),
-      doRender: () => this._doRender(...this._visRange()),
-      announce: (msg) => this._announce(msg),
-      emit: (ev, ...args) => this.emit(ev, ...args),
-      visRange: () => this._visRange(),
-      handleCellKeyEvt: (name, e) => this._handleCellKeyEvt(name, e),
-      writeCells: (patches) => this.writeCells(patches),
-      getRangeHooks: () => this._rangeMgr,
-    });
-    this._sfMgr = new SortFilterManager<T>({
-      getData: () => this._data,
-      getColLayout: () => this._colLayout,
-      getFindFilter: () => this._findMgr.findFilter,
-      getVs: () => this._vs,
-      getPagination: () => this._pagination,
-      getOptions: () => this._options,
-      renderHeader: () => this._renderHeader(),
-      doRender: () => this._doRender(...this._visRange()),
-      announce: (msg) => this._announce(msg),
-      emit: (ev, ...args) => this.emit(ev, ...args),
-      onReproject: () => this._rangeMgr.reproject(),
-    });
-    this._findMgr = new FindBarManager<T>({
-      getColLayout: () => this._colLayout,
-      getData: () => this._data,
-      getFilters: () => this._sfMgr.filters,
-      getVs: () => this._vs,
-      getPagination: () => this._pagination,
-      doRender: () => this._doRender(...this._visRange()),
-    });
-    this._cellEvt = new CellEventHandler<T>({
-      getData: () => this._data,
-      getColLayout: () => this._colLayout,
-      getOptions: () => this._options,
-      getEditMgr: () => this._editMgr,
-      getRowMgr: () => this._rowMgr,
-      emit: (ev, ...args) => this.emit(ev, ...args),
-      writeCell: (ri, field, val) => this.writeCell(ri, field, val),
-      doRender: () => this._doRender(...this._visRange()),
-      getContainer: () => this._container,
-      onCellsClick: (ri, ci, shift) => this._rangeMgr.handleClick(ri, ci, shift),
-      rangeMouseDown: (ri, ci, e) => this._rangeMgr.handleCellMouseDown(ri, ci, e),
-      rangeMouseMove: (ri, ci, e) => this._rangeMgr.handleCellMouseMove(ri, ci, e),
-      rangeMouseUp: (ri, ci, e) => this._rangeMgr.handleCellMouseUp(ri, ci, e),
-    });
-    // F1: 범위 선택 + 채우기 핸들(11_design_F1_v2.md). 헤드리스 코어(core/range/*)를 소비.
-    this._rangeMgr = new RangeSelectionManager<T>({
-      getOptions: () => this._options,
-      getData: () => this._data,
-      getColLayout: () => this._colLayout,
-      getFlatModel: () => this._flatModel,
-      getRenderer: () => this._renderer,
-      getEditMgr: () => this._editMgr,
-      setFocusCell: (ri, ci) => this._setFocusCell(ri, ci),
-      writeCells: (patches) => this.writeCells(patches),
-      getDisplayValue: (ri, field) => this.getDisplayValue(ri, field),
-      emit: (ev, ...args) => this.emit(ev, ...args),
-      doRender: () => this._doRender(...this._visRange()),
-      announce: (msg) => this._announce(msg),
-      // C3(15_cross_contracts.md): F3 이 제공하는 hasCellFormula/offsetFormula/setCellFormula 를
-      // fill 커밋 경로(FillEngine.FillPlanContext)에 연결한다.
-      hasCellFormula: (rowId, field) => this._recalc.hasCellFormula(rowId, field),
-      offsetFormula: (rowId, field, dRow, dCol) => this._recalc.offsetFormula(rowId, field, dRow, dCol),
-      setCellFormulaByRowId: (rowId, field, formula) => this._setCellFormulaByRowId(rowId, field, formula),
-    });
-    this._grpMgr = new GroupTreeManager<T>({
-      getData: () => this._data.getData(),
-      getDataLayer: () => this._data,
-      getOptions: () => this._options,
-      getVs: () => this._vs,
-      doRenderFull: (n) => this._doRender(0, n - 1),
-      doRender: () => this._doRender(...this._visRange()),
-      getStrategy: (slot, fb) => this._ovk.getStrategy(slot, fb),
-      setFlatBacking: (provider) => this._flatModel.setBacking(provider),
-      getFlatCount: () => this._flatModel.count(),
-    });
-    // F2(11_design_F2_v2.md §3.1/C0.3): DetailManager 는 FlatRowModel 의 "등록자" — group/tree
-    // 가 setBacking 한 산출물 위에 detail splice 를 끼운다(합성 체인 마지막 단계, §3.2).
-    this._detailMgr = new DetailManager<T>({
-      getOptions: () => this._options,
-      getFlatModel: () => this._flatModel,
-      getVs: () => this._vs,
-      getRowId: (row) => (row as any)[ROW_ID_FIELD],
-      getRowById: (rowId) => this._data.getRowById(rowId),
-      doRenderFull: (n) => this._doRender(0, n - 1),
-      emit: (ev, payload) => this.emit(ev, payload),
-      announce: (msg) => this._announce(msg),
-      getDepth: () => (this._options as any)._detailDepth ?? 0,
-      getGridInstance: () => this,
-      // 순환 import 회피: DetailManager.ts 는 OpenGrid 를 모르고, 이 클로저만 주입받는다.
-      createSubgrid: (host, subgridOptions, depth) =>
-        new OpenGrid(host, { ...subgridOptions, _detailDepth: depth } as any),
-    });
-    // F4(11_design_F4_v2.md §6/C5): 통합 차트 오케스트레이터. 그리드 상태는 전부 주입 클로저로
-    // 읽고(CN-1 가상DOM 미접근), range 는 FlatRowModel(C0.3)로 pseudo-row 를 걸러 스냅샷한다.
-    this._chartMgr = new ChartManager({
-      getContainer: () => this._container,
-      getOptions: () => this._options,
-      getAllRows: () => this._data.getData(),
-      getSelectedRows: () => this._rowMgr.getSelections(),
-      getCheckedRows: () => this._rowMgr.getChecked().map(c => c.row),
-      getVisibleColumns: () => this._colLayout.visibleLeaves.map(c => ({
-        field: c.field, header: c.header, type: c.type as string | undefined,
-      })),
-      getFlatModel: () => this._flatModel,
-      getRowById: (rowId) => this._data.getRowById(rowId) as Record<string, any> | undefined,
-      getActiveRange: () => this._rangeMgr.getActiveRange(),
-      on: (ev, cb) => { this.on(ev, cb); },
-      off: (ev, cb) => { this.off(ev, cb); },
-      emit: (ev, ...args) => this.emit(ev, ...args),
-      announce: (msg) => this._announce(msg),
-    });
-
-    // ── grid.override() 확장 커널 부착 (★mount 전 — 초기 렌더의 footer/그룹/strategy 슬롯이
-    //    매니저 deps의 getStrategy 클로저를 통해 this._ovk 를 참조하므로, _ovk 선생성이 필수다.
-    //    이전엔 mount 이후 생성하여 summary 푸터가 있는 그리드가 초기화 중
-    //    "Cannot read properties of undefined (reading 'getStrategy')" 로 깨졌다.) ──
-    this._ovk = new OverrideKernel(this, { strict: this._options.overrideStrict ?? true });
-    // Phase 2: DataLayer(슬롯 sortComparator/filterPredicate) + 렌더러(displayFormatter) strategy 배선.
-    this._data.setStrategyResolver((slot, fb) => this._ovk.getStrategy(slot, fb));
-    setDisplayFormatterResolver((v, f, row) =>
-      this._ovk.getStrategy('displayFormatter', null as any)?.(v, f, row) ?? null,
+    // R8(§3.1 C2, §3.3): 객체그래프 조립(구 생성자 ~235줄 + _ovk 선생성 + mount)을 GridComposer 로
+    // 외재화한다. compose() 는 core → formula → 매니저 → override 커널 → mount 를 Phased Builder 로
+    // 조립하며, mount 단계가 override-커널 단계의 산출 토큰을 매개변수로 요구하므로 _ovk-before-_mount
+    // 불변식이 함수 시그니처의 위상정렬로 구조적으로 강제된다(R2 상처주석의 완성). 협력자는 전부 이
+    // 인스턴스(this) 필드에 대입되며, _mount 본체(DOM/observer 배선)는 여전히 OpenGrid 가 소유한다.
+    // 서브그리드 재귀(F2 DetailManager)는 컴포저가 OpenGrid 를 역-import 하지 않도록 hooks 로 주입한다.
+    GridComposer.compose(
+      this as unknown as ComposerHost<T>,
+      container,
+      options,
+      {
+        createSubgrid: (host, subgridOptions, depth) =>
+          new OpenGrid(host, { ...subgridOptions, _detailDepth: depth } as any),
+      },
     );
-
-    this._mount();
     this._bindOptionEvents();
 
     if (this._options.defaultSort?.length) {
@@ -381,6 +245,35 @@ export class OpenGrid<T extends Record<string, any> = any>
   getOverrideNames(): string[] { return this._ovk.getOverrideNames(); }
   getStrategy<F extends Function>(slot: string, fallback: F): F { return this._ovk.getStrategy(slot, fallback); }
   private _mount(): void {
+    // R11(§3.1 C7, §4): 커널 위 타입드 확장점 레지스트리 생성(커널은 이미 준비됨 — _ovk-before-_mount).
+    // TriggerManager 는 늦은-null 견디도록 getter 로 주입(단일 커밋 초크포인트의 before/after 훅 표면).
+    this._extensions = new ExtensionPointRegistry<T>({
+      kernel: this._ovk,
+      getTrigMgr: () => this._trigMgr,
+    });
+    // 첫 렌더훅 = 기존 getDisplayValue 표시텍스트 동작(동일 출력 → 회귀0). 게이트 = override|strategy(제로코스트 보존).
+    this._extensions.registerRenderHook({
+      id: 'displayText',
+      gate: () => this.hasOverride('getDisplayValue') || this._ovk.hasStrategy('displayFormatter'),
+      resolve: (ri, field) => this.getDisplayValue(ri, field),
+    });
+    // R11(§4.2): 표시텍스트 너머의 NEW 렌더훅 — 셀 클래스/aria. strategy 슬롯 미설정 시 제로코스트.
+    this._extensions.registerRenderHook({
+      id: 'cellClass',
+      gate: () => this._ovk.hasStrategy('cellClassResolver'),
+      resolve: (ri, field) => {
+        const fn = this._ovk.getStrategy('cellClassResolver', null as any);
+        return fn ? fn(this.readCell(ri, field), field, this._data.getRowByIndex(ri)) : null;
+      },
+    });
+    this._extensions.registerRenderHook({
+      id: 'ariaLabel',
+      gate: () => this._ovk.hasStrategy('ariaLabelResolver'),
+      resolve: (ri, field) => {
+        const fn = this._ovk.getStrategy('ariaLabelResolver', null as any);
+        return fn ? fn(this.readCell(ri, field), field, this._data.getRowByIndex(ri)) : null;
+      },
+    });
     this._container.classList.add('og-container');
     const h = this._options.height;
     const w = this._options.width;
@@ -390,14 +283,20 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._container.style.flexDirection = 'column';
     this._container.style.overflow = 'hidden';
     this._container.style.boxSizing = 'border-box';
+    // R12a(C10): 컨테이너 크롬 보더. 이 사이트만 폴백에 공백(`, #e0e0e0`)이 있는 레거시 표기라
+    //   byte-identical 보존을 위해 resolver.border()(무공백)로 통일하지 않고 원문 그대로 둔다
+    //   (R12b 스킨 토큰화 시 흡수). resolver 는 아래에서 렌더러에 주입된다.
     this._container.style.border = '1px solid var(--og-border-color, #e0e0e0)';
     this._container.style.fontFamily = 'var(--og-font-family, -apple-system, sans-serif)';
     this._container.style.fontSize = 'var(--og-font-size, 13px)';
     this._container.setAttribute('data-og-theme', this._options.theme);
+    // R12b: FORM(스킨) 축. default 는 CSS 블록이 없어 토큰 미정의 → 폴백 = byte-identical.
+    this._container.setAttribute('data-og-skin', this._options.skin ?? 'default');
 
     for (const [k, v] of Object.entries(this._options.cssVars))
       this._container.style.setProperty(k, v);
 
+    this._appearance = new AppearanceResolver(new ThemeContext(this._options.theme, this._options.skin ?? 'default'));
     this._renderer = new GridRenderer(this._container, this._options, {
       onHeaderClick:     (field, shiftKey) => this._handleSortClick(field, shiftKey),
       onCellClick:       (ri, ci, e) => this._handleCellClick(ri, ci, e),
@@ -420,12 +319,81 @@ export class OpenGrid<T extends Record<string, any> = any>
         this._editMgr.dragColIdx = null;
       },
       getColDragIdx:     () => this._editMgr.dragColIdx,
-      getDisplayText: (ri, field) =>
-        (this.hasOverride("getDisplayValue") || this._ovk.hasStrategy("displayFormatter"))
-          ? this.getDisplayValue(ri, field)
-          : null,
+      // R11(§4.2): 하드코딩 게이트를 렌더훅 레지스트리로 일반화 — 게이트·해석이 등록 데이터(displayText
+      // 훅)로 이동. 렌더층은 이름을 하드코딩하지 않고 채널로 순회 참조한다(동작 동일 → 회귀0).
+      resolveRenderHook: (channel, ri, field) => this._extensions.resolveRenderHook(channel, ri, field),
+      // R1b: 렌더러측 Number/Date 가 ctx.value 위에 적용할 per-instance displayFormatter 전략.
+      //      전역 없이 이 그리드의 _ovk 슬롯만 읽는다(멀티그리드 격리). 미설정 시 null → 기본 포맷.
+      getDisplayFormatter: () => this._ovk.getStrategy('displayFormatter', null as any) ?? null,
       // F3(§7.4/C7/C8.3): 마커·에러 툴팁·aria-label 을 위한 셀별 수식 메타(없으면 null).
-      getFormulaMeta: (ri, field) => this._getFormulaMeta(ri, field),
+      getFormulaMeta: (ri, field) => this._formula.getFormulaMeta(ri, field),
+    }, this._appearance);
+    // R5(§3.1 C4): 렌더 루프 컨트롤러 배선. 협력자(renderer/vs/pagination)는 여전히
+    // 이 _mount 가 소유·생성하며, 값·협력자는 전부 getter 클로저로 주입(늦은-null / colLayout
+    // 재할당 견딤). vs 는 아래에서 생성되지만 getVs 는 지연 평가라 순서 무관 — 다만 어떤
+    // doRender/onResize 호출보다 먼저 존재해야 하므로 renderer 직후에 생성한다.
+    this._render = new RenderController<T>({
+      getContainer: () => this._container,
+      getOptions: () => this._options,
+      getRenderer: () => this._renderer,
+      getVs: () => this._vs,
+      getPagination: () => this._pagination,
+      getData: () => this._data,
+      getColLayout: () => this._colLayout,
+      getFlatModel: () => this._flatModel,
+      getMergeEngine: () => this._mergeEngine,
+      getColWidths: () => this._colWidths,
+      setColWidths: (widths) => { this._colWidths = widths; },
+      getUserWidths: () => this._userWidths,
+      getSfMgr: () => this._sfMgr,
+      getRowMgr: () => this._rowMgr,
+      getEditMgr: () => this._editMgr,
+      getGrpMgr: () => this._grpMgr,
+      getDetailMgr: () => this._detailMgr,
+      getRangeMgr: () => this._rangeMgr,
+      buildDetailRenderContext: () => this._buildDetailRenderContext(),
+      renderFooterEl: () => this._renderFooterEl(),
+    });
+    // R6(§3.1 C5): 데이터 변경 서비스 배선. DataLayer(유일 writer)·협력자는 모두 getter 클로저로
+    // 지연 주입되며, 서비스는 렌더 내부를 모른 채 doRenderWindow/doRenderFull 콜백으로만 렌더를 유발한다.
+    this._mutation = new MutationService<T>({
+      getData: () => this._data,
+      getVs: () => this._vs,
+      getPagination: () => this._pagination,
+      getFlatModel: () => this._flatModel,
+      getColLayout: () => this._colLayout,
+      getContainer: () => this._container,
+      getTrigMgr: () => this._trigMgr,
+      getRowMgr: () => this._rowMgr,
+      getGrpMgr: () => this._grpMgr,
+      getOptions: () => this._options,
+      emit: (event, payload) => { this.emit(event, payload); },
+      announce: (msg) => this._announce(msg),
+      applyFilters: () => this._applyFilters(),
+      flushFormula: () => this._formula.flushRecalc(),
+      doRenderWindow: () => this._doRender(...this._visRange()),
+      doRenderFull: () => this._doRender(0, -1),
+      resetFormulaState: () => {
+        // F3(§9 E11): setData 는 rowId 를 재발급하므로 stable-id 앵커에 묶인 기존 수식은 전량
+        // 무효(MVP, rowId 재바인딩은 P2) — 오케스트레이터를 새로 만들어 사이드카/그래프를 비운다.
+        this._formulaDirtySeeds.clear();
+        this._recalc = new RecalcCoordinator({
+          accessor: this._formula.buildAccessor(),
+          setComputedValue: (rowId, field, value) => this._data.setComputedValueByRowId(rowId, field, value),
+          onFormulaError: (rowId, field, error) => this._formula.handleFormulaError(rowId, field, error),
+          refMode: this._options.formula?.refMode ?? 'stable',
+          divisionPrecision: this._options.formula?.divisionPrecision ?? 30,
+        });
+      },
+      seedFormulaDirty: (rowIndex, field) => {
+        // F3(C2/§8.5): 값이 바뀐 셀을 dirty seed 로 적립(kind==='data' 일 때만).
+        const ref = this._flatModel.resolveFlatRow(rowIndex);
+        if (ref.kind === 'data' && ref.rowId) this._formulaDirtySeeds.add(cellKey(ref.rowId, field));
+      },
+      invalidateRemovedRows: (rowIds) => {
+        for (const rowId of rowIds) this._formula.afterRecalc(this._recalc.invalidateRow(rowId), { skipRender: true });
+      },
+      getRowIdAt: (rowIndex) => this._data.getRowByIndex(rowIndex)?.[ROW_ID_FIELD] as string | undefined,
     });
     // F1(§4.3, C6): bodyWrap 자식으로 범위선택 오버레이 1회 부착(renderBody 파괴 회피).
     this._rangeMgr.mount(this._renderer.bodyWrapper);
@@ -470,6 +438,22 @@ export class OpenGrid<T extends Record<string, any> = any>
     // 그리드↔그리드 드래그용 레지스트리 등록 (bodyWrapper 기준)
     crossGridRegistry.register(this._renderer.bodyWrapper, this);
 
+    // R7(§3.1 C8): 크로스그리드 컨트롤러 배선. crossGridRegistry 싱글턴은 AS-IS 유지(R8 에서 승격).
+    // target 측 연산은 getPeerController 로 얻은 상대 컨트롤러로 위임한다(원본의 targetGrid._x 재현).
+    this._cross = new CrossGridController<T>({
+      getSelf: () => this,
+      getData: () => this._data,
+      getColLayout: () => this._colLayout,
+      getOptions: () => this._options,
+      emit: (event, payload) => { this.emit(event, payload); },
+      insertRow: (item, position) => this.insertRow(item, position),
+      deleteRow: (rowIndex) => this.deleteRow(rowIndex),
+      getChecked: () => this._rowMgr.getChecked(),
+      uncheckAll: () => this._rowMgr.uncheckAll(),
+      dragRowSet: (fromIndex) => this._dragRowSet(fromIndex),
+      getPeerController: (grid) => (grid as OpenGrid<T>)._cross,
+    });
+
     if (this._options.draggable) {
       this._dnd = new RowDragDrop(
         this._renderer.bodyWrapper,
@@ -482,7 +466,7 @@ export class OpenGrid<T extends Record<string, any> = any>
             return { bodyEl: g._crossBodyEl(), rowHeight: g._options.rowHeight, totalRows: g._data.rowCount };
           },
           onCrossDrop: (fromIndex, targetBodyEl, targetIndex) =>
-            this._handleCrossGridDrop(fromIndex, targetBodyEl, targetIndex),
+            this._cross.handleCrossGridDrop(fromIndex, targetBodyEl, targetIndex),
         } : undefined,
         (fromIndex) => this._dragRowSet(fromIndex).length,
       );
@@ -699,131 +683,19 @@ export class OpenGrid<T extends Record<string, any> = any>
 
   exportSheetsExcel(filename?: string): void { this._exportMgr.exportSheetsExcel(filename); }
 
-  private _paginationHeight(): number {
-    return this._options.pagination ? 38 : 0;
-  }
-
-  private _onResize(): void {
-    const { width } = this._container.getBoundingClientRect();
-    if (!width) return;
-    this._recalcWidths(width);
-    // _renderHeader() 가 헤더를 그린 뒤 실제 헤더 높이를 측정해 본문/뷰포트 높이를 동기화한다
-    // (headerWrap/'\n' 로 헤더가 늘어나도 본문 영역이 침범당하지 않도록).
-    this._renderHeader();
-    this._doRender(...this._visRange());
-  }
-
-  private _recalcWidths(totalWidth: number): void {
-    this._colWidths = this._colLayout.computeWidths(
-      totalWidth
-        - (this._options.stateColumn ? 24 : 0)
-        - (this._options.draggable   ? 18 : 0)
-        - (this._options.rowNumber   ? 44 : 0)
-        - (this._options.checkColumn ? 36 : 0),
-      this._options.defaultColumnWidth
-    );
-    // 사용자가 직접 조절한 폭은 보존 (리사이즈 후 재계산으로 원복되는 문제 방지)
-    if (this._userWidths.size) {
-      this._colLayout.visibleLeaves.forEach((leaf, i) => {
-        const w = this._userWidths.get(leaf.field);
-        if (w != null) this._colWidths[i] = w;
-      });
-    }
-  }
+  // R5(§3.1 C4): 렌더 루프는 RenderController 로 이관. 아래는 동일 시그니처의 얇은 위임 —
+  // 다수 내부 호출부(및 테스트의 `(grid as any)._doRender` 몽키패치)를 그대로 유지하기 위함.
+  private _onResize(): void { this._render.onResize(); }
+  private _recalcWidths(totalWidth: number): void { this._render.recalcWidths(totalWidth); }
   // 헤더(컬럼 제목 행)를 다시 그린다
-  private _renderHeader(): void {
-    this._renderer?.renderHeader(
-      this._colLayout.buildHeaderCells(),
-      this._colLayout.visibleLeaves,
-      this._colWidths,
-      this._sfMgr.sortList,
-      { ...this._options, _activeFilters: this._sfMgr.filters, _frozenCount: this._colLayout.frozenCount }
-    );
-    // 헤더 줄바꿈(headerWrap/'\n')으로 헤더가 늘어나면 본문 영역 높이를 다시 맞춰 침범을 막는다.
-    this._syncHeaderLayout();
-  }
-
-  /**
-   * 렌더된 헤더의 실제 높이를 측정해 본문(bodyWrap) 높이와 뷰포트 높이에 반영한다.
-   * 줄바꿈이 없는 헤더는 측정 높이가 headerHeight 이하라 기존 고정 동작과 동일하다.
-   */
-  private _syncHeaderLayout(): void {
-    if (!this._renderer || !this._vs) return;
-    const { height } = this._container.getBoundingClientRect();
-    if (!height) return;
-    const measured = this._renderer.getHeaderHeight();
-    const headerH = measured > this._options.headerHeight ? measured : this._options.headerHeight;
-    this._renderer.updateSize(height - this._paginationHeight(), headerH);
-    let vpHeight = height - headerH - this._paginationHeight();
-    // 옵트인 뷰포트 안전장치(fallbackViewportHeight). 기본 undefined = OFF = 이 아래 로직 건너뜀 → 기존 동작 불변.
-    // "언바운드" 감지: 윈도잉 뷰포트 높이가 전체 콘텐츠 높이(totalRows×rowHeight) 이상이면
-    // 컨테이너가 오버플로 스크롤 제약 없이 전 콘텐츠를 다 보여주는 상태다(=확정 높이 부재로 스페이서에
-    // 맞춰 부푼 폭주 경로). 이때만 뷰포트 높이를 폴백값으로 클램프해 ResizeObserver 되먹임 루프를 끊는다.
-    // 바운드 컨테이너(측정<전체)는 조건에 걸리지 않아 무영향(회귀 0). 클램프 후 재측정에서도 스페이서·
-    // 컨테이너 크기는 그대로지만 렌더 행 수가 폴백 기준으로 고정되어 루프가 더는 부풀지 않고 수렴한다.
-    const fallback = this._options.fallbackViewportHeight;
-    if (fallback && fallback > 0) {
-      const totalContentHeight = this._vs.getTotalHeight();
-      if (vpHeight >= totalContentHeight && vpHeight > fallback) {
-        vpHeight = fallback;
-      }
-    }
-    this._vs.setViewportHeight(vpHeight);
-  }
-  private _doRender(startIndex: number, endIndex: number): void {
-    if (!this._renderer || !this._vs) return;
-    const range = this._vs.getVisibleRange();
-    // autoHeight(비가상): 행을 플로우로 쌓으므로 offsetY/totalHeight 절대배치를 쓰지 않는다.
-    // 스크롤 등으로 부분 범위가 들어와도 전체를 렌더(가상화 안 함)해 행 누락을 막는다.
-    const auto = this._options.autoHeight === true;
-    if (auto) {
-      [startIndex, endIndex] = this._visRange();
-      // 대용량 가드: autoHeight 는 전 행을 렌더(비가상)하므로 행이 많으면 느려진다(1회 경고).
-      if (!this._autoHeightWarned && endIndex - startIndex + 1 > 2000) {
-        this._autoHeightWarned = true;
-        console.warn(
-          `[OpenGrid] autoHeight 는 가상 스크롤이 아니라 전 행(${endIndex - startIndex + 1}행)을 렌더합니다. ` +
-          '행이 많으면 고정 rowHeight(가상 스크롤) 사용을 권장합니다.');
-      }
-    }
-    // F2(§3.2): group/tree 활성 이거나 detail 활성(펼침≥1)이면 FlatRowModel 의 최종 합성 배열
-    // (backing+splice, detail head/filler 포함)을 렌더러에 넘긴다. 둘 다 비활성인 그리드는
-    // 기존과 동일하게 null(무비용, data.getRowByIndex 경로)을 유지한다(회귀 0/성능 보존).
-    const groupTreeActive = this._grpMgr.isGroupMode || this._grpMgr.isTreeMode;
-    const flatRows = (groupTreeActive || this._detailMgr.isActive)
-      ? this._flatModel.getFlatArray()
-      : null;
-    this._renderer.renderBody(
-      startIndex, endIndex,
-      this._data,
-      this._colLayout.visibleLeaves,
-      this._colWidths,
-      this._options,
-      auto ? 0 : range.offsetY,
-      auto ? 0 : this._vs.getTotalHeight(),
-      this._rowMgr.selectedRows,
-      this._rowMgr.checkedRows,
-      flatRows,
-      (groupKey) => this._grpMgr.handleGroupToggle(groupKey),
-      this._grpMgr.isTreeMode ? (nodeId) => this._grpMgr.handleTreeToggle(nodeId) : undefined,
-      {
-        _totalRows: this._data.rowCount, _frozenCount: this._colLayout.frozenCount, _focusCell: this._editMgr.focusCell,
-        // M-6(§4.2, F1): 범위 선택 면 하이라이트 클래스 재적용 재료.
-        ...this._rangeMgr.getOverlayExtraOpts(),
-      },
-      this._mergeEngine,
-      this._buildDetailRenderContext(),
-    );
-    // 데이터가 바뀌면 푸터 합계도 다시 계산한다
-    if (this._options.footer?.length) this._renderFooterEl();
-    // F1(§4.3): 매 렌더 뒤 오버레이(테두리/핸들/프리뷰) 재측정·복원(QA-2 재렌더 생존).
-    this._rangeMgr.repaint();
-  }
+  private _renderHeader(): void { this._render.renderHeader(); }
+  private _syncHeaderLayout(): void { this._render.syncHeaderLayout(); }
+  private _doRender(startIndex: number, endIndex: number): void { this._render.doRender(startIndex, endIndex); }
 
   /** F2(§4.5/§6.1): masterDetail.enabled 아니면 undefined(GridRenderer 는 기존 경로 그대로). */
   private _buildDetailRenderContext(): DetailRenderContext | undefined {
     if (!this._detailMgr.enabled) return undefined;
-    const opts = (this._options as any).masterDetail ?? {};
+    const opts: MasterDetailOptions<T> = this._options.masterDetail ?? {};
     return {
       toggleMode: opts.toggle ?? 'expander-col',
       ariaLabel: opts.ariaLabel ?? '상세 내용',
@@ -838,28 +710,9 @@ export class OpenGrid<T extends Record<string, any> = any>
 
   private _handleGroupToggle(groupKey: string): void { this._grpMgr.handleGroupToggle(groupKey); }
 
-  // 현재 화면에 보이는 행 범위를 반환한다
-  private _visRange(): [number, number] {
-    if (this._options.pagination && this._pagination) {
-      const { start, end } = this._pagination.getRange();
-      return [start, end];
-    }
-    // F2(C0.3): FlatRowModel.count() 는 group/tree backing + detail splice 까지 합성된 최종
-    // 총 행수 — plain/group/tree/detail 모든 조합에서 이 하나로 정확하다(detail 비활성이면
-    // 기존 this._data.rowCount 와 동치).
-    const total = this._flatModel.count();
-    // autoHeight(비가상): 가상화하지 않고 전체 행을 렌더 (높이가 행마다 다르므로 범위 계산 불가)
-    if (this._options.autoHeight) {
-      return [0, total - 1];
-    }
-    const r = this._vs?.getVisibleRange();
-    return [r?.startIndex ?? 0, Math.min((r?.endIndex ?? 30) + this._visCount() + 5, total - 1)];
-  }
+  // 현재 화면에 보이는 행 범위를 반환한다 (R5: RenderController 위임)
+  private _visRange(): [number, number] { return this._render.visRange(); }
 
-  private _visCount(): number {
-    const h = this._container.getBoundingClientRect().height;
-    return Math.ceil((h - this._options.headerHeight - this._paginationHeight()) / this._options.rowHeight) + 5;
-  }
   private _handleSortClick(field: string, shiftKey: boolean): void { this._sfMgr.handleSortClick(field, shiftKey); }
 
   private _isToggleCol(col: ColumnDef<T>): boolean { return isToggleCol(col); }
@@ -910,110 +763,22 @@ export class OpenGrid<T extends Record<string, any> = any>
       : [fromIndex];
   }
 
-  /** 드래그 드롭 어댑터 → 공개 moveRowsTo 로 위임 */
-  private _handleCrossGridDrop(fromIndex: number, targetBodyEl: HTMLElement, targetIndex: number): void {
-    const targetGrid = crossGridRegistry.get(targetBodyEl) as OpenGrid<T> | undefined;
-    if (!targetGrid || targetGrid === this) return;
-    void this.moveRowsTo(targetGrid, this._dragRowSet(fromIndex), targetIndex);
-  }
+  // R7(§3.1 C8): 크로스그리드 이동·매핑·3단계 드롭 발화는 CrossGridController 로 이관.
+  // 아래는 얇은 위임(공개 API 불변). 드롭 어댑터(onCrossDrop)는 _cross.handleCrossGridDrop 로 배선됨.
 
   /**
    * 이 그리드의 행들을 다른 그리드로 이동(move)한다. 드래그·화살표 셔틀 공통 경로.
    * 3단계 이벤트(before→after→complete)와 crossGridMapping(필드 매핑)을 적용한다.
-   * @param targetGrid  대상 그리드
-   * @param sourceIndexes 이동할 (표시)행 인덱스들
-   * @param targetIndex 대상에서 삽입 위치 (생략 시 맨 끝에 추가)
-   * @returns 이동 성공 true, 취소/무효 false
    */
-  async moveRowsTo(
-    target: OpenGridInstance<T>,
-    sourceIndexes: number[],
-    targetIndex?: number,
-  ): Promise<boolean> {
-    const targetGrid = target as OpenGrid<T>;
-    if (!targetGrid || targetGrid === this || !sourceIndexes.length) return false;
-    const idxAsc = [...new Set(sourceIndexes)].sort((a, b) => a - b);
-    const at = targetIndex ?? targetGrid._data.rowCount;
-
-    // 행 데이터 복사 (내부 id 제거 → 타깃이 새 id 부여)
-    let rows = idxAsc.map(i => {
-      const r = { ...(this._data.getRowByIndex(i) as any) };
-      delete r[ROW_ID_FIELD];
-      return r as T;
-    });
-
-    // 필드 매핑 (스키마가 다른 그리드 간 이동)
-    const transform = await this._resolveCrossTransform(targetGrid);
-    if (transform === false) return false;          // 매핑 모달 취소
-    if (transform) rows = rows.map(r => transform(r) as T);
-
-    const evt: GridDropEvent<T> = {
-      sourceGrid: this, targetGrid, rows, sourceIndexes: idxAsc, targetIndex: at,
-    };
-
-    // ① 변경전 (양쪽). false 반환 또는 cancel=true 면 중단
-    if (this._fireGridDropBefore(evt) === false || evt.cancel) return false;
-    if (targetGrid._fireGridDropBefore(evt) === false || evt.cancel) return false;
-
-    // 이동: 타깃에 순서대로 삽입 → 소스에서 내림차순 제거
-    rows.forEach((row, k) => targetGrid.insertRow(row as Partial<T>, at + k));
-    [...idxAsc].sort((a, b) => b - a).forEach(i => this.deleteRow(i));
-
-    // ② 변경후
-    this._fireGridDropAfter(evt);
-    targetGrid._fireGridDropAfter(evt);
-    // ③ 완료시 (insert/delete 가 이미 양쪽 재렌더)
-    this._fireGridDropComplete(evt);
-    targetGrid._fireGridDropComplete(evt);
-    return true;
+  moveRowsTo(target: OpenGridInstance<T>, sourceIndexes: number[], targetIndex?: number): Promise<boolean> {
+    return this._cross.moveRowsTo(target, sourceIndexes, targetIndex);
   }
 
   /** 체크된 행을 다른 그리드로 이동 (화살표 셔틀용). 체크 없으면 무시. */
-  async moveCheckedTo(target: OpenGridInstance<T>): Promise<boolean> {
-    const indexes = this._rowMgr.getChecked().map(c => c.rowIndex);
-    if (!indexes.length) return false;
-    this._rowMgr.uncheckAll();
-    return this.moveRowsTo(target, indexes);
+  moveCheckedTo(target: OpenGridInstance<T>): Promise<boolean> {
+    return this._cross.moveCheckedTo(target);
   }
 
-  /**
-   * 크로스그리드 이동의 행 변환 함수를 결정한다.
-   * 반환: null=변환 불필요(그대로) / 함수=변환 적용 / false=매핑 모달 취소(이동 중단)
-   */
-  private async _resolveCrossTransform(targetGrid: OpenGrid<T>): Promise<((src: any) => any) | null | false> {
-    const mode = this._options.crossGridMapping;
-    if (typeof mode === 'function') return mode as (src: any) => any;
-    if (mode !== 'interactive') return null;     // 'auto' → 그대로 복사
-
-    const srcInfos: FieldInfo[] = this._colLayout.visibleLeaves.map(c => ({ field: c.field, header: c.header }));
-    const tgtInfos: FieldInfo[] = targetGrid._colLayout.visibleLeaves.map(c => ({ field: c.field, header: c.header }));
-    if (sameSchema(srcInfos.map(f => f.field), tgtInfos.map(f => f.field))) return null; // 스키마 동일 → 모달 불필요
-
-    const result = await openCrossGridMapper(srcInfos, tgtInfos);
-    if (!result) return false;                   // 취소
-    const mapEvt: GridMappingEvent<T> = {
-      sourceGrid: this, targetGrid,
-      mapping: result.mapping, script: result.script,
-    };
-    this.emit('gridDropMapping', mapEvt);
-    this._options.onGridDropMapping?.(mapEvt);
-    // 콘솔에도 출력 — 개발자가 바로 복사해 baking 하도록
-    console.log('[OpenGrid] cross-grid mapping script:\n' + buildMappingScript(result.mapping));
-    return buildTransform(result.mapping);
-  }
-
-  private _fireGridDropBefore(e: GridDropEvent<T>): boolean | void {
-    this.emit('gridDropBefore', e);
-    return this._options.onGridDropBefore?.(e);
-  }
-  private _fireGridDropAfter(e: GridDropEvent<T>): void {
-    this.emit('gridDropAfter', e);
-    this._options.onGridDropAfter?.(e);
-  }
-  private _fireGridDropComplete(e: GridDropEvent<T>): void {
-    this.emit('gridDropComplete', e);
-    this._options.onGridDropComplete?.(e);
-  }
   /** 행을 드롭으로 이동할 때 실행된다 */
   /** ???꾩튂 ?대룞 */
   reorderRow(fromIndex: number, toIndex: number): void {
@@ -1073,36 +838,8 @@ export class OpenGrid<T extends Record<string, any> = any>
     if (this._options.onRowExpand)      this.on('rowExpand',      this._options.onRowExpand);
     if (this._options.onRowCollapse)    this.on('rowCollapse',    this._options.onRowCollapse);
   }
-  setData(data: T[]): void {
-    const ctx = this._trigMgr.mkCtx('setData', [data]);
-    if (!this._trigMgr.exec('before:setData', ctx)) return;
-    this._rowMgr.reset();
-    this._data.setData(data);
-    // F3(§9 E11): setData 는 rowId 를 재발급하므로 stable-id 앵커에 묶인 기존 수식은 전량
-    // 무효(MVP, rowId 재바인딩은 P2) — 오케스트레이터를 새로 만들어 사이드카/그래프를 비운다.
-    this._formulaDirtySeeds.clear();
-    this._recalc = new RecalcCoordinator({
-      accessor: this._buildFormulaAccessor(),
-      setComputedValue: (rowId, field, value) => this._data.setComputedValueByRowId(rowId, field, value),
-      onFormulaError: (rowId, field, error) => this._handleFormulaError(rowId, field, error),
-      refMode: (this._options as any).formula?.refMode ?? 'stable',
-      divisionPrecision: (this._options as any).formula?.divisionPrecision ?? 30,
-    });
-    this._applyFilters();
-    if (this._grpMgr.isTreeMode) {
-      this._grpMgr.rebuildTree();
-    } else if (this._grpMgr.isGroupMode) {
-      this._grpMgr.rebuildGroups();
-    } else {
-      this._vs?.setTotalRows(this._flatModel.count());
-    }
-    this._container.setAttribute('aria-rowcount', String(this._data.rowCount));
-    this._container.setAttribute('aria-colcount', String(this._colLayout.visibleLeaves.length));
-    this._announce(`${this._data.rowCount}행 데이터 로드됨`);
-    this.emit('dataChange', this._data.getData());
-    ctx.result = data.length;
-    this._trigMgr.exec('after:setData', ctx);
-  }
+  // R6(§3.1 C5): 데이터 변경 표면은 MutationService 로 이관. 아래는 얇은 위임(공개 API 불변).
+  setData(data: T[]): void { this._mutation.setData(data); }
 
   getData(): T[] { return this._data.getData(); }
   getSourceRows(): T[] { return this._data.getOriginalData(); }
@@ -1126,39 +863,14 @@ export class OpenGrid<T extends Record<string, any> = any>
   clearData(): void {
     this._rowMgr.reset();
     this._data.clearData();
-    this._vs?.setTotalRows(0);
-    this._pagination?.setTotalRows(0);
-    this._doRender(0, -1);
-    this.emit('dataChange', []);
+    // R4: totals=0 → full 렌더 → emit([]) (onDataChange bound listener 로 ONCE, 명시 재호출 없음).
+    this._mutation.commit({ totals: 'zero', renderMode: 'full', emitPayload: () => [] });
   }
 
-  insertRow(item: Partial<T>, position: Position = 'last'): void {
-    const ctx = this._trigMgr.mkCtx('insertRow', [item, position]);
-    if (!this._trigMgr.exec('before:insertRow', ctx)) return;
-    const pos = position === 'before' ? 0
-      : position === 'after' ? this._data.rowCount
-      : position as any;
-    this._data.addRow(item, pos);
-    const n = this._data.rowCount;
-    this._vs?.setTotalRows(this._flatModel.count());
-    this._pagination?.setTotalRows(n);
-    this._doRender(...this._visRange());
-    this.emit('dataChange', this._data.getData());
-    this._options.onDataChange?.(this._data.getData());
-    ctx.result = { rowCount: n, item };
-    this._trigMgr.exec('after:insertRow', ctx);
-  }
+  // R6(§3.1 C5): 얇은 위임 — 실제 구현은 MutationService.
+  insertRow(item: Partial<T>, position: Position = 'last'): void { this._mutation.insertRow(item, position); }
 
-  pushRow(items: Partial<T> | Partial<T>[]): void {
-    const arr = Array.isArray(items) ? items : [items];
-    arr.forEach(it => this._data.addRow(it, 'last'));
-    const n = this._data.rowCount;
-    this._vs?.setTotalRows(this._flatModel.count());
-    this._pagination?.setTotalRows(n);
-    this._doRender(...this._visRange());
-    this.emit('dataChange', this._data.getData());
-    this._options.onDataChange?.(this._data.getData());
-  }
+  pushRow(items: Partial<T> | Partial<T>[]): void { this._mutation.pushRow(items); }
 
   /** @deprecated 하위호환 alias → pushRow */
   appendRows(items: Partial<T> | Partial<T>[]): void { this.pushRow(items); }
@@ -1166,40 +878,22 @@ export class OpenGrid<T extends Record<string, any> = any>
   unshiftRow(items: Partial<T> | Partial<T>[]): void {
     const arr = Array.isArray(items) ? items : [items];
     arr.forEach(it => this._data.addRow(it, 'first'));
-    const n = this._data.rowCount;
-    this._vs?.setTotalRows(this._flatModel.count());
-    this._pagination?.setTotalRows(n);
-    this._doRender(...this._visRange());
-    this.emit('dataChange', this._data.getData());
-    this._options.onDataChange?.(this._data.getData());
+    // R4: unshiftRow 도 트리거 브래킷 없음 — pushRow 와 동형 커밋.
+    this._mutation.commit({
+      totals: 'count', renderMode: 'sync-window',
+      emitPayload: () => this._data.getData(), fireOnDataChangeExplicitly: true,
+    });
   }
 
   /** @deprecated 하위호환 alias → unshiftRow */
   prependRows(items: Partial<T> | Partial<T>[]): void { this.unshiftRow(items); }
 
-  deleteRow(rowIndex: number | number[]): void {
-    const ctx = this._trigMgr.mkCtx('deleteRow', [rowIndex]);
-    const idxArr = Array.isArray(rowIndex) ? [...rowIndex] : [rowIndex];
-    ctx.extra = { rows: idxArr.map(i => this._data.getRowByIndex(i)) };
-    if (!this._trigMgr.exec('before:deleteRow', ctx)) return;
-    const idxs = idxArr.sort((a, b) => b - a);
-    // F3-R28/MCCONNELL-02(P0): 삭제되는 rowId 를 먼저 확보(제거 후엔 flat index 로 되짚을 수 없다) →
-    // 삭제 완료 후 그 rowId 를 deps 로 가진 수식들을 #REF 로 무효화(자연 귀결, invalidateRow).
-    const removedRowIds = idxs
-      .map(i => (this._data.getRowByIndex(i) as any)?.[ROW_ID_FIELD] as string | undefined)
-      .filter((id): id is string => id != null);
-    idxs.forEach(i => this._data.removeRow(i));
-    const n = this._data.rowCount;
-    this._vs?.setTotalRows(this._flatModel.count());
-    this._pagination?.setTotalRows(n);
-    for (const rowId of removedRowIds) this._afterRecalc(this._recalc.invalidateRow(rowId), { skipRender: true });
-    this._doRender(...this._visRange());
-    this.emit('dataChange', this._data.getData());
-    this._options.onDataChange?.(this._data.getData());
-    ctx.result = { deleted: idxs.length, rowCount: n };
-    this._trigMgr.exec('after:deleteRow', ctx);
-  }
+  deleteRow(rowIndex: number | number[]): void { this._mutation.deleteRow(rowIndex); }
 
+  /**
+   * @deprecated no-op stub — id 기반 삭제는 미구현(본문 없음). 인덱스로 지우려면 `deleteRow(rowIndex)`
+   *   를, id→인덱스 변환은 `getFlatRowModel()`/`getData()` 조회 후 `deleteRow` 를 사용.
+   */
   deleteById(_ids: string[]): void { /* 異뷀썑 援ы쁽 */ }
 
   readCell(rowIndex: number, field: string): any {
@@ -1215,34 +909,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     return fmt(val, field, this._data.getRowByIndex(rowIndex));
   }
 
-  writeCell(rowIndex: number, field: string, value: any): void {
-    const old = this.readCell(rowIndex, field);
-    const ctx = this._trigMgr.mkCtx('writeCell', [rowIndex, field, value]);
-    ctx.extra = { oldValue: old, rowIndex, field };
-    if (!this._trigMgr.exec('before:writeCell', ctx)) return;
-    this._data.updateCell(rowIndex, field, value);
-    const row = this._data.getRowByIndex(rowIndex);
-    const col = this._colLayout.getColumnByField(field);
-    const ci = this._colLayout.getColumnIndex(field);
-    const evt: EditEvent<T> = { type: 'editEnd', rowIndex, columnIndex: ci, field, oldValue: old, newValue: value, row: row as T, column: col as any };
-    this.emit('editEnd', evt);
-    this._options.onEditEnd?.(evt);
-    // F3(C2/§8.5): 값이 바뀐 셀을 dirty seed 로 적립 — 배치 중이면 endBatch 에서, 아니면
-    // 아래에서 즉시 onValuesChanged([key]) 1회로 소비한다(수식 셀 자신의 값 직접 덮어쓰기 포함).
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind === 'data' && ref.rowId) this._formulaDirtySeeds.add(cellKey(ref.rowId, field));
-    // Phase 0(C2.1): 배치 중이면 render·dataChange 를 coalesce — endBatch 에서 1회만 발생시킨다.
-    if (this._batchDepth > 0) {
-      this._batchDirty = true;
-    } else {
-      this._flushFormulaRecalc();
-      this.emit('dataChange', this._data.getData());
-      this._options.onDataChange?.(this._data.getData());
-      this._doRender(...this._visRange());
-    }
-    ctx.result = { rowIndex, field, oldValue: old, newValue: value };
-    this._trigMgr.exec('after:writeCell', ctx);
-  }
+  writeCell(rowIndex: number, field: string, value: any): void { this._mutation.writeCell(rowIndex, field, value); }
 
   getRowAt(rowIndex: number): T { return this._data.getRowByIndex(rowIndex) as T; }
 
@@ -1251,180 +918,52 @@ export class OpenGrid<T extends Record<string, any> = any>
   /** flat/visual index ↔ data 리졸버(C0.3). F1/F3/F4 는 이 모델만 경유해야 한다. */
   getFlatRowModel(): FlatRowModel { return this._flatModel; }
 
-  /**
-   * 배치 쓰기 시작(C2.1). 이후 writeCell 호출들은 render/dataChange 를 지연·coalesce 한다.
-   * 중첩 호출은 카운팅(reentrant) — 가장 바깥 endBatch 에서만 실제로 flush 된다.
-   */
-  beginBatch(): void { this._batchDepth++; }
+  // R6(§3.1 C5): 배치 API 도 MutationService 로 이관. 얇은 위임(공개 API 불변).
+  beginBatch(): void { this._mutation.beginBatch(); }
 
-  /**
-   * 배치 종료(C2.1). 카운터가 0 이 되는 시점에 한해 배치 중 발생한 쓰기가 있으면
-   * _doRender 1회 + dataChange 1회를 발생시킨다(둘 다 0회 또는 1회 — 폭주 차단).
-   * 향후 F3 재계산 훅 지점: 아래 flush 블록 안에 RecalcCoordinator.onValuesChanged(dirtyKeys)
-   * 1회 호출을 끼워 넣는다(Phase 0 시점엔 미구현 — 계약 §C2.1 참조).
-   */
-  endBatch(): void {
-    if (this._batchDepth === 0) return; // 불균형 호출 방어
-    this._batchDepth--;
-    if (this._batchDepth === 0 && this._batchDirty) {
-      this._batchDirty = false;
-      // F3(C2.1): 배치 중 쌓인 dirty seed 전체를 여기서 1회 onValuesChanged 로 소비(R×C fill = 1패스).
-      this._flushFormulaRecalc();
-      this.emit('dataChange', this._data.getData());
-      this._options.onDataChange?.(this._data.getData());
-      this._doRender(...this._visRange());
-    }
-  }
+  endBatch(): void { this._mutation.endBatch(); }
 
-  // ── F3: 재계산 배치 소비 + formulaRecalc 표면화(§C2.2, §5.3) ────────────
-  /** writeCell 이 적립한 dirty seed 를 1회 onValuesChanged 로 소비하고 formulaRecalc 를 emit. */
-  private _flushFormulaRecalc(): void {
-    if (this._formulaDirtySeeds.size === 0) return;
-    const seeds = [...this._formulaDirtySeeds];
-    this._formulaDirtySeeds.clear();
-    this._afterRecalc(this._recalc.onValuesChanged(seeds), { skipRender: true });
-  }
-
-  /**
-   * RecalcCoordinator 호출 결과를 표면화: formulaError 는 onFormulaError 콜백에서 이미 개별
-   * emit 되므로 여기선 배치당 1회 formulaRecalc 만 emit(C2.2 개명, `recalc`→`formulaRecalc`).
-   * Spike-A §8 교훈: 폐포가 큰 재계산은 large 플래그로 표시(가이드 문서화/모니터링용).
-   */
-  private _afterRecalc(summary: RecalcSummary, opts: { skipRender?: boolean } = {}): void {
-    if (summary.changed.length > 0 || summary.cycles > 0) {
-      const evt = {
-        changed: summary.changed,
-        cycles: summary.cycles,
-        ms: summary.ms,
-        large: summary.changed.length > FORMULA_LARGE_RECALC_THRESHOLD,
-      };
-      this.emit('formulaRecalc', evt);
-      (this._options as any).formula?.onFormulaRecalc?.(evt);
-    }
-    if (!opts.skipRender) this._doRender(...this._visRange());
-  }
-
-  private _handleFormulaError(rowId: string, field: string, error: FormulaErrorCode): void {
-    const rowIndex = this._flatModel.flatIndexOfRowId(rowId);
-    const evt = { rowIndex, field, error };
-    this.emit('formulaError', evt);
-    (this._options as any).formula?.onFormulaError?.(evt);
-    this._announce(`${field} 셀 오류: ${this._formulaErrorMessageKo(error)}`);
-  }
-
-  private _formulaErrorMessageKo(error: FormulaErrorCode): string {
-    switch (error) {
-      case '#REF': return '참조 대상이 삭제됨';
-      case '#CYCLE': return '순환 참조';
-      case '#VALUE': return '숫자가 아닌 값에 산술 연산';
-      case '#DIV0': return '0으로 나눔';
-      case '#NAME': return '알 수 없는 함수/이름';
-      case '#NUM': return '수치 도메인 오류';
-      default: return '수식 오류';
-    }
-  }
-
-  /** F3 accessor(C0/C0.5/C1) — FlatRowModel + ColumnLayout.visibleLeaves + DataLayer(rowId 기반)만 본다. */
-  private _buildFormulaAccessor(): FormulaGridAccessor {
-    return {
-      visibleFields: () => this._colLayout.visibleLeaves.map(c => c.field as string),
-      rowIdAtFlat: (flatIndex) => {
-        const ref = this._flatModel.resolveFlatRow(flatIndex);
-        return ref.kind === 'data' ? (ref.rowId ?? null) : null;
-      },
-      flatIndexOfRowId: (rowId) => this._flatModel.flatIndexOfRowId(rowId),
-      displayedRowIds: () => {
-        const out: string[] = [];
-        const n = this._flatModel.count();
-        for (let i = 0; i < n; i++) {
-          const ref = this._flatModel.resolveFlatRow(i);
-          if (ref.kind === 'data' && ref.rowId) out.push(ref.rowId);
-        }
-        return out;
-      },
-      getCellValue: (rowId, field) => this._data.getCellValueByRowId(rowId, field),
-      hasRow: (rowId) => this._data.hasRow(rowId),
-      hasField: (field) => this._colLayout.getColumnByField(field) != null,
-    };
-  }
+  // R7(§3.1 C9): F3 수식 표면은 FormulaController 로 이관. 아래는 얇은 위임(공개 API 불변).
+  // accessor 조립/에러 표현/flush/afterRecalc/getFormulaMeta 등 내부 훅은 _formula 를 통해 배선됨.
 
   // ── F3: 공개 API(§8.2) — rowIndex 는 flat(C0), 내부 즉시 stable rowId 로 정규화 ──────
   setCellFormula(rowIndex: number, field: string, formula: string): void {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return;
-    this._setCellFormulaByRowId(ref.rowId, field, formula, rowIndex);
-  }
-
-  private _setCellFormulaByRowId(rowId: string, field: string, formula: string, rowIndexHint?: number): void {
-    const rowIndex = rowIndexHint ?? this._flatModel.flatIndexOfRowId(rowId);
-    const oldFormula = this._recalc.getCellFormula(rowId, field);
-    const summary = this._recalc.setCellFormula(rowId, field, formula);
-    const evt = { rowIndex, field, formula, oldFormula };
-    this.emit('formulaChange', evt);
-    (this._options as any).formula?.onFormulaChange?.(evt);
-    this._afterRecalc(summary);
+    this._formula.setCellFormula(rowIndex, field, formula);
   }
 
   getCellFormula(rowIndex: number, field: string): string | null {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return null;
-    return this._recalc.getCellFormula(ref.rowId, field);
+    return this._formula.getCellFormula(rowIndex, field);
   }
 
   hasCellFormula(rowIndex: number, field: string): boolean {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    return ref.kind === 'data' && !!ref.rowId && this._recalc.hasCellFormula(ref.rowId, field);
+    return this._formula.hasCellFormula(rowIndex, field);
   }
 
   clearCellFormula(rowIndex: number, field: string): void {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return;
-    const dependents = this._recalc.clearCellFormula(ref.rowId, field);
-    if (dependents.length) this._afterRecalc(this._recalc.onValuesChanged(dependents));
-    else this._doRender(...this._visRange());
+    this._formula.clearCellFormula(rowIndex, field);
   }
 
   getCellError(rowIndex: number, field: string): FormulaErrorCode | null {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return null;
-    return this._recalc.getCellError(ref.rowId, field);
+    return this._formula.getCellError(rowIndex, field);
   }
 
   getDependents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }> {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return [];
-    return this._recalc.getDependents(ref.rowId, field)
-      .map(({ rowId, field: f }) => ({ rowIndex: this._flatModel.flatIndexOfRowId(rowId), field: f }));
+    return this._formula.getDependents(rowIndex, field);
   }
 
   getPrecedents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }> {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return [];
-    return this._recalc.graph.getPrecedents(cellKey(ref.rowId, field))
-      .map(parseCellKey)
-      .map(({ rowId, field: f }) => ({ rowIndex: this._flatModel.flatIndexOfRowId(rowId), field: f }));
+    return this._formula.getPrecedents(rowIndex, field);
   }
 
-  recalculate(): void { this._afterRecalc(this._recalc.recalculateAll()); }
+  recalculate(): void { this._formula.recalculate(); }
 
   recalculateCell(rowIndex: number, field: string): void {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return;
-    this._afterRecalc(this._recalc.onValuesChanged([cellKey(ref.rowId, field)]));
+    this._formula.recalculateCell(rowIndex, field);
   }
 
   /** C3(F1 fill 전용): srcRowId/srcField 수식의 상대축만 dRow/dCol 오프셋한 새 수식 원문. */
   offsetFormula(srcRowId: string, srcField: string, dRow: number, dCol: number): string {
-    return this._recalc.offsetFormula(srcRowId, srcField, dRow, dCol);
-  }
-
-  /** F3 렌더 배선(§4.4/C7, §7.4/§7.5/§7.6) — 셀 수식 메타(없으면 null). */
-  private _getFormulaMeta(rowIndex: number, field: string): { src: string; error: FormulaErrorCode | null; approx: boolean } | null {
-    const ref = this._flatModel.resolveFlatRow(rowIndex);
-    if (ref.kind !== 'data' || !ref.rowId) return null;
-    const cell = this._recalc.store.getFormula(ref.rowId, field);
-    if (!cell) return null;
-    return { src: cell.src, error: cell.error, approx: !!cell.approx };
+    return this._formula.offsetFormula(srcRowId, srcField, dRow, dCol);
   }
 
   /**
@@ -1434,19 +973,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    * 건너뛴 셀 수를 반환하고, 1건이라도 있으면 announce + 'writeCellsSkip' 이벤트로 표면화한다.
    */
   writeCells(patches: Array<{ rowIndex: number; field: string; value: any }>): number {
-    this.beginBatch();
-    let skipped = 0;
-    for (const p of patches) {
-      const ref: FlatRowRef = this._flatModel.resolveFlatRow(p.rowIndex);
-      if (ref.kind !== 'data') { skipped++; continue; }
-      this.writeCell(p.rowIndex, p.field, p.value);
-    }
-    this.endBatch();
-    if (skipped > 0) {
-      this._announce(`쓰기 대상이 아닌 셀 ${skipped}개를 건너뛰었습니다`);
-      this.emit('writeCellsSkip', { skipped, total: patches.length });
-    }
-    return skipped;
+    return this._mutation.writeCells(patches);
   }
 
   // ── F1: 범위 선택 + 채우기 핸들(11_design_F1_v2.md §6.2, C4) ────────────
@@ -1475,8 +1002,17 @@ export class OpenGrid<T extends Record<string, any> = any>
   getRemovedRows(): T[] { return this._data.getRemovedRows(); }
   getOriginalRow(rowIndex: number): T | undefined { return this._data.getOriginalRow(rowIndex); }
   getRowsWithState(stateField: string): T[] { return this._data.getRowsWithState(stateField); }
+  // ── R13(§2.8 R-7a, M8): 죽은 no-op 스텁 정직성 표기 ──────────────────────
+  //   아래 메서드들은 공개 API 표면에 존재하지만 본문이 비어 아무 동작도 하지 않는다(하위호환 계약상
+  //   삭제 불가 → @deprecated 로 명시). 각 태그에 "무엇을 안 하는지 + 대안"을 1줄로 정직 기재한다.
+  //   목록: undo/redo/clearHistory · deleteById · checkById/addCheckById/uncheckById ·
+  //         setColWidths/calcColWidths · freezeRows · addTreeRow · jumpToCol.
+  /** @deprecated no-op stub — undo/redo 히스토리는 미구현. 변이 가드는 TriggerManager `before:*` 훅,
+   *   변경 추적은 `getChanges()`/`getOriginalRow()` 를 사용. */
   undo(): void {}
+  /** @deprecated no-op stub — undo/redo 히스토리 미구현(위 `undo()` 참조). */
   redo(): void {}
+  /** @deprecated no-op stub — undo/redo 히스토리 자체가 없어 비울 것도 없음(위 `undo()` 참조). */
   clearHistory(): void {}
   getColumnDefs(): ColumnDef<T>[] { return this._colLayout.visibleLeaves; }
   getAllColumnDefs(): ColumnDef<T>[] { return this._colLayout.leaves; }
@@ -1500,7 +1036,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._colLayout.removeColumn(field);
     this._recalcWidths(this._container.getBoundingClientRect().width);
     // F3-R28(P0): 열 삭제 → 그 field 를 deps 로 가진 수식들이 자연 #REF 귀결(accessor.hasField=false).
-    this._afterRecalc(this._recalc.invalidateField(field), { skipRender: true });
+    this._formula.afterRecalc(this._recalc.invalidateField(field), { skipRender: true });
     this._renderHeader(); this._doRender(...this._visRange());
   }
 
@@ -1528,7 +1064,10 @@ export class OpenGrid<T extends Record<string, any> = any>
   getFieldAt(idx: number): string { return this._colLayout.getColumnByIndex(idx)?.field ?? ''; }
   getColValues(field: string, _all = false): any[] { return this._data.getData().map(r => r[field]); }
   getUniqueValues(field: string, all = false): any[] { return [...new Set(this.getColValues(field, all))]; }
+  /** @deprecated no-op stub — 컬럼 폭 일괄 설정 미구현. 폭은 `ColumnDef.width` 또는 헤더 드래그로
+   *   지정하며 내부 `_recalcWidths` 가 자동 배분한다. */
   setColWidths(_widths: number[]): void {}
+  /** @deprecated no-op stub — 항상 빈 배열 반환(폭 계산 미구현). 자동 배분은 내부 `_recalcWidths` 담당. */
   calcColWidths(_fitToGrid = false): number[] { return []; }
   getSelections(): T[] { return this._rowMgr.getSelections(); }
   getActiveRow(): number { return this._rowMgr.getActiveRow(); }
@@ -1536,12 +1075,15 @@ export class OpenGrid<T extends Record<string, any> = any>
   deselect(): void { this._rowMgr.deselect(); this._doRender(...this._visRange()); }
   getChecked(): Array<{ row: T; rowIndex: number }> { return this._rowMgr.getChecked(); }
   getAllChecked(): T[] { return this._rowMgr.getAllChecked(); }
+  /** @deprecated no-op stub — id 기반 체크 미구현. 값 기준 체크는 `checkByValue(field, values)` 사용. */
   checkById(_ids: string[]): void {}
+  /** @deprecated no-op stub — id 기반 체크 추가 미구현(위 `checkById()` 참조). `checkByValue` 사용. */
   addCheckById(_ids: string[]): void {}
   checkByValue(field: string, values: any[]): void {
     this._rowMgr.checkByValue(field, values);
     this._doRender(...this._visRange());
   }
+  /** @deprecated no-op stub — id 기반 체크 해제 미구현. 전체 해제는 `uncheckAll()` 사용. */
   uncheckById(_ids: string[]): void {}
   uncheckAll(): void { this._rowMgr.uncheckAll(); this._doRender(...this._visRange()); }
   orderBy(fieldOrList: string | SortItem[], dir: 'asc' | 'desc' = 'asc'): void {
@@ -1565,7 +1107,7 @@ export class OpenGrid<T extends Record<string, any> = any>
 
   /** F3-R13/MCCONNELL-03(P0): 정렬/필터 후 범위-보유(hasRangeRef) 수식 전부 dirty(§3.5). */
   private _recalcRangeBearingFormulas(): void {
-    this._afterRecalc(this._recalc.recalcRangeBearing());
+    this._formula.recalcRangeBearingFormulas();
   }
   getFilterState(): Record<string, FilterItem[]> { return this._sfMgr.getFilterState(); }
   restoreFilter(state: Record<string, FilterItem[]>): void { this._sfMgr.restoreFilter(state); }
@@ -1595,6 +1137,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._mergeEngine.clear();
     this._doRender(...this._visRange());
   }
+  /** @deprecated no-op stub — 행 고정(freeze rows) 미구현. 컬럼 고정만 지원하며 `freeze(n)` 사용. */
   freezeRows(_n: number): void {}
   groupBy(fields: string[]): void {
     const ctx = this._trigMgr.mkCtx('groupBy', [fields]);
@@ -1620,6 +1163,8 @@ export class OpenGrid<T extends Record<string, any> = any>
   collapseAllDetails(): void { this._detailMgr.collapseAllDetails(); }
   getDetailInstance<D = any>(rowRef: number | { id: string }): D | undefined { return this._detailMgr.getDetailInstance<D>(rowRef); }
   resyncPanelWidths(): void { this._detailMgr.resyncPanelWidths(); }
+  /** @deprecated no-op stub — 부모 지정 트리행 삽입 미구현. 평면 삽입은 `insertRow(item, pos)`,
+   *   트리 구성은 `enableTree()`/`groupBy(fields)` 사용. */
   addTreeRow(_item: Partial<T>, _pid: string, _pos?: Position): void {}
   exportExcel(options?: ExportOptions | string): void { this._exportMgr.exportExcel(options); }
   exportCsv(options?: ExportOptions | string): void { this._exportMgr.exportCsv(options); }
@@ -1637,6 +1182,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._vs?.scrollToRow(rowIndex);
     this._doRender(...this._visRange());
   }
+  /** @deprecated no-op stub — 특정 컬럼으로 가로 스크롤 이동 미구현. 행 이동은 `jumpToRow(rowIndex)` 사용. */
   jumpToCol(_field: string): void {}
   getScrollPos(): { x: number; y: number } {
     return { x: this._renderer?.bodyWrapper.scrollLeft ?? 0, y: this._renderer?.bodyWrapper.scrollTop ?? 0 };
@@ -1658,6 +1204,56 @@ export class OpenGrid<T extends Record<string, any> = any>
   }
   setTheme(theme: string): void { this._container.setAttribute('data-og-theme', theme); }
   setThemeVar(k: string, v: string): void { this._container.style.setProperty(k, v); }
+
+  /**
+   * R12b: 스킨(FORM 축) 전환. data-og-skin 설정 + resolver 컨텍스트 교체 + 인라인 form 사이트 재해석.
+   * 색 테마와 직교(색 토큰 무변경). default→named 전환 시 인라인 보더가 리터럴→var() 로 승격되므로
+   * 헤더/본문을 한 번 재렌더한다(opt-in 비용). named→named/…→default 도 동일 경로로 안전.
+   */
+  setSkin(skin: string): void {
+    this._options.skin = skin;
+    this._container.setAttribute('data-og-skin', skin);
+    this._appearance?.setSkin(skin);
+    // 컨테이너 크롬 보더도 스킨 width/style 을 반영(default 는 오늘의 레거시 문자열 복원 → byte-identical).
+    this._container.style.border = (skin === 'default')
+      ? '1px solid var(--og-border-color, #e0e0e0)'
+      : (this._appearance ? this._appearance.border() : '1px solid var(--og-border-color, #e0e0e0)');
+    this._renderHeader();
+    this._doRender(...this._visRange());
+  }
+  /** R12b: 현재 스킨 id('default' = 오늘). */
+  getSkin(): string { return this._options.skin ?? 'default'; }
+
+  /**
+   * R12c(계약 C13): 이 그리드 인스턴스에 한해 시맨틱 아이콘 role 을 교체(멀티그리드 격리 —
+   * 전역 iconRegistry 를 부모로 하는 child 에만 기록). svgOrKey 는 알려진 아이콘 key 또는 원시 SVG 본문.
+   * R11 확장점과의 연결: 오버라이드를 `extensions.iconResolver` strategy 슬롯으로도 표면화해 발견가능하게 한다.
+   * 반환은 this(체이닝). 미지정 role/글리프는 안전 폴백(never throw).
+   */
+  setIcon(role: string, svgOrKey: string): this {
+    if (!this._icons) this._icons = iconRegistry.child();
+    this._icons.register(role, svgOrKey);
+    // R11 iconResolver 슬롯(있으면)으로 표면화 — role → 렌더 마크업 해석기(발견/디버깅용).
+    try {
+      this._extensions?.strategy('iconResolver', (r: string, opts?: any) => this._icons!.render(r, opts));
+    } catch { /* 커널 미준비 등 — best-effort */ }
+    return this;
+  }
+
+  /** R12c: 이 인스턴스의 아이콘 role 해석(오버라이드 우선, 없으면 전역). 렌더 마크업/SVGElement. */
+  renderIcon(role: string, opts?: { size?: number; title?: string; el?: boolean }): string | SVGElement {
+    return (this._icons ?? iconRegistry).render(role, opts);
+  }
+  /**
+   * R12b: FORM 축 단일 토큰 런타임 오버라이드(setThemeVar 의 형태-축 형제). 컨테이너 인라인이라
+   * 스타일시트를 항상 이긴다. 색⊥형태 직교성 보호를 위해 색 값은 거부한다.
+   */
+  setSkinVar(k: string, v: string): void {
+    if (/#[0-9a-fA-F]{3,8}\b/.test(v) || /\b(?:rgba?|hsla?)\(\s*\d/.test(v)) {
+      throw new Error(`[OpenGrid.setSkinVar] "${k}: ${v}" 에 색 리터럴 — 색은 setThemeVar 축입니다(색⊥형태).`);
+    }
+    this._container.style.setProperty(k, v);
+  }
   addTrigger(event: TriggerEvent | string, handler: TriggerHandler): this {
     this._trigMgr.add(event, handler); return this;
   }

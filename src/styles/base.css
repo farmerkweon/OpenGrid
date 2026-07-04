@@ -139,7 +139,7 @@
 .og-header {
   flex-shrink: 0;
   overflow:    hidden;
-  border-bottom: 1px solid var(--og-border-color);
+  border-bottom: 1px var(--og-divider-style, solid) var(--og-border-color);
   scrollbar-width: none;
 }
 .og-header::-webkit-scrollbar { display: none; }
@@ -164,8 +164,8 @@
   white-space:     nowrap;
   overflow:        hidden;
   text-overflow:   ellipsis;
-  border-right:    1px solid var(--og-border-color);
-  border-bottom:   1px solid var(--og-border-color);
+  border-right:    1px var(--og-border-style, solid) var(--og-border-color);
+  border-bottom:   1px var(--og-divider-style, solid) var(--og-border-color);
   user-select:     none;
   box-sizing:      border-box;
   position:        relative;
@@ -232,7 +232,7 @@
   right:       0;
   display:     flex;
   align-items: center;
-  border-bottom: 1px solid var(--og-border-color);
+  border-bottom: 1px var(--og-divider-style, solid) var(--og-border-color);
   background:  var(--og-row-bg);
   color:       var(--og-row-color);
   box-sizing:  border-box;
@@ -287,7 +287,7 @@
   display:         flex;
   align-items:     center;
   justify-content: flex-start;
-  border-right:    1px solid var(--og-border-color);
+  border-right:    1px var(--og-border-style, solid) var(--og-border-color);
   overflow:        hidden;
   white-space:     nowrap;
   text-overflow:   ellipsis;

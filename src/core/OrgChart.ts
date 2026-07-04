@@ -55,6 +55,11 @@ export class OrgChart {
     this._container.setAttribute('data-og-theme', theme);
   }
 
+  /** R12b: FORM(스킨) 축 — data-og-skin 을 자기 컨테이너에 설정(setTheme 과 동형, 색과 직교). */
+  setSkin(skin: string): void {
+    this._container.setAttribute('data-og-skin', skin);
+  }
+
   expandAll(): void {
     const collect = (nodes: TreeNode<any>[]) => {
       for (const n of nodes) {
