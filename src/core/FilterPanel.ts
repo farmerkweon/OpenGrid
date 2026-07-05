@@ -1,14 +1,19 @@
 import type { FilterItem } from './types.js';
 import { t as _globalT } from './i18n/LocaleRegistry.js';
 
+/** 필터 적용 콜백. / Callback invoked when a filter is applied. */
 export type FilterApplyFn = (field: string, items: FilterItem[]) => void;
+/** 필터 해제 콜백. / Callback invoked when a filter is cleared. */
 export type FilterClearFn = (field: string) => void;
 /** i18n: 필터 라벨 로케일 해석기(주입 없으면 전역 t). / i18n: filter-label resolver (global t when not injected). */
 export type FilterPanelT = (key: string, params?: Record<string, string | number>) => string;
 
 /**
- * 컬럼 헤더 필터 드롭다운 패널.
- * 단일 인스턴스를 재사용(열릴 때 위치 재계산).
+ * 컬럼 헤더 필터 드롭다운 패널. / Column-header filter dropdown panel.
+ *
+ * 단일 인스턴스를 재사용하며, 열릴 때마다 대상 컬럼(`field`)과 앵커 기준 위치를
+ * 재계산한다. / Reuses a single instance; on each open it recomputes the target
+ * column (`field`) and its anchor-relative position.
  */
 export class FilterPanel {
   private _el: HTMLElement;
@@ -34,6 +39,13 @@ export class FilterPanel {
     container.appendChild(this._el);
   }
 
+  /**
+   * 지정 컬럼의 필터 패널을 앵커 엘리먼트 아래에 연다. / Open the filter panel for the given column, anchored below `anchorEl`.
+   *
+   * @param field - 필터 대상 컬럼 field 명 / Field name of the column to filter
+   * @param anchorEl - 위치 기준이 되는 헤더 엘리먼트(보통 필터 아이콘) / Header element used as the position anchor (typically the filter icon)
+   * @param currentFilters - 해당 컬럼에 이미 적용된 필터(있으면 입력값 프리필) / Filters already applied to this column (pre-fills the inputs, if any)
+   */
   open(field: string, anchorEl: HTMLElement, currentFilters: FilterItem[]): void {
     this._field = field;
     this._el.innerHTML = '';
@@ -142,6 +154,7 @@ export class FilterPanel {
     setTimeout(() => document.addEventListener('mousedown', this._outsideHandler!), 0);
   }
 
+  /** 필터 패널을 숨기고 외부 클릭 리스너를 해제한다. / Hide the filter panel and detach the outside-click listener. */
   close(): void {
     this._el.style.display = 'none';
     if (this._outsideHandler) {
@@ -150,10 +163,12 @@ export class FilterPanel {
     }
   }
 
+  /** 패널이 현재 열려 있는지 여부. / Whether the panel is currently open. */
   get isOpen(): boolean {
     return this._el.style.display !== 'none';
   }
 
+  /** 패널을 닫고 DOM 에서 제거한다. / Close the panel and remove it from the DOM. */
   destroy(): void {
     this.close();
     this._el.remove();

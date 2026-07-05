@@ -2,27 +2,61 @@ import { buildTree, TreeNode } from './TreeEngine.js';
 // i18n: OrgChart 는 그리드와 독립된 standalone 컴포넌트(인스턴스 로케일 child 없음) → 전역 t 로 해석.
 import { t } from './i18n/LocaleRegistry.js';
 
+/**
+ * 조직도 노드 카드의 컬럼(필드) 정의. / Column (field) definition for an org-chart node card.
+ */
 export interface OrgChartColumnDef {
+  /** 표시할 데이터 필드명. / Data field name to display. */
   field: string;
+  /** 셀 래퍼에 추가할 CSS 클래스명. / Extra CSS class name for the cell wrapper. */
   className?: string;
+  /** 인라인 스타일 문자열 또는 (값, 행)→스타일 함수. / Inline style string or (value, row)→style function. */
   style?: string | ((value: any, row: Record<string, any>) => string);
+  /** 커스텀 렌더러. 문자열 반환 시 innerHTML, 엘리먼트 반환 시 append. / Custom renderer; a string is set as innerHTML, an element is appended. */
   renderer?: (value: any, row: Record<string, any>) => HTMLElement | string;
 }
 
+/**
+ * 조직도 생성 옵션. / Org-chart construction options.
+ */
 export interface OrgChartOptions {
+  /** 각 행의 고유 id 필드명. / Field name holding each row's unique id. */
   idField: string;
+  /** 부모 id 를 담은 필드명(트리 구성 기준). / Field name holding the parent id (tree structure key). */
   parentIdField: string;
+  /** 노드 카드에 렌더할 컬럼 정의 배열. / Column definitions rendered inside each node card. */
   columns: OrgChartColumnDef[];
+  /** 노드 카드 너비(px). 기본 160. / Node card width in px. Default 160. @defaultValue 160 */
   nodeWidth?: number;
+  /** 노드 카드 높이(px). 기본 72. / Node card height in px. Default 72. @defaultValue 72 */
   nodeHeight?: number;
+  /** 레벨(세대) 간 세로 간격(px). 기본 52. / Vertical gap between levels in px. Default 52. @defaultValue 52 */
   levelGap?: number;
+  /** 형제 노드 간 가로 간격(px). 기본 20. / Horizontal gap between siblings in px. Default 20. @defaultValue 20 */
   siblingGap?: number;
+  /** 최초 로드 시 전체 펼침 여부. 기본 true. / Whether to expand all on first load. Default true. @defaultValue true */
   expandOnLoad?: boolean;
+  /** 노드 클릭 콜백 (id, 행데이터). / Node click callback (id, row data). */
   onNodeClick?: (id: any, data: Record<string, any>) => void;
 }
 
 interface LayoutInfo { x: number; y: number; }
 
+/**
+ * 조직도 컴포넌트. / Org-chart component.
+ *
+ * 부모/자식 관계(idField/parentIdField)를 가진 평면 데이터를 트리로 구성해
+ * SVG 연결선 + 노드 카드로 렌더한다. 그리드와 독립된 standalone 컴포넌트다.
+ * / Builds a tree from flat parent/child data (idField/parentIdField) and renders it as
+ * SVG connectors plus node cards. A standalone component independent of the grid.
+ *
+ * @example
+ * const chart = new OrgChart('#org', {
+ *   idField: 'id', parentIdField: 'managerId',
+ *   columns: [{ field: 'name' }, { field: 'title' }],
+ * });
+ * chart.setData([{ id: 1, managerId: null, name: 'CEO', title: '대표' }]);
+ */
 export class OrgChart {
   private _container: HTMLElement;
   private _opts: Required<OrgChartOptions>;
@@ -31,6 +65,10 @@ export class OrgChart {
   private _expandedKeys = new Set<any>();
   private _selectedId: any = null;
 
+  /**
+   * @param selector - 마운트할 컨테이너 셀렉터 문자열 또는 엘리먼트 / Container selector string or element to mount into
+   * @param opts - 조직도 옵션 / Org-chart options
+   */
   constructor(selector: string | HTMLElement, opts: OrgChartOptions) {
     this._container = typeof selector === 'string'
       ? (document.querySelector(selector) as HTMLElement)
@@ -43,6 +81,11 @@ export class OrgChart {
     this._container.classList.add('og-orgchart');
   }
 
+  /**
+   * 조직도 데이터를 설정하고 렌더한다. / Set org-chart data and render.
+   *
+   * @param data - 부모/자식 관계를 가진 평면 행 배열 / Flat array of rows with parent/child relations
+   */
   setData(data: Record<string, any>[]): void {
     this._data = data;
     const { idField, parentIdField, expandOnLoad } = this._opts;
@@ -53,15 +96,26 @@ export class OrgChart {
     this._render();
   }
 
+  /**
+   * COLOR 축 테마를 컨테이너에 설정한다. / Set the COLOR-axis theme on the container.
+   *
+   * @param theme - data-og-theme 값 / data-og-theme value
+   */
   setTheme(theme: string): void {
     this._container.setAttribute('data-og-theme', theme);
   }
 
-  /** R12b: FORM(스킨) 축 — data-og-skin 을 자기 컨테이너에 설정(setTheme 과 동형, 색과 직교). */
+  /**
+   * R12b: FORM(스킨) 축 — data-og-skin 을 자기 컨테이너에 설정(setTheme 과 동형, 색과 직교).
+   * / R12b: FORM (skin) axis — set data-og-skin on the container (symmetric to setTheme, orthogonal to color).
+   *
+   * @param skin - data-og-skin 값 / data-og-skin value
+   */
   setSkin(skin: string): void {
     this._container.setAttribute('data-og-skin', skin);
   }
 
+  /** 모든 노드를 펼친다. / Expand all nodes. */
   expandAll(): void {
     const collect = (nodes: TreeNode<any>[]) => {
       for (const n of nodes) {
@@ -73,6 +127,7 @@ export class OrgChart {
     this._rebuild();
   }
 
+  /** 모든 노드를 접는다(루트만 표시). / Collapse all nodes (roots only). */
   collapseAll(): void {
     this._expandedKeys.clear();
     this._rebuild();

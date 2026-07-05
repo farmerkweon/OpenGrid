@@ -1,13 +1,22 @@
 /**
  * F4 — 그리드 데이터 통합 차트 오케스트레이터(§5 라이프사이클·§C 배지·§7 F1 seam).
+ * / F4 — integrated chart orchestrator for grid data (§5 lifecycle, §C badges, §7 F1 seam).
  *
  * 계약 근거: 11_design_F4_v2.md §5(컨테이너/배치·라이브·테마·격리)·§6(공개 API)·§C(상시 배지)·
  * §7(F1 range 스냅샷/폴백), 15_cross_contracts.md C0.3(FlatRowModel)·C0.4/C0.5(CellRange/스냅샷)·
  * C2.2(dataChange+formulaRecalc 디바운스)·C5(chart:{} 옵션·이벤트 4종)·C8.1(aria-live).
+ * / Contract basis: 11_design_F4_v2.md §5 (container/placement, live updates, theme, isolation),
+ * §6 (public API), §C (always-visible badges), §7 (F1 range snapshot/fallback);
+ * 15_cross_contracts.md C0.3 (FlatRowModel), C0.4/C0.5 (CellRange/snapshot),
+ * C2.2 (dataChange + formulaRecalc debounce), C5 (chart:{} option and its 4 events), C8.1 (aria-live).
  *
  * 본 매니저는 헤드리스 코어(chart/DataExtractor·downsample·CanvasAdapter)를 "소비"만 하며
  * 그리드 상태는 전부 주입 클로저로 읽는다(기존 매니저 배선 패턴, CN-3 본문 무수정). OpenGrid 는
  * 생성자에서 deps 를 주입하고 createChart/getCharts/destroyCharts 를 이 매니저로 위임한다.
+ * / This manager only "consumes" the headless core (chart/DataExtractor, downsample, CanvasAdapter);
+ * all grid state is read through injected closures (the established manager-wiring pattern — CN-3,
+ * body unchanged). OpenGrid injects the deps in its constructor and delegates
+ * createChart/getCharts/destroyCharts to this manager.
  */
 
 import type { CellRange } from './types.js';
@@ -28,27 +37,42 @@ const DEFAULT_DEBOUNCE_MS = 50;
 const DEFAULT_RESIZE_DEBOUNCE_MS = 100;
 const DEFAULT_SIZE = { width: 480, height: 300 };
 
+/**
+ * ChartManager 가 그리드 서브시스템을 읽기 위해 주입받는 클로저 묶음. / Closures injected into
+ * ChartManager so it can read grid subsystem state without owning it directly.
+ */
 export interface ChartManagerDeps {
+  /** 차트 패널을 붙일 그리드 컨테이너 엘리먼트. / Grid container element the chart panel mounts into. */
   getContainer(): HTMLElement;
+  /** 현재 GridOptions(차트 관련 `options.chart` 포함). / Current GridOptions (includes `options.chart`). */
   getOptions(): any;
+  /** 필터/정렬 적용 전 전체 행. / All rows, before filter/sort. */
   getAllRows(): Array<Record<string, any>>;
+  /** 현재 선택된 행. / Currently selected rows. */
   getSelectedRows(): Array<Record<string, any>>;
+  /** 현재 체크된 행. / Currently checked rows. */
   getCheckedRows(): Array<Record<string, any>>;
-  /** ColumnLayout.visibleLeaves 투영(숨김 제외, C0.4). */
+  /** ColumnLayout.visibleLeaves 투영(숨김 제외, C0.4). / Projection of ColumnLayout.visibleLeaves (hidden columns excluded, C0.4). */
   getVisibleColumns(): ChartColumnRef[];
+  /** 행 합성 결과를 조회하는 baseline 모델. / Baseline model exposing the composed row structure. */
   getFlatModel(): FlatRowModel;
+  /** stable rowId 로 원본 행을 조회(없으면 undefined). / Look up the source row by stable rowId (undefined if absent). */
   getRowById(rowId: string): Record<string, any> | undefined;
-  /** F1 seam(C4). 없으면 range 소스는 selection 으로 강등(§7). */
+  /** F1 seam(C4). 없으면 range 소스는 selection 으로 강등(§7). / F1 seam (C4); when absent, a `range` source degrades to `selection` (§7). */
   getActiveRange?(): CellRange | null;
-  /** 그리드 이벤트 구독/해제(EventEmitter). */
+  /** 그리드 이벤트 구독/해제(EventEmitter). / Subscribe/unsubscribe grid events (EventEmitter). */
   on(ev: string, cb: (...a: any[]) => void): void;
   off(ev: string, cb: (...a: any[]) => void): void;
+  /** 그리드 이벤트 발행. / Emit a grid event. */
   emit(ev: string, ...args: any[]): void;
+  /** aria-live 영역에 메시지를 공지. / Announce a message via the aria-live region. */
   announce(msg: string): void;
   /** i18n: 차트 배지·패널 aria·announce 해석. / i18n: resolve chart badges/panel-aria/announce. */
   t(key: string, params?: Record<string, string | number>): string;
 }
 
+/** F4 차트 인스턴스 핸들(update/refresh/destroy 등). 정의는 chart/types.js 참고.
+ * / F4 chart instance handle (update/refresh/destroy, etc.). See chart/types.js for the definition. */
 export type { ChartInstance } from './chart/types.js';
 
 interface RangeSnapshot { rowIds: string[]; fields: string[] }
@@ -79,6 +103,15 @@ interface ChartRecord {
 
 let _seq = 0;
 
+/**
+ * F4 통합 차트 매니저. / F4 integrated chart manager.
+ *
+ * 차트 설정(`ChartConfig`)을 받아 데이터 추출 → 다운샘플 → 렌더 스펙 조립 → 어댑터 렌더까지의
+ * 파이프라인을 실행하고, 생성된 각 차트를 라이브 갱신(dataChange/formulaRecalc)·리사이즈·파괴까지
+ * 책임지고 관리한다. / Given a `ChartConfig`, runs the pipeline from data extraction through
+ * downsampling, render-spec assembly, and adapter rendering, then owns each created chart's
+ * live updates (dataChange/formulaRecalc), resize handling, and teardown.
+ */
 export class ChartManager {
   private _d: ChartManagerDeps;
   private _charts = new Map<string, ChartRecord>();
@@ -87,6 +120,27 @@ export class ChartManager {
     this._d = deps;
   }
 
+  /**
+   * 새 차트를 생성해 그리드에 마운트한다. / Create a new chart and mount it into the grid.
+   *
+   * 범위 스냅샷(source.kind==='range') → 어댑터 결정 → 패널 DOM 구성 → 데이터 추출/렌더 →
+   * 배지/라이브구독/리사이즈 관찰까지 한 번에 처리한다. 초기화 도중 실패하면 부분 생성된
+   * DOM/구독을 정리하고 원 예외를 다시 던진다.
+   * / Handles range snapshotting (when source.kind==='range'), adapter resolution, panel DOM
+   * construction, data extraction/render, badges, live subscription, and resize observation in
+   * one call. If initialization fails partway, partially created DOM/subscriptions are cleaned up
+   * and the original error is re-thrown.
+   *
+   * @param config - 차트 생성 설정(소스·타입·배치 등) / Chart creation config (source, type, placement, etc.)
+   * @returns 생성된 차트 인스턴스 핸들 / Handle for the created chart instance
+   * @example
+   * const chart = chartManager.createChart({
+   *   source: { kind: 'selection' },
+   *   type: 'bar',
+   *   category: 'name',
+   * });
+   * chart.on('chartRender', () => console.log('rendered'));
+   */
   createChart(config: ChartConfig): ChartInstance {
     const id = `chart-${++_seq}`;
     const container = this._d.getContainer();
@@ -186,10 +240,13 @@ export class ChartManager {
     rec.resizeObserver = ro;
   }
 
+  /** 파괴되지 않은 모든 차트 인스턴스를 반환한다. / Return all chart instances that have not been destroyed. */
   getCharts(): ChartInstance[] {
     return [...this._charts.values()].filter(r => !r.destroyed).map(r => this._makeInstance(r));
   }
 
+  /** 이 매니저가 소유한 모든 차트를 파괴한다(DOM 제거·구독 해제 포함).
+   * / Destroy every chart owned by this manager (DOM removal and unsubscription included). */
   destroyCharts(): void {
     for (const rec of [...this._charts.values()]) this._destroy(rec);
   }

@@ -1,66 +1,85 @@
 /**
  * XmlConverter — XML ↔ 그리드 데이터 양방향 변환 유틸리티.
+ * / XmlConverter — bidirectional XML ↔ grid-data conversion utility.
  *
- * 지원 포맷:
+ * 지원 포맷 / Supported formats:
  *   A. Element 방식  <row><name>홍길동</name></row>
  *   B. Attribute 방식  <row name="홍길동" />
  *   C. SAP BAPI XML 응답  <RETURN><TYPE>S</TYPE><BELNR>...</BELNR></RETURN>
  *   D. SAP IDoc XML  <IDOC><E1HEADER SEGMENT="1"><BUKRS>1000</BUKRS></IDOC>
  *
  * 외부 의존성 없음 — 브라우저 내장 DOMParser 사용.
+ * / No external dependency — uses the browser's built-in DOMParser.
  */
 
 // ─── 파싱 옵션 ────────────────────────────────────────────────
+/** XML → 데이터 파싱 옵션. / Options for parsing XML into data. */
 export interface XmlParseOptions {
-  /** 루트 엘리먼트 태그명 (생략 시 문서 루트 자동 사용) */
+  /** 루트 엘리먼트 태그명. 생략 시 문서 루트 자동 사용. / Root element tag name; falls back to the document root when omitted. */
   rootTag?: string;
-  /** 행 엘리먼트 태그명 (생략 시 루트의 첫 번째 자식 자동 감지) */
+  /** 행 엘리먼트 태그명. 생략 시 루트의 첫 번째 자식 자동 감지. / Row element tag name; auto-detected from the root's first child when omitted. */
   rowTag?: string;
-  /** 값 추출 방식: 'element' | 'attribute' | 'auto'(기본) */
+  /** 값 추출 방식: 'element' | 'attribute' | 'auto'(기본). / Value extraction mode: 'element' | 'attribute' | 'auto' (default). @defaultValue 'auto' */
   mode?: 'element' | 'attribute' | 'auto';
-  /** XML 태그명 → 그리드 field명 매핑 (생략 시 태그명 그대로 사용) */
+  /** XML 태그명 → 그리드 field명 매핑. 생략 시 태그명 그대로 사용. / XML tag name → grid field name map; tag names are used as-is when omitted. */
   fieldMap?: Record<string, string>;
-  /** 텍스트 값 앞뒤 공백 제거 (기본 true) */
+  /** 텍스트 값 앞뒤 공백 제거. 기본 true. / Trim whitespace around text values. Default true. @defaultValue true */
   trim?: boolean;
 }
 
 // ─── 직렬화 옵션 ─────────────────────────────────────────────
+/** 데이터 → XML 직렬화 옵션. / Options for serializing data into XML. */
 export interface XmlStringifyOptions {
-  /** 루트 태그명 (기본 'rows') */
+  /** 루트 태그명. 기본 'rows'. / Root tag name. Default 'rows'. @defaultValue 'rows' */
   rootTag?: string;
-  /** 행 태그명 (기본 'row') */
+  /** 행 태그명. 기본 'row'. / Row tag name. Default 'row'. @defaultValue 'row' */
   rowTag?: string;
-  /** 출력 방식: 'element'(기본) | 'attribute' */
+  /** 출력 방식: 'element'(기본) | 'attribute'. / Output mode: 'element' (default) | 'attribute'. @defaultValue 'element' */
   mode?: 'element' | 'attribute';
-  /** 그리드 field명 → XML 태그명 매핑 */
+  /** 그리드 field명 → XML 태그명 매핑. / Grid field name → XML tag name map. */
   fieldMap?: Record<string, string>;
-  /** XML 선언부 포함 여부 (기본 true) */
+  /** XML 선언부 포함 여부. 기본 true. / Whether to include the XML declaration. Default true. @defaultValue true */
   declaration?: boolean;
-  /** 들여쓰기 공백 수 (기본 2) */
+  /** 들여쓰기 공백 수. 기본 2. / Indentation space count. Default 2. @defaultValue 2 */
   indent?: number;
-  /** null/undefined 처리 문자열 (기본 '') */
+  /** null/undefined 처리 문자열. 기본 ''. / String used for null/undefined values. Default ''. @defaultValue '' */
   nullAs?: string;
-  /** 출력에서 제외할 필드 목록 */
+  /** 출력에서 제외할 필드 목록. / Field names to exclude from the output. */
   excludeFields?: string[];
 }
 
 // ─── SAP 파싱 결과 ────────────────────────────────────────────
+/** SAP XML 파싱 결과 구조. / Result structure of SAP XML parsing. */
 export interface SapParseResult {
+  /** 문서 헤더(DOCUMENTHEADER) 필드 맵. / Document header (DOCUMENTHEADER) field map. */
   header: Record<string, string>;
+  /** 라인 아이템 행 배열. / Line-item row array. */
   items: Record<string, string>[];
+  /** RETURN 메시지 행 배열(복수). / RETURN message rows (may be multiple). */
   returns: Record<string, string>[];
+  /** 파싱에 사용한 원본 Document(선택). / The source Document used for parsing (optional). */
   raw?: Document;
 }
 
 // ─── 메인 클래스 ─────────────────────────────────────────────
+/**
+ * XML ↔ 그리드 데이터 변환기(정적 메서드 모음). / XML ↔ grid-data converter (static methods).
+ *
+ * @example
+ * const rows = XmlConverter.parse('<rows><row><name>Kim</name></row></rows>');
+ * const xml  = XmlConverter.stringify(rows);
+ */
 export class XmlConverter {
 
   // ── 1. XML → 데이터 배열 ────────────────────────────────────
   /**
-   * XML 문자열을 파싱하여 그리드 데이터 배열로 변환.
-   * Element / Attribute 방식 자동 감지.
+   * XML 문자열을 파싱하여 그리드 데이터 배열로 변환. Element / Attribute 방식 자동 감지.
+   * / Parse an XML string into a grid-data array. Auto-detects element vs. attribute style.
    *
-   * @throws XML 파싱 오류 시 Error 발생
+   * @param xml - 파싱할 XML 문자열 / XML string to parse
+   * @param options - 파싱 옵션 / Parse options
+   * @returns 행 객체 배열 / Array of row objects
+   * @throws XML 파싱 오류 시 Error 발생 / Throws an Error on XML parse failure
    */
   static parse(xml: string, options: XmlParseOptions = {}): Record<string, any>[] {
     const { fieldMap = {}, trim = true } = options;
@@ -108,7 +127,11 @@ export class XmlConverter {
 
   // ── 2. 데이터 배열 → XML ─────────────────────────────────────
   /**
-   * 그리드 데이터 배열을 XML 문자열로 직렬화.
+   * 그리드 데이터 배열을 XML 문자열로 직렬화. / Serialize a grid-data array into an XML string.
+   *
+   * @param data - 직렬화할 행 배열 / Row array to serialize
+   * @param options - 직렬화 옵션 / Serialize options
+   * @returns XML 문자열 / XML string
    */
   static stringify(data: Record<string, any>[], options: XmlStringifyOptions = {}): string {
     const {
@@ -158,11 +181,15 @@ export class XmlConverter {
   // ── 3. SAP BAPI XML 응답 파싱 ────────────────────────────────
   /**
    * SAP BAPI XML 응답을 파싱하여 { header, items, returns } 구조로 반환.
+   * / Parse a SAP BAPI XML response into a { header, items, returns } structure.
    *
-   * 지원 패턴:
+   * 지원 패턴 / Supported patterns:
    *   <DOCUMENTHEADER>...</DOCUMENTHEADER>
    *   <ACCOUNTGL><ITEM>...</ITEM></ACCOUNTGL>
    *   <RETURN><TYPE>S</TYPE><MESSAGE>...</MESSAGE></RETURN>
+   *
+   * @param xml - SAP BAPI XML 응답 문자열 / SAP BAPI XML response string
+   * @returns 파싱 결과 구조 / Parsed result structure
    */
   static parseSap(xml: string): SapParseResult {
     const parser = new DOMParser();
@@ -227,8 +254,11 @@ export class XmlConverter {
 
   // ── 4. SAP BAPI 페이로드 → XML 직렬화 ───────────────────────
   /**
-   * BAPI 페이로드 객체를 SAP XML 형식으로 직렬화.
-   * sapGenPayload()의 결과 또는 단일 document 객체를 받음.
+   * BAPI 페이로드 객체를 SAP XML 형식으로 직렬화. sapGenPayload() 결과 또는 단일 document 객체를 받음.
+   * / Serialize a BAPI payload object into SAP XML. Accepts a sapGenPayload() result or a single document object.
+   *
+   * @param payload - BAPI 페이로드 객체 / BAPI payload object
+   * @returns SAP XML 문자열 / SAP XML string
    */
   static stringifySap(payload: {
     BAPI_FUNCTION?: string;
@@ -279,8 +309,11 @@ export class XmlConverter {
 
   // ── 5. 다건 documents 배열 → XML (sapGenPayload 결과 전체) ───
   /**
-   * sapGenPayload()의 { totalDocuments, documents[] } 결과를
-   * 다건 BAPI XML로 직렬화.
+   * sapGenPayload() 의 { totalDocuments, documents[] } 결과를 다건 BAPI XML 로 직렬화.
+   * / Serialize a sapGenPayload() { totalDocuments, documents[] } result into a multi-document BAPI XML.
+   *
+   * @param payload - documents 배열을 담은 페이로드 / Payload holding the documents array
+   * @returns 다건 BAPI XML 문자열 / Multi-document BAPI XML string
    */
   static stringifySapBatch(payload: { documents: any[] }): string {
     const lines: string[] = [

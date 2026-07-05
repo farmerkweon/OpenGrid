@@ -1,15 +1,24 @@
 /**
  * RangeSelectionManager — F1 배선 계층. 헤드리스 코어(src/core/range/*)를 실제 OpenGrid
  * 서브시스템(FlatRowModel/ColumnLayout/DataLayer/GridRenderer/CellEditManager)에 연결한다.
+ * / RangeSelectionManager — F1 wiring layer. Connects the headless core (src/core/range/*) to
+ * the real OpenGrid subsystems (FlatRowModel/ColumnLayout/DataLayer/GridRenderer/CellEditManager).
  *
  * 계약 근거: docs/design/grid-features-2026-07/11_design_F1_v2.md, 15_cross_contracts.md.
  * 이 파일은 core/range/*(RangeModel/FillEngine/ClipboardCodec/RangeQuery)를 "소비"만 하고
  * 재구현하지 않는다(태스크 지시).
+ * / Contract basis: 11_design_F1_v2.md, 15_cross_contracts.md. This file only "consumes"
+ * core/range/* (RangeModel/FillEngine/ClipboardCodec/RangeQuery) and never reimplements it
+ * (per task directive).
  *
  * F3(수식) 배선(C3): _commitFill()의 FillPlanContext.hasCellFormula/offsetFormula 는
  * grid.hasCellFormula/grid.offsetFormula(F3 제공, RecalcCoordinator 소비)에 연결돼 있다.
  * 소스가 수식인 셀 복제는 값 write 가 아니라 setCellFormulaByRowId(→ grid.setCellFormula)
  * 경유로 커밋한다(C3.1).
+ * / F3 (formula) wiring (C3): in _commitFill(), FillPlanContext.hasCellFormula/offsetFormula are
+ * wired to grid.hasCellFormula/grid.offsetFormula (provided by F3, backed by RecalcCoordinator).
+ * Duplicating a cell whose source holds a formula is committed via setCellFormulaByRowId
+ * (→ grid.setCellFormula), not as a value write (C3.1).
  */
 import type { DataLayer } from './DataLayer.js';
 import type { ColumnLayout } from './ColumnLayout.js';
@@ -30,6 +39,11 @@ import {
 import { getRangeValues, getRangeStats, type RangeStats, type RangeQueryContext } from './range/RangeQuery.js';
 import type { CellRange, Direction, FillAxis, FillMode, FillPreview, RangeModelHost } from './range/types.js';
 
+/**
+ * RangeSelectionManager 가 OpenGrid 서브시스템을 읽고 쓰기 위해 주입받는 클로저 묶음.
+ * / Closures injected into RangeSelectionManager so it can read and write OpenGrid subsystem
+ * state without owning it directly.
+ */
 export interface RangeSelectionDeps<T extends Record<string, any>> {
   getOptions: () => Required<GridOptions<T>>;
   getData: () => DataLayer<T>;
@@ -37,21 +51,29 @@ export interface RangeSelectionDeps<T extends Record<string, any>> {
   getFlatModel: () => FlatRowModel;
   getRenderer: () => GridRenderer | null;
   getEditMgr: () => CellEditManager<T>;
+  /** 포커스 셀을 이동. / Move the focused cell. */
   setFocusCell: (ri: number, ci: number) => void;
+  /** 배치 경유 셀 쓰기(재렌더 ≤1회, C2.1). / Batched cell write (at most one re-render, C2.1). */
   writeCells: (patches: Array<{ rowIndex: number; field: string; value: any }>) => number;
+  /** 셀의 화면 표시 텍스트(포맷 적용). / The cell's display text (formatted). */
   getDisplayValue: (ri: number, field: string) => string;
+  /** 그리드 이벤트 발행. / Emit a grid event. */
   emit: (event: string, ...args: any[]) => void;
+  /** 현재 가시 범위를 재렌더. / Re-render the currently visible range. */
   doRender: () => void;
+  /** aria-live 영역에 메시지를 공지. / Announce a message via the aria-live region. */
   announce: (msg: string) => void;
   /** i18n: 범위 선택/채우기 announce·aria 해석. / i18n: resolve range selection/fill announce & aria. */
   t: (key: string, params?: Record<string, string | number>) => string;
   // C3(15_cross_contracts.md, F3 제공): fill 커밋 시 수식 합동 3규칙(FillEngine.FillPlanContext) 연결.
+  // / C3 (15_cross_contracts.md, provided by F3): wires the 3 formula-merge rules
+  // (FillEngine.FillPlanContext) used when committing a fill.
   hasCellFormula?: (rowId: string, field: string) => boolean;
   offsetFormula?: (rowId: string, field: string, dRow: number, dCol: number) => string;
   setCellFormulaByRowId?: (rowId: string, field: string, formula: string) => void;
 }
 
-/** 정규화된 rangeSelection 옵션(§6.1 기본값). */
+/** 정규화된 rangeSelection 옵션(§6.1 기본값). / Normalized rangeSelection options (§6.1 defaults). */
 interface ResolvedRangeOptions {
   fillHandle: boolean;
   multiRange: boolean;
@@ -61,6 +83,17 @@ interface ResolvedRangeOptions {
   fillOverwriteFormula: boolean;
 }
 
+/**
+ * F1 범위 선택 + 채우기 매니저. / F1 range selection + fill manager.
+ *
+ * 포인터 드래그·클릭·Shift+화살표로 셀 범위를 선택하고, 채우기 핸들 드래그/Ctrl+D·R 로 값·수식을
+ * 복제하며, 탭 구분 텍스트 복사/붙여넣기(TSV)까지 담당한다. 선택 모델 자체는 헤드리스
+ * `RangeModel`(core/range/*)이 소유하고, 이 클래스는 DOM 이벤트·오버레이 렌더·그리드 배선만
+ * 책임진다. / Handles cell-range selection via pointer drag, click, and Shift+Arrow; duplicates
+ * values/formulas via fill-handle drag or Ctrl+D/R; and drives tab-separated (TSV) copy/paste.
+ * The selection model itself is owned by the headless `RangeModel` (core/range/*); this class is
+ * responsible only for DOM events, overlay rendering, and grid wiring.
+ */
 export class RangeSelectionManager<T extends Record<string, any> = any> {
   private _d: RangeSelectionDeps<T>;
   private _model: RangeModel;
@@ -99,6 +132,8 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── 옵션/게이트 ────────────────────────────────────────────
+  /** 범위 선택 기능이 켜져 있는지. / Whether range selection is enabled.
+   * @returns 켜져 있으면 true / True if enabled */
   isEnabled(): boolean {
     const opts = this._d.getOptions() as any;
     return opts.rangeSelection?.enabled ?? (opts.selection === 'cells');
@@ -121,17 +156,25 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── 조회 API(C4/§6.2) ──────────────────────────────────────
+  /** 현재 범위 선택이 있는지. / Whether there is an active range selection. */
   hasSelection(): boolean { return this._model.hasSelection; }
+  /** 현재 선택된 모든 범위(multiRange 지원 시 다건). / All currently selected ranges (multiple when multiRange is enabled). */
   getRangeSelection(): CellRange[] { return this._model.getRangeSelection(); }
+  /** 마지막(활성) 범위. 없으면 `null`. / The last (active) range, or `null` if none. */
   getActiveRange(): CellRange | null { return this._model.getActiveRange(); }
+  /** 채우기 핸들 드래그 중인 미리보기 범위. 없으면 `null`. / The fill preview range while dragging the fill handle, or `null`. */
   getFillPreview(): FillPreview | null { return this._fillPreview; }
 
+  /** 활성 범위의 셀 값들을 2차원 배열로 반환(범위 없으면 빈 배열).
+   * / Return the active range's cell values as a 2D array (empty array if no active range). */
   getRangeValues(): any[][] {
     const rect = this.getActiveRange();
     if (!rect) return [];
     return getRangeValues(rect, this._queryCtx());
   }
 
+  /** 활성 범위의 합계/평균 등 통계(범위 없으면 `null`).
+   * / Statistics (sum/average/etc.) for the active range, or `null` if none. */
   getRangeStats(): RangeStats | null {
     const rect = this.getActiveRange();
     if (!rect) return null;
@@ -146,6 +189,13 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── 포인터 드래그(UC-1, §3.1) ────────────────────────────────
+  /**
+   * 셀 위 마우스 다운 — 드래그 선택을 시작한다(UC-1). / Mouse-down on a cell — begins drag selection (UC-1).
+   *
+   * @param ri - 시작 행 인덱스 / Starting row index
+   * @param ci - 시작 열 인덱스 / Starting column index
+   * @param e - 원본 마우스 이벤트(Ctrl/Meta=추가선택, Shift=확장) / Original mouse event (Ctrl/Meta = additive, Shift = extend)
+   */
   handleCellMouseDown(ri: number, ci: number, e: MouseEvent): void {
     if (!this.isEnabled() || this._editorActive()) return;
     if (ri < 0 || ci < 0) return;
@@ -162,6 +212,14 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     document.addEventListener('mouseup', onDocUp);
   }
 
+  /**
+   * 드래그 중 셀 위 마우스 이동 — 범위를 갱신하고 가장자리 근처면 자동 스크롤한다.
+   * / Mouse move over a cell while dragging — updates the range and auto-scrolls near edges.
+   *
+   * @param ri - 현재 행 인덱스 / Current row index
+   * @param ci - 현재 열 인덱스 / Current column index
+   * @param e - 원본 마우스 이벤트(자동 스크롤 거리 계산용) / Original mouse event (used to compute auto-scroll distance)
+   */
   handleCellMouseMove(ri: number, ci: number, e: MouseEvent): void {
     if (this._isDragging) {
       if (ri >= 0 && ci >= 0) {
@@ -172,6 +230,9 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     }
   }
 
+  /** 드래그 종료 — 자동 스크롤 정지 + 선택 확정 + 이벤트 발행. 셀 밖 mouseup(document 폴백)도 이 경로를 탄다.
+   * / End the drag — stops auto-scroll, finalizes the selection, and emits events. A mouseup
+   * outside any cell (document-level fallback) also flows through this path. */
   handleCellMouseUp(_ri: number, _ci: number, _e: MouseEvent): void {
     if (!this._isDragging) return;
     this._isDragging = false;
@@ -181,6 +242,14 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── 클릭 / Shift+클릭(UC-2, §3.2, M-1) ───────────────────────
+  /**
+   * 셀 클릭 처리 — 일반 클릭은 단일 셀 선택, Shift+클릭은 활성 범위를 확장한다(UC-2).
+   * / Handle a cell click — a plain click selects a single cell; Shift+click extends the active range (UC-2).
+   *
+   * @param ri - 클릭된 행 인덱스 / Clicked row index
+   * @param ci - 클릭된 열 인덱스 / Clicked column index
+   * @param shiftKey - Shift 키가 눌려 있었는지 / Whether the Shift key was held
+   */
   handleClick(ri: number, ci: number, shiftKey: boolean): void {
     if (!this.isEnabled() || this._editorActive()) return;
     if (shiftKey) this._model.shiftClickExtend(ri, ci);
@@ -191,6 +260,11 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── Shift+Arrow(UC-3, §3.3) ───────────────────────────────────
+  /**
+   * Shift+화살표로 활성 범위를 방향으로 확장한다(UC-3). / Extend the active range in a direction via Shift+Arrow (UC-3).
+   *
+   * @param dir - 확장 방향 / Direction to extend
+   */
   extendFocus(dir: Direction): void {
     if (!this.isEnabled()) return;
     if (!this._model.hasSelection) return;
@@ -200,13 +274,22 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     this._afterModelChange(true);
   }
 
+  /** 범위 선택을 해제한다(선택 없으면 no-op). / Clear the range selection (no-op if nothing is selected). */
   clear(): void {
     if (!this._model.hasSelection) return;
     this._model.clear();
     this._afterModelChange(true);
   }
+  /** `clear()` 별칭(공개 API 명명 일관성). / Alias for `clear()` (public API naming consistency). */
   clearRangeSelection(): void { this.clear(); }
 
+  /**
+   * 범위 선택을 프로그램적으로 지정한다(§6.2 공개 API). / Programmatically set the range selection (§6.2 public API).
+   *
+   * @param range - 지정할 범위(배열이면 첫 요소만 사용) / Range to set (if an array, only the first element is used)
+   * @example
+   * grid.setRangeSelection({ startRow: 0, endRow: 2, startCol: 0, endCol: 1 });
+   */
   setRangeSelection(range: CellRange | CellRange[]): void {
     const r = Array.isArray(range) ? range[0] : range;
     if (!r) { this.clear(); return; }
@@ -216,7 +299,9 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     this._afterModelChange(true);
   }
 
-  /** applySort/applyFilter 직후 호출(C0.5, §2.5) — 선택은 rowId 집합 기준으로 재투영(해제 아님). */
+  /** applySort/applyFilter 직후 호출(C0.5, §2.5) — 선택은 rowId 집합 기준으로 재투영(해제 아님).
+   * / Called right after applySort/applyFilter (C0.5, §2.5) — re-projects the selection by its
+   * rowId set instead of clearing it. */
   reproject(): void {
     if (!this._model.hasSelection) return;
     this._model.reproject();
@@ -247,6 +332,12 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── 키보드 채우기(UR-5, Ctrl+D/R, §3.3, C9) ───────────────────
+  /**
+   * Ctrl+D(아래로 채우기)/Ctrl+R(오른쪽으로 채우기) 키보드 단축키(UR-5, §3.3).
+   * / Ctrl+D (fill down) / Ctrl+R (fill right) keyboard shortcuts (UR-5, §3.3).
+   *
+   * @param axis - 채우기 방향 / Fill direction
+   */
   ctrlFill(axis: 'down' | 'right'): void {
     if (!this.isEnabled()) return;
     const rect = this.getActiveRange();
@@ -256,7 +347,20 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     this._commitFill(st.source, st.target, axis, 'copy');
   }
 
-  /** 공개 API(§6.2): source→target 채우기. axis 는 두 rect 의 상대 위치로 추론한다. */
+  /** 공개 API(§6.2): source→target 채우기. axis 는 두 rect 의 상대 위치로 추론한다.
+   * / Public API (§6.2): fill from source to target. The axis is inferred from the two rects'
+   * relative position.
+   *
+   * @param source - 채우기 원본 범위 / Source range to fill from
+   * @param target - 채우기 대상 범위 / Target range to fill into
+   * @param mode - 채우기 모드(기본 'copy') / Fill mode (default 'copy')
+   * @example
+   * grid.fillRange(
+   *   { startRow: 0, endRow: 0, startCol: 0, endCol: 0 },
+   *   { startRow: 1, endRow: 3, startCol: 0, endCol: 0 },
+   *   'series',
+   * );
+   */
   fillRange(source: CellRange, target: CellRange, mode: FillMode = 'copy'): void {
     let axis: FillAxis;
     if (target.startRow < source.startRow) axis = 'up';
@@ -327,7 +431,12 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── 클립보드(UR-4/UC-6, §5, M-4/M-5) ──────────────────────────
-  /** KeyboardManager._copyToClipboard 가 소비. 범위 없으면 null(호출측이 기존 경로로 폴백). */
+  /** KeyboardManager._copyToClipboard 가 소비. 범위 없으면 null(호출측이 기존 경로로 폴백).
+   * / Consumed by KeyboardManager._copyToClipboard. Returns null when there is no active range
+   * (the caller falls back to its existing path).
+   *
+   * @returns 활성 범위의 TSV 텍스트, 없으면 `null` / TSV text for the active range, or `null`
+   */
   copyText(): string | null {
     const rect = this.getActiveRange();
     if (!rect) return null;
@@ -342,7 +451,13 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     return text;
   }
 
-  /** KeyboardManager._pasteFromClipboard 가 소비. true = 처리함(배치 경유), false = 범위 없음(폴백). */
+  /** KeyboardManager._pasteFromClipboard 가 소비. true = 처리함(배치 경유), false = 범위 없음(폴백).
+   * / Consumed by KeyboardManager._pasteFromClipboard.
+   *
+   * @param text - 붙여넣을 TSV 텍스트 / TSV text to paste
+   * @returns 처리했으면 true(배치 경유), 활성 범위가 없으면 false(호출측 폴백)
+   *  / True if handled (batched write); false if there is no active range (caller falls back)
+   */
   pasteText(text: string): boolean {
     const rect = this.getActiveRange();
     if (!rect) return false;
@@ -399,7 +514,11 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   // ── 오버레이(§4.3, C6) ─────────────────────────────────────
-  /** bodyWrap 자식으로 오버레이 1회 생성(renderBody 파괴 회피, CON-3 해법). */
+  /** bodyWrap 자식으로 오버레이 1회 생성(renderBody 파괴 회피, CON-3 해법).
+   * / Creates the overlay once as a child of bodyWrap (avoids renderBody teardown; the CON-3 fix).
+   *
+   * @param bodyWrap - 그리드 바디 래퍼 엘리먼트 / The grid body wrapper element
+   */
   mount(bodyWrap: HTMLElement): void {
     if (this._mountedWrap === bodyWrap) return;
     this._mountedWrap = bodyWrap;
@@ -437,7 +556,9 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     this._handleEl = handle;
   }
 
-  /** _doRender 매 호출 뒤 실행(M-6 통합점) — 코너 셀 실측 → 연속 테두리/핸들/프리뷰 갱신(QA-2, CON-4). */
+  /** _doRender 매 호출 뒤 실행(M-6 통합점) — 코너 셀 실측 → 연속 테두리/핸들/프리뷰 갱신(QA-2, CON-4).
+   * / Runs after every _doRender call (M-6 integration point) — measures the corner cells and
+   * updates the contiguous border/handle/preview overlay (QA-2, CON-4). */
   repaint(): void {
     if (!this._overlayEl) return;
     const renderer = this._d.getRenderer();
@@ -494,7 +615,11 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     if (this._previewEl) this._previewEl.style.display = 'none';
   }
 
-  /** OpenGrid._doRender 가 renderBody extraOpts 로 전달(M-6). */
+  /** OpenGrid._doRender 가 renderBody extraOpts 로 전달(M-6).
+   * / Passed by OpenGrid._doRender as renderBody's extraOpts (M-6).
+   *
+   * @returns 현재 선택 범위들을 담은 렌더 옵션 조각 / A render-options fragment carrying the current selected ranges
+   */
   getOverlayExtraOpts(): { _rangeRects: CellRange[] } {
     return { _rangeRects: this._model.getRangeSelection() };
   }

@@ -6,15 +6,18 @@ export type FilterSelectT = (key: string, params?: Record<string, string | numbe
 
 // ─── 공개 타입 ────────────────────────────────────────────
 
+/** 필터 셀렉트 옵션(값/표시 텍스트). / Filter-select option (value/display text). */
 export interface FilterSelectOption {
+  /** 필터·선택에 사용할 값. / Value used for filtering/selection. */
   value: string;
+  /** 화면에 표시할 텍스트. / Text shown on screen. */
   text:  string;
 }
 
 /**
- * 캐스케이딩 필터 셀렉트 컬럼 정의.
+ * 캐스케이딩 필터 셀렉트 컬럼 정의. / Cascading filter-select column definition.
  *
- * ### 데이터 공급 방식 (택 1)
+ * ### 데이터 공급 방식 (택 1) / Data supply (pick one)
  *
  * **A. JSON 배열 바인딩** (권장)
  * ```ts
@@ -36,36 +39,37 @@ export interface FilterSelectOption {
  * ```
  */
 export interface FilterSelectColumn {
-  /** 캐스케이딩 식별자 / 기본 필터 키 */
+  /** 캐스케이딩 식별자 / 기본 필터 키. / Cascading identifier / default filter key. */
   field:    string;
-  /** 화면 표시 라벨 */
+  /** 화면 표시 라벨. / Display label. */
   label:    string;
 
   // ── A. JSON 배열 바인딩 ──────────────────────────────
-  /** 바인딩할 JSON 배열 */
+  /** 바인딩할 JSON 배열. / JSON array to bind. */
   data?: any[];
-  /** data[]에서 option value로 사용할 키 */
+  /** data[] 에서 option value 로 사용할 키. / Key in data[] used as the option value. */
   valueKey?: string;
-  /** data[]에서 화면 표시 text로 사용할 키 (미지정 시 valueKey 사용) */
+  /** data[] 에서 화면 표시 text 로 사용할 키(미지정 시 valueKey 사용). / Key in data[] used as display text (falls back to valueKey). */
   textKey?: string;
   /**
-   * 그리드 행 데이터에서 실제 필터링할 키.
-   * 미지정 시 `field` 값 그대로 사용.
+   * 그리드 행 데이터에서 실제 필터링할 키. 미지정 시 `field` 값 그대로 사용.
+   * / Key actually filtered against grid row data; falls back to `field`.
    *
    * @example
-   * // 그리드 row.category === selectedValue 로 필터링
+   * // 그리드 row.category === selectedValue 로 필터링 / filter where row.category === selectedValue
    * filterKey: 'category'
    */
   filterKey?: string;
 
   // ── B. 정적 옵션 (data 대신 사용) ───────────────────
+  /** 정적 옵션 배열(data 대신 사용). / Static option array (used instead of data). */
   options?: FilterSelectOption[];
 
   // ── 캐스케이딩 ────────────────────────────────────────
-  /** 부모 컬럼의 field 명 */
+  /** 부모 컬럼의 field 명. / Parent column's field name. */
   dependsOn?: string;
   /**
-   * 자식 data[]에서 부모 선택값과 비교할 키.
+   * 자식 data[] 에서 부모 선택값과 비교할 키. / Key in the child data[] compared against the parent's selected value.
    *
    * @example
    * // brandList.filter(b => b.catCode === parentSelectedValue)
@@ -74,9 +78,11 @@ export interface FilterSelectColumn {
   dependsOnKey?: string;
 }
 
+/** 필터 셀렉트 패널 구성. / Filter-select panel configuration. */
 export interface FilterSelectConfig {
+  /** 캐스케이딩 컬럼 정의 배열. / Cascading column definitions. */
   columns: FilterSelectColumn[];
-  /** fieldset 제목 (기본: '필터') */
+  /** fieldset 제목(기본: 로케일 'filter.legend'). / fieldset legend (default: locale 'filter.legend'). */
   legend?: string;
 }
 
@@ -84,6 +90,14 @@ type FilterFn = (field: string, items: FilterItem[]) => void;
 type ResetFn  = (field?: string) => void;
 
 // ─── FilterSelectPanel ────────────────────────────────────
+/**
+ * 캐스케이딩 필터 셀렉트 패널. / Cascading filter-select panel.
+ *
+ * 그리드 헤더 앞에 fieldset 형태의 셀렉트 필터를 삽입하고, 부모→자식 종속(캐스케이딩)
+ * 옵션 재계산과 그리드 필터 콜백을 배선한다.
+ * / Inserts a fieldset of select filters ahead of the grid header and wires parent→child cascading
+ * option recalculation to the grid filter callbacks.
+ */
 export class FilterSelectPanel {
   private _el:       HTMLFieldSetElement;
   private _selects   = new Map<string, HTMLSelectElement>();
@@ -94,6 +108,14 @@ export class FilterSelectPanel {
   private _onReset:  ResetFn;
   private _t:        FilterSelectT;
 
+  /**
+   * @param container - 패널을 삽입할 컨테이너(그리드 헤더 앞에 prepend) / Container to insert the panel into (prepended before the grid header)
+   * @param config - 패널 구성 / Panel configuration
+   * @param onFilter - 필터 적용 콜백(field, items) / Filter-apply callback (field, items)
+   * @param onReset - 필터 해제 콜백(field?) / Filter-reset callback (field?)
+   * @param gridId - aria-controls 로 연결할 그리드 id(선택) / Grid id to link via aria-controls (optional)
+   * @param t - 로케일 해석기(미주입 시 전역 t) / Locale resolver (global t when not injected)
+   */
   constructor(
     container: HTMLElement,
     config:    FilterSelectConfig,
@@ -275,6 +297,8 @@ export class FilterSelectPanel {
   }
 
   // ─── 공개 API ─────────────────────────────────────────
+  /** 모든 필터 선택을 초기화한다. / Reset all filter selections. */
   reset():   void { this._reset(); }
+  /** 패널을 DOM 에서 제거한다. / Remove the panel from the DOM. */
   destroy(): void { this._el.remove(); }
 }

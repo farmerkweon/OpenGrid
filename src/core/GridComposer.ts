@@ -23,7 +23,7 @@ import type { Pagination } from './Pagination.js';
 import type { WorksheetManager } from './WorksheetManager.js';
 import type { GridOptions } from './types.js';
 
-/** OpenGrid 의 rowId 영속 필드(파사드와 동일 상수). */
+/** OpenGrid 의 rowId 영속 필드(파사드와 동일 상수). / OpenGrid's persisted rowId field (same constant as the facade). */
 const ROW_ID_FIELD = '_ogRowId';
 
 /**
@@ -33,6 +33,14 @@ const ROW_ID_FIELD = '_ogRowId';
  * 조립 중 대입·참조하는 대상이며, 잘못된 이름/타입의 대입은 이 인터페이스로 인해 컴파일
  * 타임에 잡힌다(순수 `any` host 보다 안전). `_mount` 본체(renderer/vs/pagination 등 DOM
  * 배선)는 여전히 OpenGrid 가 소유하며, 컴포저는 mount 단계에서 `_mount()` 를 호출만 한다.
+ * / The internal surface of `OpenGrid` that `GridComposer` accesses while assembling it
+ * (R8, §3.1 C2, §3.3).
+ *
+ * Structurally mirrors `OpenGrid`'s private fields/methods. Only the members enumerated here
+ * are ones the composer assigns to or reads during assembly; assigning a wrong name/type is
+ * caught at compile time thanks to this interface (safer than a plain `any` host). The body of
+ * `_mount` (renderer/vs/pagination DOM wiring, etc.) is still owned by `OpenGrid` — the
+ * composer only calls `_mount()` at the mount phase.
  */
 export interface ComposerHost<T extends Record<string, any> = any> {
   _container: HTMLElement;
@@ -55,7 +63,9 @@ export interface ComposerHost<T extends Record<string, any> = any> {
   _detailMgr: DetailManager<T>;
   _chartMgr: ChartManager;
   _ovk: OverrideKernel;
-  /** i18n: per-instance 로케일 오버라이드 child(전역 localeRegistry 의 child). 미지정 시 null → 전역 직행. */
+  /** i18n: per-instance 로케일 오버라이드 child(전역 localeRegistry 의 child). 미지정 시 null → 전역 직행.
+   * / i18n: per-instance locale-override child (a child of the global localeRegistry).
+   * `null` when unspecified, in which case lookups go straight to the global registry. */
   _locales: LocaleRegistry | null;
   // ── mount 단계에서 채워지는(늦은-null) 협력자 — 조립 시엔 lazy 클로저로만 참조 ──
   _renderer: GridRenderer | null;
@@ -68,8 +78,9 @@ export interface ComposerHost<T extends Record<string, any> = any> {
   emit(event: string, ...args: any[]): any;
   on(event: string, cb: (...args: any[]) => void): any;
   off(event: string, cb: (...args: any[]) => void): any;
+  /** aria-live announce. */
   _announce(msg: string): void;
-  /** i18n: 메시지 해석(인스턴스 오버라이드 우선 → 활성 로케일 → ko → 키). / i18n: resolve a message. */
+  /** i18n: 메시지 해석(인스턴스 오버라이드 우선 → 활성 로케일 → ko → 키). / i18n: resolve a message (instance override first, then active locale, then ko, then the raw key). */
   t(key: string, params?: Record<string, string | number>): string;
   _doRender(startIndex: number, endIndex: number): void;
   _visRange(): [number, number];
@@ -85,25 +96,44 @@ export interface ComposerHost<T extends Record<string, any> = any> {
   getCellFormula(rowIndex: number, field: string): string | null;
   setCellFormula(rowIndex: number, field: string, formula: string): void;
   clearCellFormula(rowIndex: number, field: string): void;
-  /** override 커널 배선 후 컴포저가 단 1회 호출(구조적 순서 관문). */
+  /** override 커널 배선 후 컴포저가 단 1회 호출(구조적 순서 관문). / Called exactly once by the composer after the override kernel is wired up (a structural ordering gate). */
   _mount(): void;
 }
 
-/** OpenGrid 만 알아야 하는 재귀/전역 배선을 컴포저에 주입(컴포저의 OpenGrid 역-import 회피). */
+/** OpenGrid 만 알아야 하는 재귀/전역 배선을 컴포저에 주입(컴포저의 OpenGrid 역-import 회피).
+ * / Injects into the composer the recursive/global wiring that only `OpenGrid` needs to know
+ * about (avoids the composer having to reverse-import `OpenGrid`). */
 export interface ComposerHooks {
-  /** F2 서브그리드 재귀 생성(DetailManager createSubgrid). `new OpenGrid(host, {..,_detailDepth})`. */
+  /** F2 서브그리드 재귀 생성(DetailManager createSubgrid). `new OpenGrid(host, {..,_detailDepth})`.
+   * / F2: recursively create a subgrid (DetailManager's createSubgrid) — `new OpenGrid(host, {..,_detailDepth})`.
+   *
+   * @param host - 서브그리드를 마운트할 컨테이너 엘리먼트 / Container element to mount the subgrid into
+   * @param subgridOptions - 서브그리드 생성 옵션 / Subgrid construction options
+   * @param depth - 중첩 깊이(재귀 가드) / Nesting depth (recursion guard)
+   * @returns 생성된 서브그리드 인스턴스 / The created subgrid instance
+   */
   createSubgrid: (host: HTMLElement, subgridOptions: any, depth: number) => any;
 }
 
 // ── Phased Builder 위상정렬 토큰 — 각 단계 산출물이 다음 단계의 매개변수 타입이 되어
 //    구성 순서(특히 override 커널 → mount)를 함수 시그니처로 강제한다(§3.3-1). ──
+// / Phased-builder topological-sort tokens — each phase's output becomes the next phase's
+//    parameter type, so construction order (notably override kernel → mount) is enforced by
+//    the function signatures themselves (§3.3-1).
+/** Phase A(core) 완료 토큰. / Completion token for Phase A (core). */
 export interface CoreServicesToken { readonly _phase: 'core'; }
+/** Phase B(formula) 완료 토큰. / Completion token for Phase B (formula). */
 export interface FormulaServicesToken { readonly _phase: 'formula'; }
+/** Phase C(managers) 완료 토큰. / Completion token for Phase C (managers). */
 export interface ManagerRegistryToken { readonly _phase: 'managers'; }
+/** Phase D(override kernel) 완료 토큰. / Completion token for Phase D (override kernel). */
 export interface OverrideKernelToken { readonly _phase: 'ovk'; }
+/** Phase E(mount) 완료 토큰. / Completion token for Phase E (mount). */
 export interface MountedViewToken { readonly _phase: 'mounted'; }
 
-/** compose() 산출물 핸들. 모든 협력자는 host 에 대입되며, 이 핸들은 완료 표식이다. */
+/** compose() 산출물 핸들. 모든 협력자는 host 에 대입되며, 이 핸들은 완료 표식이다.
+ * / The handle produced by compose(). All collaborators are assigned onto the host; this
+ * handle is merely a completion marker. */
 export interface GridRuntime {
   readonly mounted: MountedViewToken;
 }
@@ -118,8 +148,29 @@ export interface GridRuntime {
  *
  * 협력자 생성 순서는 기존 생성자와 바이트 동일(회귀0): core → formula/recalc → 11 매니저
  * → override 커널 → mount. R2 런타임 가드는 belt-and-suspenders 로 유지된다.
+ * / The composition root / phased builder (R8, §6-R8, §3.1 C2, §3.3).
+ *
+ * Externalizes the object-graph assembly that used to be fused into the constructor. Each
+ * `build*` phase requires the previous phase's output token as a parameter, so construction
+ * order — in particular the invariant that `_ovk` (OverrideKernel) must be created before
+ * `_mount()` — is enforced by **topologically sorting the function signatures**: `mount(ovk)`
+ * simply does not compile without the token produced by `buildOverrideKernel()`.
+ *
+ * Collaborator creation order is byte-identical to the original constructor (zero regression):
+ * core → formula/recalc → 11 managers → override kernel → mount. The R2 runtime guard is kept
+ * as a belt-and-suspenders check.
  */
 export class GridComposer {
+  /**
+   * 그리드 객체그래프를 전 단계 순서대로 조립하고 mount 한다. / Assemble the grid's object
+   * graph through every phase, in order, and mount it.
+   *
+   * @param host - 조립 대상 OpenGrid 내부 표면 / The OpenGrid internal surface to assemble into
+   * @param container - 컨테이너 셀렉터 또는 엘리먼트 / Container selector or element
+   * @param rawOptions - 사용자 지정 그리드 옵션(정규화 전) / User-supplied grid options (pre-normalization)
+   * @param hooks - OpenGrid 전용 재귀/전역 배선 훅 / OpenGrid-only recursive/global wiring hooks
+   * @returns compose 완료 핸들 / The completion handle for compose
+   */
   static compose<T extends Record<string, any>>(
     host: ComposerHost<T>,
     container: string | HTMLElement,

@@ -6,18 +6,45 @@
 // ============================================================
 import type { OpenGridInstance } from './types.js';
 
+/**
+ * 그리드 셔틀 생성 옵션. / Grid shuttle construction options.
+ */
 export interface GridShuttleOptions {
-  /** 버튼 배치 방향 (기본 'vertical') */
+  /** 버튼 배치 방향. 기본 'vertical'. / Button layout direction. Default 'vertical'.
+   *  @defaultValue 'vertical' */
   layout?: 'vertical' | 'horizontal';
-  /** 전체 이동(≫ ≪) 버튼도 표시 (기본 false) */
+  /** 전체 이동(≫ ≪) 버튼도 표시. 기본 false. / Also show move-all (≫ ≪) buttons. Default false.
+   *  @defaultValue false */
   includeAll?: boolean;
-  /** 버튼 라벨 커스터마이즈 */
+  /** 버튼 라벨 커스터마이즈. / Customize button labels. */
   labels?: { toRight?: string; toLeft?: string; allRight?: string; allLeft?: string };
 }
 
+/**
+ * 두 그리드 사이의 셔틀 UI. / Shuttle UI between two grids.
+ *
+ * 두 그리드 사이에 화살표 버튼을 두고 "체크된 행"을 드래그 없이 버튼으로 이동(move)시킨다.
+ * 이동은 `grid.moveCheckedTo()` 를 호출하므로 crossGridMapping(필드 매핑)과 3단계 이벤트가
+ * 드래그 이동과 100% 동일하게 적용된다.
+ * / Places arrow buttons between two grids to move "checked rows" without dragging.
+ * The move delegates to `grid.moveCheckedTo()`, so crossGridMapping (field mapping) and the
+ * 3-stage events apply identically to drag-based moves.
+ *
+ * @example
+ * const shuttle = new GridShuttle(leftGrid, rightGrid, document.querySelector('#mid')!, {
+ *   layout: 'vertical',
+ *   includeAll: true,
+ * });
+ */
 export class GridShuttle {
   private _el: HTMLElement;
 
+  /**
+   * @param _left - 왼쪽 그리드 인스턴스 / Left grid instance
+   * @param _right - 오른쪽 그리드 인스턴스 / Right grid instance
+   * @param mount - 셔틀 버튼을 붙일 마운트 엘리먼트 / Mount element to attach the shuttle buttons
+   * @param opts - 셔틀 옵션 / Shuttle options
+   */
   constructor(
     private _left: OpenGridInstance,
     private _right: OpenGridInstance,
@@ -70,10 +97,23 @@ export class GridShuttle {
     if (n > 0) void from.moveRowsTo(to, Array.from({ length: n }, (_, i) => i));
   }
 
+  /** 셔틀 UI 를 DOM 에서 제거한다. / Remove the shuttle UI from the DOM. */
   destroy(): void { this._el.remove(); }
 }
 
-/** 두 그리드 사이에 셔틀(화살표 이동) 버튼을 만든다 */
+/**
+ * 두 그리드 사이에 셔틀(화살표 이동) 버튼을 만든다. / Create shuttle (arrow-move) buttons between two grids.
+ *
+ * `new GridShuttle(...)` 의 편의 팩토리. / Convenience factory for `new GridShuttle(...)`.
+ *
+ * @param left - 왼쪽 그리드 인스턴스 / Left grid instance
+ * @param right - 오른쪽 그리드 인스턴스 / Right grid instance
+ * @param mount - 셔틀 버튼을 붙일 마운트 엘리먼트 / Mount element to attach the shuttle buttons
+ * @param opts - 셔틀 옵션 / Shuttle options
+ * @returns 생성된 GridShuttle 인스턴스 / The created GridShuttle instance
+ * @example
+ * const shuttle = createGridShuttle(leftGrid, rightGrid, mountEl, { includeAll: true });
+ */
 export function createGridShuttle(
   left: OpenGridInstance,
   right: OpenGridInstance,

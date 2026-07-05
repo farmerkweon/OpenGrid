@@ -9,7 +9,7 @@ High-performance, framework-agnostic data grid with virtual scrolling, inline ed
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![npm](https://img.shields.io/badge/npm-1.2.0-orange)](https://www.npmjs.com/package/open-grid)
+[![npm](https://img.shields.io/badge/npm-1.2.1-orange)](https://www.npmjs.com/package/open-grid)
 
 📖 **[개발 가이드](https://foxnail.kr/open-grid/demo/v2/guide/index.php)** — 설치부터 고급 API까지 단계별 가이드
 🔗 **[데모/홈페이지](https://foxnail.kr/open-grid/demo/v2/index.php)**

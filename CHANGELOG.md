@@ -2,6 +2,18 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.2.1] - 2026-07-05
+
+### Fixed
+- **ES 번들 미니파이** / **ES bundle minification.** Vite lib 모드가 ES 포맷 청크에 minify 를
+  적용하지 않아 ESM(`module`) 번들 전체가 비압축(주석·공백 포함)으로 배포되던 문제를 수정.
+  이제 모든 청크를 esbuild 로 압축하고 JSDoc 주석을 번들에서 제거한다 —
+  ES 코어 청크 gzip **135KB → 98KB (약 -27%)**. (이전 모든 버전에 존재하던 결함)
+
+### Docs
+- 공개 API 선언 원본·오케스트레이터/매니저 38개 파일에 한·영 병행 JSDoc 확대.
+- 번들 사이즈 게이트 추가 (`npm run size`).
+
 ## [1.2.0] - 2026-07-05
 
 ### Added

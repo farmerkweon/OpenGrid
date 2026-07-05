@@ -13,23 +13,52 @@ import type { GridOptions, EditEvent, Position } from './types.js';
  * `commit(spec)` 로 수렴시키기 위한 명시 데이터계약(CommitSpec DTO). 각 mutator 의
  * **관측 가능한 발화 순서 차이는 정규화 대상이 아니라 이 필드들로 인코딩**한다
  * (R-9c 회귀0: R0 골든 `mutation-event-sequence.test.ts` 순서 보존).
+ * / Explicit data contract (CommitSpec DTO) that converges every mutator's mutate→render→emit
+ * tail into the single choke point `commit(spec)` (R4, §3.4, R-9a/R-9b). Each mutator's
+ * **observable firing-order differences are not normalized away but encoded into these
+ * fields** (R-9c, zero regression: order preserved by the R0 golden test
+ * `mutation-event-sequence.test.ts`).
  *
  * - `totals`  : VS/Pagination 행수 갱신. 'count'=현재 행수(insert/delete/push/unshift),
  *               'zero'=0(clearData). 생략=미갱신(writeCell/setData — 행수 불변 or 인라인 처리).
+ *               / Updates the VS/Pagination row count. `'count'` = current row count
+ *               (insert/delete/push/unshift), `'zero'` = 0 (clearData). Omitted = no update
+ *               (writeCell/setData — row count unchanged, or handled inline).
  * - `renderMode` : 'sync-window'=`_doRender(...visRange)`(insert/delete/write/endBatch),
  *               'full'=`_doRender(0,-1)`(clearData),
  *               'async-vs'=명령형 렌더 없음. setData 는 setTotalRows/rebuild 로 VS 가
  *               rAF 스케줄(비동기)하므로 `commit` 은 동기 `_doRender` 를 **하지 않는다**.
+ *               / `'sync-window'` = `_doRender(...visRange)` (insert/delete/write/endBatch),
+ *               `'full'` = `_doRender(0,-1)` (clearData), `'async-vs'` = no imperative render.
+ *               For setData, VS schedules via rAF through setTotalRows/rebuild, so `commit`
+ *               **does not** invoke a synchronous `_doRender`.
  * - `emitBeforeRender` : true=emit 을 render 앞에(writeCell/endBatch — 현행 순서), 기본 false=render 먼저(insert/delete).
+ *               / `true` = emit before render (writeCell/endBatch — current order); default
+ *               `false` = render first (insert/delete).
  * - `emitPayload` : `emit('dataChange', …)` 페이로드 지연 평가(thunk). getData() 시점을
  *               현행과 동일(render 뒤 or 앞)하게 유지 + 명시 onDataChange 재호출 시 2회 평가 보존.
+ *               / Lazily-evaluated (thunk) payload for `emit('dataChange', …)`. Keeps the
+ *               `getData()` evaluation point identical to current behavior (before or after
+ *               render) and preserves double evaluation when `onDataChange` is explicitly
+ *               re-invoked.
  * - `fireOnDataChangeExplicitly` : true=`_options.onDataChange?.()` 를 **명시 재호출**(bound listener 와 합쳐 DOUBLE-fire).
  *               row mutator=true, setData/clearData=false(bound listener 로 ONCE).
+ *               / `true` = **explicitly re-invokes** `_options.onDataChange?.()` (combined with
+ *               the bound listener, this DOUBLE-fires). Row mutators = `true`;
+ *               setData/clearData = `false` (bound listener fires ONCE).
  * - `flushFormula` : true=emit 전에 `_flushFormulaRecalc()`(writeCell/endBatch).
+ *               / `true` = calls `_flushFormulaRecalc()` right before emit (writeCell/endBatch).
  * - `preRender` : render 직전 훅(deleteRow 의 removedRowId invalidate 루프).
+ *               / Hook that runs immediately before render (deleteRow's removedRowId
+ *               invalidation loop).
  * - `coalescable` : true 인 커밋만 배치 개구 중 render/emit 을 no-op 하고 `_batchDirty` 를 세운다.
  *               **writeCell 만 원래 배치를 감지**했으므로 나머지 mutator(coalescable 생략)는
  *               배치 안에서도 즉시 렌더(현행 보존 — 배치 게이트를 전 mutator 로 확대하지 않는다).
+ *               / Only commits with `true` no-op render/emit while a batch is open and instead
+ *               set `_batchDirty`. **Only writeCell originally detected batches**, so the
+ *               remaining mutators (which omit `coalescable`) still render immediately even
+ *               inside a batch (current behavior preserved — the batch gate is not widened to
+ *               every mutator).
  */
 export interface CommitSpec {
   totals?: 'count' | 'zero';
@@ -52,6 +81,18 @@ export interface CommitSpec {
  * render 는 주입된 `doRenderWindow`/`doRenderFull` 콜백으로만 유발한다. 값(vs/pagination/recalc
  * 등)은 늦은-null / 재할당(worksheet 전환)을 견디도록 전부 getter 클로저로 읽는다.
  * 배치 코얼레싱(`_batchDepth`/`_batchDirty`) 시맨틱은 R4 와 1:1 동일하다(회귀 0).
+ * / Dependency contract that moves the data-mutation surface (setData/insert/push/delete/
+ * writeCell/writeCells + batch API) and the single commit choke point `commit(CommitSpec)`
+ * introduced by R4 out of the `OpenGrid` God object with **behavior unchanged** (R6, §3.1 C5,
+ * §6-R6). `OpenGrid` retains only thin delegating public methods (public API unchanged).
+ *
+ * Strangler principle (A2): `DataLayer` is still owned by `OpenGrid`; it is only **injected**
+ * here via the `*Deps` closure-inversion pattern. **The service has no direct knowledge of
+ * rendering** (Yourdon I/O separation): render is only triggered through the injected
+ * `doRenderWindow`/`doRenderFull` callbacks. Values (vs/pagination/recalc, etc.) are all read
+ * through getter closures so they tolerate late-null / reassignment (worksheet switching).
+ * Batch coalescing semantics (`_batchDepth`/`_batchDirty`) are 1:1 identical to R4 (zero
+ * regression).
  */
 export interface MutationServiceDeps<T extends Record<string, any> = any> {
   getData: () => DataLayer<T>;
@@ -64,30 +105,39 @@ export interface MutationServiceDeps<T extends Record<string, any> = any> {
   getRowMgr: () => RowManager<T>;
   getGrpMgr: () => GroupTreeManager<T>;
   getOptions: () => Required<GridOptions<T>>;
-  /** EventEmitter fan (this.emit) — 'dataChange'/'editEnd'/'writeCellsSkip'. */
+  /** EventEmitter fan(this.emit) — 'dataChange'/'editEnd'/'writeCellsSkip'. / EventEmitter fan-out (this.emit) for 'dataChange'/'editEnd'/'writeCellsSkip'. */
   emit: (event: string, payload?: any) => void;
-  /** aria-live announce (C8.1 공용 인프라). */
+  /** aria-live announce(C8.1 공용 인프라). / aria-live announce (C8.1 shared infrastructure). */
   announce: (msg: string) => void;
   /** i18n: 데이터 로드/스킵 announce 해석. / i18n: resolve data load/skip announces. */
   t: (key: string, params?: Record<string, string | number>) => string;
-  /** sort/filter 재적용(setData). */
+  /** sort/filter 재적용(setData). / Re-apply sort/filter (setData). */
   applyFilters: () => void;
-  /** writeCell/endBatch 커밋 emit 직전 수식 dirty seed 소비. */
+  /** writeCell/endBatch 커밋 emit 직전 수식 dirty seed 소비. / Consume formula dirty seeds right before the writeCell/endBatch commit emit. */
   flushFormula: () => void;
-  /** 현재 가시 범위 렌더(this._doRender(...this._visRange())). 서비스는 렌더 내부를 모른다. */
+  /** 현재 가시 범위 렌더(this._doRender(...this._visRange())). 서비스는 렌더 내부를 모른다. / Render the current visible range (this._doRender(...this._visRange())). The service has no knowledge of render internals. */
   doRenderWindow: () => void;
-  /** 전체 렌더(this._doRender(0, -1)) — clearData full 모드. */
+  /** 전체 렌더(this._doRender(0, -1)) — clearData full 모드. / Full render (this._doRender(0, -1)) — clearData's full mode. */
   doRenderFull: () => void;
-  /** setData: 수식 dirty seed clear + RecalcCoordinator 재생성(rowId 재발급 대응). */
+  /** setData: 수식 dirty seed clear + RecalcCoordinator 재생성(rowId 재발급 대응). / setData: clears formula dirty seeds and recreates the RecalcCoordinator (to cope with rowId reissuance). */
   resetFormulaState: () => void;
-  /** writeCell: 값이 바뀐 셀을 수식 dirty seed 로 적립(kind==='data' 일 때만). */
+  /** writeCell: 값이 바뀐 셀을 수식 dirty seed 로 적립(kind==='data' 일 때만). / writeCell: accumulates a changed cell as a formula dirty seed (only when kind === 'data'). */
   seedFormulaDirty: (rowIndex: number, field: string) => void;
-  /** deleteRow: 제거된 rowId 를 deps 로 갖는 수식들을 #REF 로 무효화(preRender). */
+  /** deleteRow: 제거된 rowId 를 deps 로 갖는 수식들을 #REF 로 무효화(preRender). / deleteRow: invalidates formulas that depend on a removed rowId to #REF (preRender). */
   invalidateRemovedRows: (rowIds: string[]) => void;
-  /** deleteRow: 제거 전 flat index 의 안정 rowId 확보. */
+  /** deleteRow: 제거 전 flat index 의 안정 rowId 확보. / deleteRow: captures the stable rowId at a flat index before removal. */
   getRowIdAt: (rowIndex: number) => string | undefined;
 }
 
+/**
+ * 모든 데이터 변경(mutation)의 단일 초크포인트. / Single chokepoint for all data mutations.
+ *
+ * setData/insertRow/pushRow/deleteRow/writeCell/writeCells + 배치 API를 소유하며, 각 연산의
+ * mutate→render→emit 꼬리를 {@link CommitSpec} 을 통해 `commit()` 하나로 수렴시킨다(R4/R6).
+ * / Owns setData/insertRow/pushRow/deleteRow/writeCell/writeCells plus the batch API, and
+ * converges every operation's mutate→render→emit tail into a single `commit()` call driven
+ * by a {@link CommitSpec} (R4/R6).
+ */
 export class MutationService<T extends Record<string, any> = any> {
   private _deps: MutationServiceDeps<T>;
 
@@ -106,6 +156,13 @@ export class MutationService<T extends Record<string, any> = any> {
    * 꼬리를 여기로 수렴. **관측 순서는 spec 필드로 인코딩**(정규화 아님 — R0 골든 diff=0).
    * 배치 코얼레싱을 내재화: `coalescable` 커밋은 배치 개구 중 render/emit 을 지연하고
    * `_batchDirty` 만 세운다(가장 바깥 endBatch 에서 1회 flush).
+   * / Single commit chokepoint (R4, §3.4, R-9a). Converges the post-mutate
+   * totals→(preRender)→flush→render/emit tail here. **Observable order is encoded via the
+   * spec fields** (not normalized — R0 golden diff = 0). Internalizes batch coalescing:
+   * commits marked `coalescable` defer render/emit while a batch is open and only set
+   * `_batchDirty` (flushed once by the outermost endBatch).
+   *
+   * @param spec - 커밋 데이터계약 / The commit data contract
    */
   commit(spec: CommitSpec): void {
     // 배치 코얼레싱(writeCell 만 coalescable) — 나머지 mutator 는 배치 중에도 즉시 커밋(현행 보존).
@@ -138,6 +195,13 @@ export class MutationService<T extends Record<string, any> = any> {
     else { doRender(); doEmit(); }
   }
 
+  /**
+   * 전체 데이터를 교체한다. rowId 를 재발급하므로 기존 stable-id 앵커 수식은 전량 무효화된다.
+   * / Replace the entire dataset. Reissues rowIds, so any existing stable-id-anchored formulas
+   * are fully invalidated.
+   *
+   * @param data - 새 행 데이터 배열 / New array of row data
+   */
   setData(data: T[]): void {
     const trigMgr = this._deps.getTrigMgr();
     const ctx = trigMgr.mkCtx('setData', [data]);
@@ -168,6 +232,12 @@ export class MutationService<T extends Record<string, any> = any> {
     trigMgr.exec('after:setData', ctx);
   }
 
+  /**
+   * 행 하나를 삽입한다. / Insert a single row.
+   *
+   * @param item - 삽입할 행 데이터(부분) / Row data to insert (partial)
+   * @param position - 삽입 위치. 기본 'last' / Insert position. Default `'last'`
+   */
   insertRow(item: Partial<T>, position: Position = 'last'): void {
     const trigMgr = this._deps.getTrigMgr();
     const ctx = trigMgr.mkCtx('insertRow', [item, position]);
@@ -187,6 +257,11 @@ export class MutationService<T extends Record<string, any> = any> {
     trigMgr.exec('after:insertRow', ctx);
   }
 
+  /**
+   * 하나 이상의 행을 끝에 추가한다(트리거 브래킷 없음). / Append one or more rows to the end (no trigger bracket).
+   *
+   * @param items - 추가할 행(단일 또는 배열) / Row(s) to append (single or array)
+   */
   pushRow(items: Partial<T> | Partial<T>[]): void {
     const arr = Array.isArray(items) ? items : [items];
     const dl = this._deps.getData();
@@ -198,6 +273,12 @@ export class MutationService<T extends Record<string, any> = any> {
     });
   }
 
+  /**
+   * 하나 이상의 행을 제거한다. 제거된 rowId 에 의존하던 수식은 #REF 로 무효화된다.
+   * / Remove one or more rows. Formulas depending on a removed rowId are invalidated to #REF.
+   *
+   * @param rowIndex - 제거할 행의 (표시) 인덱스, 단일 또는 배열 / (Displayed) index of the row(s) to remove, single or array
+   */
   deleteRow(rowIndex: number | number[]): void {
     const trigMgr = this._deps.getTrigMgr();
     const dl = this._deps.getData();
@@ -223,6 +304,14 @@ export class MutationService<T extends Record<string, any> = any> {
     trigMgr.exec('after:deleteRow', ctx);
   }
 
+  /**
+   * 셀 하나에 값을 쓴다. 배치 개구 중이면 render/emit 을 coalesce 한다.
+   * / Write a value to a single cell. Coalesces render/emit while a batch is open.
+   *
+   * @param rowIndex - 대상 행의 flat index / Flat index of the target row
+   * @param field - 컬럼 field 명 / Column field name
+   * @param value - 기록할 값 / Value to write
+   */
   writeCell(rowIndex: number, field: string, value: any): void {
     const dl = this._deps.getData();
     const old = dl.getCellValue(rowIndex, field);
@@ -255,12 +344,18 @@ export class MutationService<T extends Record<string, any> = any> {
   /**
    * 배치 쓰기 시작(C2.1). 이후 writeCell 호출들은 render/dataChange 를 지연·coalesce 한다.
    * 중첩 호출은 카운팅(reentrant) — 가장 바깥 endBatch 에서만 실제로 flush 된다.
+   * / Begin batched writes (C2.1). Subsequent writeCell calls defer and coalesce
+   * render/dataChange. Nested calls are counted (reentrant) — only the outermost endBatch
+   * actually flushes.
    */
   beginBatch(): void { this._batchDepth++; }
 
   /**
    * 배치 종료(C2.1). 카운터가 0 이 되는 시점에 한해 배치 중 발생한 쓰기가 있으면
    * _doRender 1회 + dataChange 1회를 발생시킨다(둘 다 0회 또는 1회 — 폭주 차단).
+   * / End the batch (C2.1). Only when the counter reaches 0 and a write occurred during the
+   * batch does this fire one `_doRender` and one `dataChange` (each either 0 or 1 times — no
+   * runaway firing).
    */
   endBatch(): void {
     if (this._batchDepth === 0) return; // 불균형 호출 방어
@@ -281,6 +376,14 @@ export class MutationService<T extends Record<string, any> = any> {
    * FlatRowModel.resolveFlatRow 로 해소해 kind!=='data' (group/tree/detail 의사행)이면
    * 쓰기 전에 skip 한다(C0.3 쓰기 안전, filler 에 writeCell 절대 금지).
    * 건너뛴 셀 수를 반환하고, 1건이라도 있으면 announce + 'writeCellsSkip' 이벤트로 표면화한다.
+   * / A beginBatch+loop+endBatch wrapper (C2.1). `rowIndex` in each patch is a flat index —
+   * if resolving it via `FlatRowModel.resolveFlatRow` yields `kind !== 'data'` (a group/tree/
+   * detail pseudo-row), the write is skipped (C0.3 write safety — writeCell is never allowed
+   * on fillers). Returns the number of skipped cells and, if any were skipped, surfaces it via
+   * announce + a `'writeCellsSkip'` event.
+   *
+   * @param patches - 적용할 셀 패치 배열 / Array of cell patches to apply
+   * @returns 건너뛴 셀 수 / Number of cells skipped
    */
   writeCells(patches: Array<{ rowIndex: number; field: string; value: any }>): number {
     this.beginBatch();

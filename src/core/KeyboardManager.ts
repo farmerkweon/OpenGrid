@@ -3,39 +3,91 @@ import type { ColumnLayout } from './ColumnLayout.js';
 import type { CellEditManager } from './CellEditManager.js';
 import type { RowManager } from './RowManager.js';
 
-/** F1 범위 선택 배선 훅(M-3/M-4/M-5) — RangeSelectionManager 가 그대로 구현한다. */
+/**
+ * F1 범위 선택 배선 훅(M-3/M-4/M-5) — RangeSelectionManager 가 그대로 구현한다.
+ * / F1 range-selection wiring hooks (M-3/M-4/M-5) — implemented directly by
+ * `RangeSelectionManager`.
+ */
 export interface RangeKeyboardHooks {
+  /** 범위 선택 모드(`selection:'cells'`)가 활성인지. / Whether range-select mode (`selection:'cells'`) is active. */
   isEnabled(): boolean;
+  /** 현재 유효한 범위 선택이 있는지. / Whether there is a currently valid range selection. */
   hasSelection(): boolean;
+  /**
+   * 포커스를 지정 방향으로 확장한다(Shift+화살표). / Extend the focus range in the given direction (Shift+Arrow).
+   * @param dir - 확장 방향 / Direction to extend
+   */
   extendFocus(dir: 'up' | 'down' | 'left' | 'right'): void;
+  /**
+   * Ctrl+D/Ctrl+R 채우기를 축 방향으로 실행한다. / Run a Ctrl+D/Ctrl+R fill along the given axis.
+   * @param axis - 채우기 축(`'down'` = Ctrl+D, `'right'` = Ctrl+R) / Fill axis (`'down'` for Ctrl+D, `'right'` for Ctrl+R)
+   */
   ctrlFill(axis: 'down' | 'right'): void;
+  /** 범위 선택을 해제한다. / Clear the range selection. */
   clear(): void;
-  /** 범위 없으면 null(호출측이 기존 focusCell/selectedRows 경로로 폴백) */
+  /**
+   * 범위 없으면 null(호출측이 기존 focusCell/selectedRows 경로로 폴백)
+   * / Returns `null` when there is no range (caller falls back to the
+   * focusCell/selectedRows path).
+   * @returns 범위의 TSV 텍스트, 또는 `null` / TSV text of the range, or `null`
+   */
   copyText(): string | null;
-  /** true = 배치 경유로 처리함, false = 범위 없음(폴백) */
+  /**
+   * true = 배치 경유로 처리함, false = 범위 없음(폴백)
+   * / `true` if handled via the batch path, `false` if there is no range (caller falls back).
+   * @param text - 붙여넣을 TSV 텍스트 / TSV text to paste
+   * @returns 배치 경유로 처리되었는지 여부 / Whether this was handled via the batch path
+   */
   pasteText(text: string): boolean;
 }
 
+/**
+ * {@link KeyboardManager} 의존성 주입 계약. / Dependency-injection contract for {@link KeyboardManager}.
+ */
 export interface KeyboardDeps<T extends Record<string, any>> {
+  /** 셀 편집 매니저 조회. / Look up the cell edit manager. */
   getEditMgr: () => CellEditManager<T>;
+  /** 행 선택/체크 매니저 조회. / Look up the row selection/check manager. */
   getRowMgr: () => RowManager<T>;
+  /** 현재 데이터 레이어 조회. / Look up the current data layer. */
   getData: () => DataLayer<T>;
+  /** 현재 컬럼 레이아웃 조회. / Look up the current column layout. */
   getColLayout: () => ColumnLayout<T>;
+  /** 현재 그리드 옵션 조회. / Look up the current grid options. */
   getOptions: () => any;
+  /** 키보드 포커스 셀을 설정한다. / Set the keyboard-focused cell. */
   setFocusCell: (ri: number, ci: number) => void;
+  /** 행 드래그(Ctrl+화살표) 이동을 처리한다. / Handle a row drag (Ctrl+Arrow) move. */
   handleRowDrop: (from: number, to: number) => void;
+  /** 바디를 다시 그린다. / Re-render the body. */
   doRender: () => void;
+  /** 스크린리더용 상태 안내. / Announce a status message for screen readers. */
   announce: (msg: string) => void;
   /** i18n: 행 이동 announce 해석. / i18n: resolve row-move announce. */
   t: (key: string, params?: Record<string, string | number>) => string;
+  /** 그리드 이벤트를 발행한다. / Emit a grid event. */
   emit: (event: string, ...args: any[]) => void;
+  /** 현재 렌더된 가시 행 범위(`[start, end]`)를 조회. / Look up the currently rendered visible row range (`[start, end]`). */
   visRange: () => [number, number];
+  /** 포커스 셀에 대한 공개 키 이벤트를 발행한다. / Emit a public key event for the focused cell. */
   handleCellKeyEvt: (eventName: 'cellKeyDown' | 'cellKeyUp' | 'cellKeyPress', e: KeyboardEvent) => void;
-  /** M-4: 붙여넣기 쓰기 퍼널을 writeCell(배치)로 교체(CON-2, 의도적 동작 변경) */
+  /** M-4: 붙여넣기 쓰기 퍼널을 writeCell(배치)로 교체(CON-2, 의도적 동작 변경)
+   * / M-4: replaces the paste write funnel with batched `writeCell` (CON-2, an
+   * intentional behavior change). */
   writeCells?: (patches: Array<{ rowIndex: number; field: string; value: any }>) => number;
+  /** 범위 선택 배선 훅 조회(범위 선택 미사용 시 `null`). / Look up the range-selection wiring hooks (or `null` when range selection is unused). */
   getRangeHooks?: () => RangeKeyboardHooks | null;
 }
 
+/**
+ * 키보드 내비게이션·단축키(복사/붙여넣기/행 이동/범위 선택)를 처리하는 매니저.
+ * / Handles keyboard navigation and shortcuts (copy/paste, row move, range selection).
+ *
+ * `handleKeyDown` 하나로 모든 키 입력을 받아, 클립보드·범위선택 훅·기본 셀 포커스
+ * 이동 순으로 우선순위를 매겨 위임한다.
+ * / A single `handleKeyDown` entry point receives all key input and dispatches by
+ * priority: clipboard shortcuts, range-selection hooks, then plain cell-focus movement.
+ */
 export class KeyboardManager<T extends Record<string, any> = any> {
   private _d: KeyboardDeps<T>;
 
@@ -43,6 +95,21 @@ export class KeyboardManager<T extends Record<string, any> = any> {
     this._d = deps;
   }
 
+  /**
+   * 그리드 컨테이너의 키다운 이벤트를 처리한다. / Handle a keydown event on the grid container.
+   *
+   * 편집 중이면 무시하고, 이후 순서대로 처리한다: 공개 `cellKeyDown` 발행 →
+   * 복사/붙여넣기(Ctrl+C/V) → 범위 채우기(Ctrl+D/R)·범위 확장(Shift+화살표) →
+   * 행 드래그(Ctrl+화살표) → 기본 셀 포커스 이동/Tab/Home/End/PageUp/PageDown →
+   * 체크·선택 토글(Space) → 편집 시작(F2/Enter) → 포커스/범위 해제(Escape).
+   * / While editing, this is a no-op. Otherwise, processing order is: emit the
+   * public `cellKeyDown` event → copy/paste (Ctrl+C/V) → range fill (Ctrl+D/R) /
+   * range extend (Shift+Arrow) → row drag (Ctrl+Arrow) → plain cell-focus movement
+   * (arrows/Tab/Home/End/PageUp/PageDown) → check/select toggle (Space) → start
+   * editing (F2/Enter) → clear focus/range (Escape).
+   *
+   * @param e - 원본 키보드 이벤트 / The originating keyboard event
+   */
   handleKeyDown(e: KeyboardEvent): void {
     const editMgr = this._d.getEditMgr();
     if (editMgr.activeEditor) return;
@@ -233,6 +300,14 @@ export class KeyboardManager<T extends Record<string, any> = any> {
     }
   }
 
+  /**
+   * 현재 선택을 클립보드에 TSV 로 복사한다. / Copy the current selection to the clipboard as TSV.
+   *
+   * 우선순위: 범위 선택(있으면 그 TSV) → 단일 포커스 셀 값 → 다중 선택 행(TSV).
+   * / Priority: range selection (its TSV, if any) → single focused cell value →
+   * multi-row selection (TSV).
+   * @internal
+   */
   private _copyToClipboard(): void {
     const opts = this._d.getOptions();
     if (!opts.clipboard) return;
@@ -268,6 +343,15 @@ export class KeyboardManager<T extends Record<string, any> = any> {
     if (text) navigator.clipboard?.writeText(text).catch(() => {});
   }
 
+  /**
+   * 클립보드의 TSV 텍스트를 붙여넣는다. / Paste TSV text from the clipboard.
+   *
+   * 범위 선택이 있으면 범위 붙여넣기(타일 전개)가 우선하고, 그렇지 않으면 포커스
+   * 셀을 기준으로 배치 `writeCells` 를 호출한다.
+   * / Range paste (tiled expansion) takes priority when a range is selected;
+   * otherwise this calls batched `writeCells` anchored at the focus cell.
+   * @internal
+   */
   private _pasteFromClipboard(): void {
     const opts = this._d.getOptions();
     if (!opts.clipboard || !opts.editable) return;

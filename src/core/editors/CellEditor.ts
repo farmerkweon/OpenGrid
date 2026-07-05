@@ -5,19 +5,28 @@ export { SelectEditor } from './SelectEditor.js';
 import { DateEditor } from './DateEditor.js';
 import { SelectEditor } from './SelectEditor.js';
 
+/** 편집 결과(커밋 여부 + 값). / Edit result (whether committed + value). */
 export interface EditorResult {
+  /** 커밋(확정) 여부. / Whether committed. */
   committed: boolean;
+  /** 편집된 값. / Edited value. */
   value: any;
 }
 
+/** 셀 에디터 인터페이스 — 편집 위젯 수명 관리. / Cell editor interface — manages the edit widget lifecycle. */
 export interface CellEditor {
+  /** 컨테이너에 편집 위젯을 마운트한다. / Mount the edit widget into the container. */
   mount(container: HTMLElement, ctx: RenderContext, onCommit: (value: any) => void, onCancel: () => void): void;
+  /** 현재 편집 값을 반환한다. / Return the current edit value. */
   getValue(): any;
+  /** 편집 위젯에 포커스한다. / Focus the edit widget. */
   focus(): void;
+  /** 편집 위젯을 정리한다. / Tear down the edit widget. */
   destroy(): void;
 }
 
 // ─── TextEditor ───────────────────────────────────────────
+/** 텍스트 입력 에디터. / Text input editor. */
 export class TextEditor implements CellEditor {
   private input!: HTMLInputElement;
   private _onCommit!: (v: any) => void;
@@ -69,6 +78,7 @@ export class TextEditor implements CellEditor {
 }
 
 // ─── NumberEditor ─────────────────────────────────────────
+/** 숫자 입력 에디터(min/max/step 지원). / Number input editor (supports min/max/step). */
 export class NumberEditor implements CellEditor {
   private input!: HTMLInputElement;
   private _onCommit!: (v: any) => void;
@@ -126,6 +136,7 @@ export class NumberEditor implements CellEditor {
 
 
 // ─── CheckboxEditor ───────────────────────────────────────
+/** 체크박스 에디터(change 즉시 커밋). / Checkbox editor (commits immediately on change). */
 export class CheckboxEditor implements CellEditor {
   private chk!: HTMLInputElement;
   private _onCommit!: (v: any) => void;
@@ -159,16 +170,25 @@ export class CheckboxEditor implements CellEditor {
  *  - number 는 def 가 있으면 min/max/step 을 옵션으로, 없으면 기본 NumberEditor.
  *  - select 는 def 가 있으면 def.options, 없으면 col.options 를 쓴다(원 switch 와 동일).
  */
+/** 셀 에디터 팩토리 시그니처 `(col, def?) => CellEditor`. / Cell-editor factory signature `(col, def?) => CellEditor`. */
 export type EditorFactory = (col: ColumnDef, def?: EditorDef) => CellEditor;
 
 const _editorRegistry = new Map<string, EditorFactory>();
 
-/** 커스텀 셀 에디터 타입을 코어 편집 없이 등록(OCP). 프로세스 전역. */
+/**
+ * 커스텀 셀 에디터 타입을 코어 편집 없이 등록(OCP). 프로세스 전역.
+ * / Register a custom cell-editor type without editing core (OCP). Process-global.
+ *
+ * @param typeName - 에디터 타입 이름(예: 'color') / Editor type name (e.g. 'color')
+ * @param factory - 에디터 팩토리 / Editor factory
+ * @example
+ * registerEditor('color', () => new TextEditor());
+ */
 export function registerEditor(typeName: string, factory: EditorFactory): void {
   _editorRegistry.set(typeName, factory);
 }
 
-/** 등록 여부 조회(내부/테스트용). */
+/** 에디터 타입 등록 여부 조회(내부/테스트용). / Whether an editor type is registered (internal/test use). */
 export function hasEditor(typeName: string): boolean {
   return _editorRegistry.has(typeName);
 }
@@ -188,6 +208,13 @@ registerEditor('checkbox', () => new CheckboxEditor());
 registerEditor('select',   (col, def) => new SelectEditor((def ? def.options : col.options) ?? [], col.optionsFn as any));
 
 // ─── Editor 팩토리 ────────────────────────────────────────
+/**
+ * 컬럼 정의로부터 셀 에디터를 생성한다(레지스트리 해석, 미등록 시 TextEditor 폴백).
+ * / Create a cell editor from a column definition (registry resolution; falls back to TextEditor when unregistered).
+ *
+ * @param col - 컬럼 정의 / Column definition
+ * @returns 셀 에디터 / A cell editor
+ */
 export function createEditor(col: ColumnDef): CellEditor {
   const editor = col.editor;
   let name: string;

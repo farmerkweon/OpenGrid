@@ -25,7 +25,7 @@
 //   → '12******90'
 // ============================================================
 
-/** 지원 마스킹 타입 */
+/** 지원 마스킹 타입. / Supported masking types. */
 export type MaskType =
   | 'ssn'       // 주민등록번호: 930101-1******
   | 'phone'     // 전화번호: 010-****-5678
@@ -38,23 +38,24 @@ export type MaskType =
   | 'ip'        // IP 주소: 192.168.***.***
   | 'partial';  // 부분 마스킹 (visiblePrefix/visibleSuffix 지정)
 
-/** 마스킹 상세 옵션 */
+/** 마스킹 상세 옵션. / Detailed masking options. */
 export interface MaskDef {
+  /** 마스킹 타입. / Masking type. */
   type: MaskType;
-  /** 마스킹 치환 문자 (기본: '*') */
+  /** 마스킹 치환 문자. 기본 '*'. / Masking replacement character. Default '*'. @defaultValue '*' */
   char?: string;
-  /** partial/account: 앞 N자리 표시 */
+  /** partial/account: 앞 N자리 표시. / partial/account: reveal the first N characters. */
   visiblePrefix?: number;
-  /** partial/account: 뒤 N자리 표시 */
+  /** partial/account: 뒤 N자리 표시. / partial/account: reveal the last N characters. */
   visibleSuffix?: number;
 }
 
 /**
- * 원본 값에 마스킹을 적용해 표시용 문자열을 반환.
+ * 원본 값에 마스킹을 적용해 표시용 문자열을 반환. / Apply masking to a raw value and return a display string.
  *
- * @param value   원본 값 (null/undefined → 빈 문자열 그대로 반환)
- * @param maskDef 마스킹 타입 또는 상세 옵션
- * @returns       마스킹된 문자열
+ * @param value - 원본 값 (null/undefined → 빈 문자열 그대로 반환) / Raw value (null/undefined → empty string)
+ * @param maskDef - 마스킹 타입 또는 상세 옵션 / Masking type or detailed options
+ * @returns 마스킹된 문자열 / The masked string
  *
  * @example
  * applyMask('930101-1234567', 'ssn')   // '930101-1******'

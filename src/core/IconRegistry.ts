@@ -26,20 +26,26 @@
 
 import { BOOTSTRAP_ICONS, ICON_VIEWBOX } from './icons/bootstrap-icons.js';
 
-/** render() 옵션. size 미지정 시 svg 는 viewBox/CSS 로 크기를 상속(width/height 속성 생략). */
+/**
+ * render() 옵션. size 미지정 시 svg 는 viewBox/CSS 로 크기를 상속(width/height 속성 생략).
+ * / render() options. When size is omitted, the svg inherits its size from viewBox/CSS (width/height attrs skipped).
+ */
 export interface IconRenderOptions {
-  /** px 정사각 크기(width=height). 미지정 시 속성 생략(CSS/컨테이너가 결정). */
+  /** px 정사각 크기(width=height). 미지정 시 속성 생략(CSS/컨테이너가 결정). / Square size in px (width=height); omitted when unset (CSS/container decides). */
   size?: number;
-  /** 접근성 제목. 지정 시 <title> + role="img" 추가(스크린리더). 미지정 시 장식용(부모가 aria 담당). */
+  /** 접근성 제목. 지정 시 <title> + role="img" 추가(스크린리더). 미지정 시 장식용(부모가 aria 담당). / Accessible title; adds <title> + role="img" when set (screen readers). Decorative otherwise (parent owns aria). */
   title?: string;
-  /** true → SVGElement(DOMParser) 반환. 기본 false → SVG 마크업 문자열. */
+  /** true → SVGElement(DOMParser) 반환. 기본 false → SVG 마크업 문자열. / true → return an SVGElement (DOMParser). Default false → SVG markup string. @defaultValue false */
   el?: boolean;
 }
 
 /**
  * 시맨틱 ROLE → 아이콘 key(`BOOTSTRAP_ICONS` 의 symbolId) 기본 매핑.
+ * / Default map of semantic ROLE → icon key (a `BOOTSTRAP_ICONS` symbolId).
+ *
  * 렌더 코드는 이 역할 이름만 참조한다. key 교체는 이 표(혹은 register/setIcon)만 고치면 된다.
  * 참고 스왑: `row.delete`→`trash3`(Bootstrap 의 표준 휴지통, task 의 'trash' 동족), `chart.line`→`graph-up`.
+ * / Render code references only these role names; swapping a glyph means editing this table (or register/setIcon).
  */
 export const DEFAULT_ICON_ROLES: Readonly<Record<string, string>> = {
   // 정렬
@@ -131,11 +137,20 @@ function _escapeAttr(s: string): string {
 
 /**
  * IconRegistry — role → 글리프 본문(inner SVG markup) 해석 + svg 래핑.
+ * / IconRegistry — resolves role → glyph body (inner SVG markup) and wraps it in an svg.
  *
  * 저장 단위는 **글리프 본문 문자열**(<path>/<g> 마크업). register(role, svgOrKey) 는
  *   - svgOrKey 가 `BOOTSTRAP_ICONS` 의 알려진 key 면 그 본문으로,
  *   - 아니면 **원시 SVG 본문**(사용자 커스텀 <path…>)으로 저장한다.
  * 부모 체인(_parent)으로 per-instance 오버라이드 레지스트리를 전역 위에 얹는다(멀티그리드 격리).
+ * / The storage unit is the glyph body string (<path>/<g> markup). register(role, svgOrKey) stores either
+ * the body of a known `BOOTSTRAP_ICONS` key, or the raw SVG body otherwise. A parent chain (_parent) layers
+ * a per-instance override registry on top of the global one (multi-grid isolation).
+ *
+ * @example
+ * const reg = iconRegistry.child();
+ * reg.register('sort.asc', 'arrow-up');
+ * const svg = reg.render('sort.asc', { size: 16 }) as string;
  */
 export class IconRegistry {
   private _roles = new Map<string, string>(); // role → glyph body
@@ -149,6 +164,12 @@ export class IconRegistry {
   /**
    * role 에 글리프를 등록/교체. svgOrKey 가 알려진 아이콘 key 면 그 본문을, 아니면 원시 SVG
    * 본문 마크업으로 간주한다(코어 편집 없이 아이콘 교체 — OCP).
+   * / Register/replace a glyph for a role. A known icon key resolves to its body; otherwise svgOrKey is
+   * treated as raw SVG body markup (swap icons without editing core — OCP).
+   *
+   * @param role - 시맨틱 역할 키(예: 'sort.asc') / Semantic role key (e.g. 'sort.asc')
+   * @param svgOrKey - 알려진 아이콘 key 또는 원시 SVG 본문 / A known icon key or raw SVG body
+   * @returns 체이닝용 this / this for chaining
    */
   register(role: string, svgOrKey: string): this {
     const body = Object.prototype.hasOwnProperty.call(BOOTSTRAP_ICONS, svgOrKey)
@@ -158,19 +179,25 @@ export class IconRegistry {
     return this;
   }
 
-  /** role 이 (자신 또는 부모 체인에) 등록돼 있는가. */
+  /** role 이 (자신 또는 부모 체인에) 등록돼 있는가. / Whether a role is registered (self or parent chain). */
   has(role: string): boolean {
     return this._roles.has(role) || (this._parent?.has(role) ?? false);
   }
 
-  /** role → 글리프 본문(inner markup). 미등록이면 null(부모 체인까지 조회). */
+  /**
+   * role → 글리프 본문(inner markup). 미등록이면 null(부모 체인까지 조회).
+   * / role → glyph body (inner markup); null if unregistered (searches up the parent chain).
+   *
+   * @param role - 조회할 역할 키 / Role key to resolve
+   * @returns 글리프 본문 또는 null / Glyph body or null
+   */
   resolveBody(role: string): string | null {
     const own = this._roles.get(role);
     if (own !== undefined) return own;
     return this._parent ? this._parent.resolveBody(role) : null;
   }
 
-  /** 이 레지스트리를 부모로 하는 자식(per-instance 오버라이드용) 생성. */
+  /** 이 레지스트리를 부모로 하는 자식(per-instance 오버라이드용) 생성. / Create a child registry with this as parent (for per-instance overrides). */
   child(): IconRegistry {
     return new IconRegistry(undefined, this);
   }
@@ -179,6 +206,12 @@ export class IconRegistry {
    * role 을 `<svg viewBox=ICON_VIEWBOX>` 로 렌더. 기본 반환은 SVG 마크업 문자열(innerHTML 용);
    * opts.el 이면 SVGElement. 미지원 role 은 빈 svg 폴백(never throw).
    * 스킨 토큰: fill=currentColor(presentation attr) + stroke-linejoin=var(--og-icon-corner,miter).
+   * / Render a role as `<svg viewBox=ICON_VIEWBOX>`. Returns SVG markup string by default (for innerHTML);
+   * opts.el returns an SVGElement. Unknown roles fall back to an empty svg (never throws).
+   *
+   * @param role - 렌더할 역할 키 / Role key to render
+   * @param opts - 렌더 옵션 / Render options
+   * @returns SVG 마크업 문자열 또는 SVGElement(opts.el) / SVG markup string, or SVGElement when opts.el
    */
   render(role: string, opts?: IconRenderOptions): string | SVGElement {
     const body = this.resolveBody(role) ?? FALLBACK_BODY;
@@ -199,7 +232,7 @@ export class IconRegistry {
     return markup;
   }
 
-  /** 등록된 role 목록(자신만, 디버깅/테스트용). */
+  /** 등록된 role 목록(자신만, 디버깅/테스트용). / List of registered roles (self only; for debugging/tests). */
   roles(): string[] {
     return [...this._roles.keys()];
   }
@@ -207,12 +240,26 @@ export class IconRegistry {
 
 /**
  * 프로세스 공유 기본 아이콘 레지스트리(시맨틱 role 시드 완료).
+ * / Process-shared default icon registry (seeded with semantic roles).
+ *
  * CellRenderer 등 팩토리 생성 렌더러(인스턴스 컨텍스트 없음)가 이 초크포인트로 아이콘을 얻는다.
  * per-instance 교체는 `grid.setIcon()`(이 레지스트리의 child) 로, 전역 확장은 `defineIconSet()` 로.
+ * / Factory-created renderers (e.g. CellRenderer, without instance context) obtain icons through this
+ * chokepoint. Per-instance swaps go through `grid.setIcon()` (a child of this registry); global extension
+ * through `defineIconSet()`.
  */
 export const iconRegistry = new IconRegistry(DEFAULT_ICON_ROLES);
 
-/** 편의 정적 render — 공유 기본 레지스트리로 위임(`IconRegistry.render(role, opts)`). */
+/**
+ * 편의 정적 render — 공유 기본 레지스트리로 위임(`IconRegistry.render(role, opts)`).
+ * / Convenience static render — delegates to the shared default registry (`IconRegistry.render(role, opts)`).
+ *
+ * @param role - 렌더할 역할 키 / Role key to render
+ * @param opts - 렌더 옵션 / Render options
+ * @returns SVG 마크업 문자열 또는 SVGElement(opts.el) / SVG markup string, or SVGElement when opts.el
+ * @example
+ * el.innerHTML = renderIcon('filter') as string;
+ */
 export function renderIcon(role: string, opts?: IconRenderOptions): string | SVGElement {
   return iconRegistry.render(role, opts);
 }

@@ -1,5 +1,7 @@
 /**
  * DetailManager — F2 마스터/디테일 배선(모듈 경계는 헤드리스 코어 소비만, 재구현 금지).
+ * / DetailManager — F2 master/detail wiring (module boundary: consumes the headless core only;
+ * never reimplement it).
  *
  * 계약 근거:
  *  - docs/design/grid-features-2026-07/11_design_F2_v2.md §3.1(모듈 책임), §3.2(단방향 합성
@@ -7,12 +9,23 @@
  *    §6(공개 API), §7(정렬/필터/그룹/트리 상호작용)
  *  - docs/design/grid-features-2026-07/15_cross_contracts.md C0.3(FlatRowModel 은 baseline
  *    인프라 — DetailManager 는 registerSplice 로 detail head/filler 를 등록할 뿐 소유하지 않는다)
+ * / Contract basis:
+ *  - 11_design_F2_v2.md §3.1 (module responsibility), §3.2 (one-way composition chain —
+ *    group/tree → detail splice → FlatRowModel), §5 (mount-once / skip-rebuild / focus restore),
+ *    §6 (public API), §7 (sort/filter/group/tree interaction)
+ *  - 15_cross_contracts.md C0.3 (FlatRowModel is baseline infra — DetailManager only *registers*
+ *    detail head/filler rows via registerSplice; it does not own the model)
  *
  * 소비하는 헤드리스 코어(src/core/detail/*, 재구현 금지):
  *  - DetailState   : 펼침 상태(Set<rowId>) + maxDepth/expandMultiple 규칙
  *  - spliceDetails : 상류 flat 에 head/filler 의사행 삽입(순수 함수)
  *  - SubgridCache  : mount-once + detach≠delete 서브그리드/host 생명주기
  *  - DetailGlyph   : 글리프/aria 상수(GridRenderer 가 직접 소비, 이 파일은 재노출만)
+ * / Headless core consumed (src/core/detail/*, never reimplement):
+ *  - DetailState   : expanded-state (Set<rowId>) + maxDepth/expandMultiple rules
+ *  - spliceDetails : inserts head/filler pseudo-rows into the upstream flat list (pure function)
+ *  - SubgridCache  : mount-once + detach≠delete lifecycle for subgrids/hosts
+ *  - DetailGlyph   : glyph/aria constants (consumed directly by GridRenderer; this file only re-exports)
  */
 
 import { DetailState } from './detail/DetailState.js';
@@ -21,36 +34,58 @@ import { SubgridCache, type SubgridAdapter } from './detail/SubgridCache.js';
 import type { VirtualScroll } from './VirtualScroll.js';
 import type { FlatRowModel } from './FlatRowModel.js';
 
-/** expandRow/collapseRow/toggleRow/isRowExpanded/getDetailInstance 공통 인자(§6.2, C0.2). */
+/** expandRow/collapseRow/toggleRow/isRowExpanded/getDetailInstance 공통 인자(§6.2, C0.2).
+ * / Common argument shape for expandRow/collapseRow/toggleRow/isRowExpanded/getDetailInstance (§6.2, C0.2). */
 export type DetailRowRef = number | { id: string };
 
+/**
+ * DetailManager 가 OpenGrid 서브시스템을 읽기 위해 주입받는 클로저 묶음. / Closures injected into
+ * DetailManager so it can read OpenGrid subsystem state without owning it directly.
+ */
 export interface DetailManagerDeps<T extends Record<string, any> = any> {
-  /** this._options — masterDetail.* 를 이 안에서 읽는다(옵션 자체는 항상 최신값 참조). */
+  /** this._options — masterDetail.* 를 이 안에서 읽는다(옵션 자체는 항상 최신값 참조).
+   * / this._options — reads masterDetail.* from it (always the latest option values). */
   getOptions: () => any;
   /** Phase 0 baseline. registerSplice 로 detail splice 를 등록하고, count()/resolveFlatRow 로
-   *  rowIndex↔rowId 를 해소한다(F2 는 이 모델의 "소유자"가 아니라 "등록자" — C0.3 정정). */
+   *  rowIndex↔rowId 를 해소한다(F2 는 이 모델의 "소유자"가 아니라 "등록자" — C0.3 정정).
+   * / Phase 0 baseline. Registers the detail splice via registerSplice, and resolves
+   *  rowIndex↔rowId through count()/resolveFlatRow (F2 is a "registrant" of this model,
+   *  not its "owner" — C0.3 correction). */
   getFlatModel: () => FlatRowModel;
+  /** 가상 스크롤 인스턴스(마운트 전이면 null). / Virtual scroll instance (null before mount). */
   getVs: () => VirtualScroll | null;
-  /** DataLayer 가 부여한 stable id 필드값(OpenGrid 의 ROW_ID_FIELD). */
+  /** DataLayer 가 부여한 stable id 필드값(OpenGrid 의 ROW_ID_FIELD). / The stable id field value assigned by DataLayer (OpenGrid's ROW_ID_FIELD). */
   getRowId: (row: T) => string;
-  /** stable rowId → 현재 행(삭제됐으면 undefined). DataLayer.getRowById 위임. */
+  /** stable rowId → 현재 행(삭제됐으면 undefined). DataLayer.getRowById 위임. / stable rowId → current row (undefined if deleted). Delegates to DataLayer.getRowById. */
   getRowById: (rowId: string) => T | undefined;
-  /** group/tree rebuild 와 동일한 관용구 — 전체(0..n-1) 재렌더. */
+  /** group/tree rebuild 와 동일한 관용구 — 전체(0..n-1) 재렌더. / Same idiom as group/tree rebuild — re-renders the full (0..n-1) range. */
   doRenderFull: (n: number) => void;
+  /** 그리드 이벤트 발행. / Emit a grid event. */
   emit: (ev: string, payload: any) => void;
+  /** aria-live 영역에 메시지를 공지. / Announce a message via the aria-live region. */
   announce: (msg: string) => void;
   /** i18n: 깊이 한계/펼침·접힘 announce 메시지 해석. / i18n: resolve depth-limit & expand/collapse announces. */
   t: (key: string, params?: Record<string, string | number>) => string;
-  /** 이 그리드 인스턴스의 중첩 깊이(0=최상위, 부모가 자식 생성 시 depth+1 주입). */
+  /** 이 그리드 인스턴스의 중첩 깊이(0=최상위, 부모가 자식 생성 시 depth+1 주입). / Nesting depth of this grid instance (0 = top level; a parent injects depth+1 when creating a child). */
   getDepth: () => number;
-  /** masterDetail.renderer 의 DetailRenderApi.grid 에 실어줄 인스턴스. */
+  /** masterDetail.renderer 의 DetailRenderApi.grid 에 실어줄 인스턴스. / Instance handed to DetailRenderApi.grid inside masterDetail.renderer. */
   getGridInstance: () => any;
-  /** masterDetail.subgridOptions(§5 ②) 소비 — 순환 import 회피 위해 OpenGrid.ts 가 주입. */
+  /** masterDetail.subgridOptions(§5 ②) 소비 — 순환 import 회피 위해 OpenGrid.ts 가 주입. / Consumes masterDetail.subgridOptions (§5 ②) — injected by OpenGrid.ts to avoid a circular import. */
   createSubgrid?: (host: HTMLElement, subgridOptions: any, depth: number) => any;
 }
 
 let _autoHeightWarned = false;
 
+/**
+ * F2 마스터/디테일 매니저. / F2 master/detail manager.
+ *
+ * 행 펼침 상태(DetailState)를 소유하고, FlatRowModel 합성 체인 끝에 detail head/filler 의사행을
+ * 등록(registerSplice)하며, 펼쳐진 행마다 서브그리드/커스텀 렌더러 host 를 mount-once 로
+ * 생명주기 관리(SubgridCache)한다. / Owns the row expand/collapse state (DetailState), registers
+ * detail head/filler pseudo-rows at the tail of the FlatRowModel composition chain
+ * (registerSplice), and manages the mount-once lifecycle of each expanded row's
+ * subgrid/custom-renderer host (SubgridCache).
+ */
 export class DetailManager<T extends Record<string, any> = any> {
   private _d: DetailManagerDeps<T>;
   private _state: DetailState;
@@ -98,16 +133,19 @@ export class DetailManager<T extends Record<string, any> = any> {
     return this._d.getOptions()?.masterDetail ?? {};
   }
 
-  /** masterDetail.enabled 여부(옵션 자체 — 펼침 개수와 무관). */
+  /** masterDetail.enabled 여부(옵션 자체 — 펼침 개수와 무관). / Whether masterDetail.enabled is set (the option itself — independent of how many rows are expanded). */
   get enabled(): boolean {
     return this._mdOpts().enabled === true;
   }
 
-  /** §3.2 v2: "isActive" = 기능 on + 실제 펼침 ≥1(FlatRowModel 합성/렌더 분기 판단용). */
+  /** §3.2 v2: "isActive" = 기능 on + 실제 펼침 ≥1(FlatRowModel 합성/렌더 분기 판단용).
+   * / §3.2 v2: "isActive" = feature on AND at least one row expanded (used to branch
+   *  FlatRowModel composition/rendering). */
   get isActive(): boolean {
     return this.enabled && this._state.size > 0;
   }
 
+  /** 현재 설정된 최대 중첩 깊이. / Currently configured maximum nesting depth. */
   get maxDepth(): number { return this._state.maxDepth; }
 
   // ── rowRef(C0.2 flat index | stable id) 해소 ──────────────────────
@@ -119,16 +157,35 @@ export class DetailManager<T extends Record<string, any> = any> {
     return ref?.id ?? null;
   }
 
+  /** stable rowId 기준 펼침 여부. / Whether the row is expanded, keyed by stable rowId.
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @returns 펼쳐져 있으면 true / True if the row is expanded
+   */
   isExpandedId(rowId: string): boolean {
     return this._state.isExpanded(rowId);
   }
 
+  /** rowRef(flat index 또는 stable id) 기준 펼침 여부. / Whether the row is expanded, keyed by rowRef (flat index or stable id).
+   *
+   * @param ref - flat index 또는 `{ id }` 형태의 행 참조(C0.2) / Row reference as a flat index or `{ id }` (C0.2)
+   * @returns 펼쳐져 있으면 true / True if the row is expanded
+   */
   isRowExpanded(ref: DetailRowRef): boolean {
     const id = this._resolveRowId(ref);
     return id != null && this._state.isExpanded(id);
   }
 
   // ── 공개 토글 API(§6.2, FR-5/FR-6/FR-10) ──────────────────────────
+  /**
+   * 지정 행을 펼친다. / Expand the given row.
+   *
+   * maxDepth 초과면 렌더러 진입 전에 거부하고(자식 패널 미생성) announce 로 알린다(CON-4/FR-10).
+   * / If maxDepth would be exceeded, the expansion is rejected before reaching the renderer
+   * (no child panel is created) and the rejection is announced (CON-4/FR-10).
+   *
+   * @param ref - flat index 또는 `{ id }` 형태의 행 참조 / Row reference as a flat index or `{ id }`
+   */
   expandRow(ref: DetailRowRef): void {
     if (!this.enabled) return;
     const id = this._resolveRowId(ref);
@@ -142,6 +199,11 @@ export class DetailManager<T extends Record<string, any> = any> {
     this._afterToggle(id, 'expanded');
   }
 
+  /**
+   * 지정 행을 접는다. / Collapse the given row.
+   *
+   * @param ref - flat index 또는 `{ id }` 형태의 행 참조 / Row reference as a flat index or `{ id }`
+   */
   collapseRow(ref: DetailRowRef): void {
     const id = this._resolveRowId(ref);
     if (id == null || !this._state.isExpanded(id)) return;
@@ -155,6 +217,11 @@ export class DetailManager<T extends Record<string, any> = any> {
     this._afterToggle(id, 'collapsed');
   }
 
+  /**
+   * 펼침/접힘 상태를 반전한다. / Toggle the row's expanded/collapsed state.
+   *
+   * @param ref - flat index 또는 `{ id }` 형태의 행 참조 / Row reference as a flat index or `{ id }`
+   */
   toggleRow(ref: DetailRowRef): void {
     const id = this._resolveRowId(ref);
     if (id == null) return;
@@ -162,6 +229,7 @@ export class DetailManager<T extends Record<string, any> = any> {
     else this.expandRow(ref);
   }
 
+  /** 펼쳐진 모든 행을 접는다(변경 없으면 no-op). / Collapse every currently expanded row (no-op if none are expanded). */
   collapseAllDetails(): void {
     const ids = this._state.collapseAll();
     if (ids.length === 0) return;
@@ -176,6 +244,13 @@ export class DetailManager<T extends Record<string, any> = any> {
     this._d.announce(this._d.t('detail.collapsedAllAnnounce'));
   }
 
+  /**
+   * 펼쳐진 행의 서브그리드/커스텀 렌더러 인스턴스를 조회한다. / Look up the subgrid or custom-renderer
+   * instance mounted for an expanded row.
+   *
+   * @param ref - flat index 또는 `{ id }` 형태의 행 참조 / Row reference as a flat index or `{ id }`
+   * @returns 마운트된 인스턴스, 없으면 `undefined` / The mounted instance, or `undefined`
+   */
   getDetailInstance<D = any>(ref: DetailRowRef): D | undefined {
     const id = this._resolveRowId(ref);
     if (id == null) return undefined;
@@ -184,14 +259,24 @@ export class DetailManager<T extends Record<string, any> = any> {
 
   /** FR-11 공개 계약 — 실제로는 리사이즈 이후 발생하는 통상 재렌더가 panel width 를 최신
    *  totalColWidth 로 이미 재계산하므로(§4.3 GridRenderer 가 매 렌더 폭을 새로 그린다), 여기선
-   *  강제 재렌더 1회로 계약을 만족시킨다(중복 상태 없이 단일 진실원 유지). */
+   *  강제 재렌더 1회로 계약을 만족시킨다(중복 상태 없이 단일 진실원 유지).
+   * / FR-11 public contract — in practice, the normal re-render that follows a resize already
+   *  recomputes panel width against the latest totalColWidth (§4.3: GridRenderer redraws width on
+   *  every render), so this simply forces one re-render to satisfy the contract (no duplicate
+   *  state; single source of truth is preserved). */
   resyncPanelWidths(): void {
     if (!this.isActive) return;
     this._rebuildAndRender();
   }
 
   // ── 서브그리드/렌더러 콘텐츠(mount-once, §5) ──────────────────────
-  /** GridRenderer 가 detailHead 를 그릴 때 호출 — 영속 host 를 최초 1회만 만들고 이후 재사용. */
+  /** GridRenderer 가 detailHead 를 그릴 때 호출 — 영속 host 를 최초 1회만 만들고 이후 재사용.
+   * / Called by GridRenderer when it draws a detailHead — creates the persistent host only
+   *  once and reuses it thereafter.
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @returns 재사용 가능한 host div / A reusable host div
+   */
   getPanelHost(rowId: string): HTMLElement {
     let host = this._hosts.get(rowId);
     if (!host) {
@@ -238,7 +323,11 @@ export class DetailManager<T extends Record<string, any> = any> {
 
   /** §5(4) skip-rebuild(FR-8/NFR-2, MCCONNELL-04 → Phase1 승격): renderBody teardown 직전
    *  호출된다. 편집 중인 host 는 detach 자체를 회피(document.body 로 hoist, 연결 유지 → blur
-   *  없음) 하고, 그 외는 정상 detach(연결 끊음, 참조는 Map 이 쥐고 있어 파괴 아님). */
+   *  없음) 하고, 그 외는 정상 detach(연결 끊음, 참조는 Map 이 쥐고 있어 파괴 아님).
+   * / §5(4) skip-rebuild (FR-8/NFR-2, MCCONNELL-04 → promoted to Phase1): called immediately
+   *  before renderBody teardown. A host that is currently being edited avoids detach altogether
+   *  (hoisted into document.body, staying connected → no blur); every other host is detached
+   *  normally (disconnected, but not destroyed — the Map still holds the reference). */
   onBeforeTeardown(): void {
     for (const [rowId, host] of this._hosts) {
       if (!this._cache.isAttached(rowId)) continue;
@@ -250,13 +339,26 @@ export class DetailManager<T extends Record<string, any> = any> {
     }
   }
 
+  /** 서브그리드/커스텀 렌더러 인스턴스가 현재 편집 중인지 여부. / Whether the subgrid/custom-renderer
+   * instance for a row is currently being edited.
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @returns 편집 중이면 true / True if currently being edited
+   */
   isEditing(rowId: string): boolean {
     const instance = this._cache.getInstance(rowId);
     return !!instance && typeof instance.isEditing === 'function' && !!instance.isEditing();
   }
 
   /** collapse 직후 렌더가 끝난 뒤 호출 — FR-9: 패널 내부에 포커스가 있었으면 해당 마스터 행의
-   *  expander 로 복원한다. GridRenderer 가 expander 엘리먼트를 렌더한 다음 프레임에 호출. */
+   *  expander 로 복원한다. GridRenderer 가 expander 엘리먼트를 렌더한 다음 프레임에 호출.
+   * / Called right after the render that follows a collapse — FR-9: if focus had been inside the
+   *  panel, restore it to that master row's expander. GridRenderer calls this on the frame after
+   *  it renders the expander element.
+   *
+   * @returns 포커스를 복원해야 할 행의 stable id, 없으면 `null` / Stable id of the row whose focus
+   *  should be restored, or `null`
+   */
   consumePendingFocusRestore(): string | null {
     const id = this._focusPendingRestore;
     this._focusPendingRestore = null;
@@ -304,6 +406,8 @@ export class DetailManager<T extends Record<string, any> = any> {
     this._d.doRenderFull(total);
   }
 
+  /** 모든 서브그리드/커스텀 렌더러 인스턴스를 파괴하고 host 캐시를 비운다.
+   * / Destroy every subgrid/custom-renderer instance and clear the host cache. */
   destroy(): void {
     this._cache.destroyAll();
     this._hosts.clear();

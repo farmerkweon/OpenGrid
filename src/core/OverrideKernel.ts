@@ -13,17 +13,22 @@
  * 인스턴스 프로퍼티로 shadowing(순수 런타임 래핑, C1-clean) 한다. 소스 본문 0줄 수정.
  */
 
+/** override 커널의 호스트(임의 메서드를 가진 객체, 보통 OpenGrid 인스턴스). / Host of the override kernel (an object with arbitrary methods, usually an OpenGrid instance). */
 export interface OverrideKernelHost {
   [name: string]: any;
 }
 
-/** override() 호출 시 레이어가 받는 함수 시그니처: 첫 인자는 안쪽(원본 근접) 함수. */
+/**
+ * override() 호출 시 레이어가 받는 함수 시그니처: 첫 인자는 안쪽(원본 근접) 함수.
+ * / Layer function signature received by override(): the first argument is the inner (closest-to-original) function.
+ */
 export type OverrideLayer = (orig: (...args: any[]) => any, ...args: any[]) => any;
 
+/** override 옵션. / Override options. */
 export interface OverrideOptions {
-  /** 동일 name 재진입을 허용(정당한 재귀). 기본 false. */
+  /** 동일 name 재진입을 허용(정당한 재귀). 기본 false. / Allow re-entry for the same name (legitimate recursion). Default false. @defaultValue false */
   reentrant?: boolean;
-  /** 'fallback' → 레이어 예외 시 경고 후 orig 실행(멱등 가정). 미지정 시 strict(전파). */
+  /** 'fallback' → 레이어 예외 시 경고 후 orig 실행(멱등 가정). 미지정 시 strict(전파). / 'fallback' → on layer exception, warn then run orig (idempotent assumption); otherwise strict (propagate). */
   onError?: 'fallback';
 }
 
@@ -32,6 +37,18 @@ interface LayerEntry {
   opts: OverrideOptions;
 }
 
+/**
+ * `grid.override()` 확장 커널. / The `grid.override()` extension kernel.
+ *
+ * OpenGrid 인스턴스를 host 로 받아 프로토타입 메서드를 인스턴스 프로퍼티로 shadowing 한다
+ * (순수 런타임 래핑, 소스 본문 0줄 수정). FIFO 합성 + 재진입 가드 + 에러 격리를 제공한다.
+ * / Takes an OpenGrid instance as host and shadows prototype methods with instance properties
+ * (pure runtime wrapping, zero source edits). Provides FIFO composition, re-entry guarding, and error isolation.
+ *
+ * @example
+ * const k = new OverrideKernel(grid);
+ * k.override('setData', (orig, rows) => orig(rows.filter(r => r.active)));
+ */
 export class OverrideKernel {
   private _host: OverrideKernelHost;
   /** name → this-bound 원본 함수 (최초 1회 보존) */
@@ -49,6 +66,10 @@ export class OverrideKernel {
   /** F3: 재귀 깊이 제한 */
   private _maxDepth: number;
 
+  /**
+   * @param host - override 대상 호스트 객체 / Host object to override
+   * @param opts - strict(기본 true, 예외 전파) / maxDepth(기본 32, 재귀 깊이 제한) / strict (default true, propagate) / maxDepth (default 32, recursion depth limit)
+   */
   constructor(host: OverrideKernelHost, opts?: { strict?: boolean; maxDepth?: number }) {
     this._host = host;
     this._strict = opts?.strict ?? true;
@@ -56,11 +77,17 @@ export class OverrideKernel {
   }
 
   /**
-   * 메서드 override 등록.
-   * 1. 최초 1회 원본을 this-bound 로 보존.
-   * 2. 레이어 push (FIFO 등록순).
-   * 3. reduce 좌측폴드로 합성(나중 등록 = 최외곽).
-   * 4. 재진입 가드 + 에러 격리로 감싼 dispatcher 를 host[name] 인스턴스 프로퍼티에 할당.
+   * 메서드 override 등록. / Register a method override.
+   *
+   * 1. 최초 1회 원본을 this-bound 로 보존. / Preserve the original once, this-bound.
+   * 2. 레이어 push (FIFO 등록순). / Push the layer (FIFO registration order).
+   * 3. reduce 좌측폴드로 합성(나중 등록 = 최외곽). / Compose via reduce left-fold (later registration = outermost).
+   * 4. 재진입 가드 + 에러 격리로 감싼 dispatcher 를 host[name] 인스턴스 프로퍼티에 할당. / Assign a re-entry-guarded, error-isolated dispatcher to the host[name] instance property.
+   *
+   * @param name - override 대상 메서드명 / Method name to override
+   * @param fn - override 레이어(첫 인자는 안쪽 orig) / Override layer (first arg is the inner orig)
+   * @param opts - override 옵션 / Override options
+   * @returns 체이닝용 host / The host for chaining
    */
   override(name: string, fn: OverrideLayer, opts: OverrideOptions = {}): OverrideKernelHost {
     if (typeof fn !== 'function') {
@@ -139,7 +166,13 @@ export class OverrideKernel {
     };
   }
 
-  /** strategy 슬롯 등록 (Phase 2 매니저 배선용 API). */
+  /**
+   * strategy 슬롯 등록(매니저 배선용 API). / Register a strategy slot (manager-wiring API).
+   *
+   * @param slot - 전략 슬롯 이름 / Strategy slot name
+   * @param fn - 전략 함수 / Strategy function
+   * @returns 체이닝용 host / The host for chaining
+   */
   strategy(slot: string, fn: Function): OverrideKernelHost {
     if (typeof fn !== 'function') {
       throw new TypeError(`OverrideKernel.strategy: fn for "${slot}" must be a function`);
@@ -148,17 +181,28 @@ export class OverrideKernel {
     return this._host;
   }
 
-  /** strategy 슬롯 조회 — 미등록 시 fallback 반환 (매니저 read API). */
+  /**
+   * strategy 슬롯 조회 — 미등록 시 fallback 반환(매니저 read API). / Read a strategy slot — returns fallback when unregistered (manager read API).
+   *
+   * @param slot - 전략 슬롯 이름 / Strategy slot name
+   * @param fallback - 미등록 시 반환할 기본 함수 / Default function returned when unregistered
+   * @returns 등록된 전략 또는 fallback / The registered strategy or fallback
+   */
   getStrategy<F extends Function>(slot: string, fallback: F): F {
     return (this._strategies.get(slot) as F) ?? fallback;
   }
 
-  /** 슬롯 등록 여부. */
+  /** 전략 슬롯 등록 여부. / Whether a strategy slot is registered. */
   hasStrategy(slot: string): boolean {
     return this._strategies.has(slot);
   }
 
-  /** 단일 메서드 원본 복구. 없으면 no-op. */
+  /**
+   * 단일 메서드 원본 복구. 없으면 no-op. / Restore a single method's original; no-op if absent.
+   *
+   * @param name - 복구할 메서드명 / Method name to restore
+   * @returns 체이닝용 host / The host for chaining
+   */
   restore(name: string): OverrideKernelHost {
     if (!this._originals.has(name)) return this._host;
     if (this._hadOwn.get(name)) {
@@ -174,7 +218,7 @@ export class OverrideKernel {
     return this._host;
   }
 
-  /** 전체 복구 + strategy clear. destroy 시 호출. */
+  /** 전체 복구 + strategy clear. destroy 시 호출. / Restore everything + clear strategies; called on destroy. */
   restoreAll(): OverrideKernelHost {
     for (const n of [...this._originals.keys()]) this.restore(n);
     this._strategies.clear();
@@ -182,12 +226,12 @@ export class OverrideKernel {
     return this._host;
   }
 
-  /** override 등록 여부. */
+  /** 해당 메서드가 override 등록돼 있는가. / Whether the given method is overridden. */
   hasOverride(name: string): boolean {
     return this._originals.has(name);
   }
 
-  /** override 등록된 메서드 이름 목록. */
+  /** override 등록된 메서드 이름 목록. / List of overridden method names. */
   getOverrideNames(): string[] {
     return [...this._originals.keys()];
   }

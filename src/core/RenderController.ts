@@ -23,6 +23,17 @@ import type { GridOptions } from './types.js';
  * 값(컬럼폭·옵션 등)은 늦은-null / 재할당(worksheet 전환 시 colLayout 교체)을 견디도록
  * 전부 getter 클로저로 읽는다. `fallbackViewportHeight` 클램프 시맨틱과 RenderFrame 구성은
  * 원본과 1:1 동일하다(회귀 0).
+ * / Dependency contract for the sole entry point of the render loop (R5, §3.1 C4, §6-R5),
+ * moving `_onResize`/`_recalcWidths`/`_renderHeader`/`_syncHeaderLayout`/`_doRender`/`_visRange`
+ * (plus the private helpers `_visCount`/`_paginationHeight`) out of the `OpenGrid` God object
+ * with **behavior unchanged**.
+ *
+ * Strangler principle (A2): collaborators (GridRenderer/VirtualScroll/Pagination, etc.) are
+ * still created and owned by `OpenGrid._mount`; they are only **injected** here via the
+ * `*Deps` closure-inversion pattern. Values (column widths, options, etc.) are all read
+ * through getter closures so they tolerate late-null / reassignment (colLayout swap on
+ * worksheet switch). The `fallbackViewportHeight` clamp semantics and RenderFrame construction
+ * are 1:1 identical to the original (zero regression).
  */
 export interface RenderControllerDeps<T extends Record<string, any> = any> {
   getContainer: () => HTMLElement;
@@ -36,6 +47,7 @@ export interface RenderControllerDeps<T extends Record<string, any> = any> {
   getMergeEngine: () => MergeEngine;
   getColWidths: () => number[];
   setColWidths: (widths: number[]) => void;
+  /** 사용자가 직접 조절한 컬럼폭(리사이즈 시 보존 대상). / User-resized column widths (preserved across recalcWidths). */
   getUserWidths: () => Map<string, number>;
   getSfMgr: () => SortFilterManager<T>;
   getRowMgr: () => RowManager<T>;
@@ -43,10 +55,19 @@ export interface RenderControllerDeps<T extends Record<string, any> = any> {
   getGrpMgr: () => GroupTreeManager<T>;
   getDetailMgr: () => DetailManager<T>;
   getRangeMgr: () => RangeSelectionManager<T>;
+  /** F2: detail 렌더 컨텍스트 조립(비활성 시 undefined). / F2: build the detail render context (undefined when inactive). */
   buildDetailRenderContext: () => DetailRenderContext | undefined;
+  /** 푸터 합계 영역 재렌더. / Re-render the footer summary area. */
   renderFooterEl: () => void;
 }
 
+/**
+ * 렌더 루프의 유일 진입점. / Sole entry point of the render loop.
+ *
+ * 리사이즈·헤더/본문 렌더·뷰포트 높이 동기화·가시 범위 계산을 담당한다(R5).
+ * / Handles resize, header/body rendering, viewport-height sync, and visible-range
+ * computation (R5).
+ */
 export class RenderController<T extends Record<string, any> = any> {
   private _deps: RenderControllerDeps<T>;
   private _autoHeightWarned = false;
@@ -55,10 +76,16 @@ export class RenderController<T extends Record<string, any> = any> {
     this._deps = deps;
   }
 
+  /** @internal */
   private _paginationHeight(): number {
     return this._deps.getOptions().pagination ? 38 : 0;
   }
 
+  /**
+   * 컨테이너 리사이즈에 반응해 폭 재계산 → 헤더 재렌더 → 본문 재렌더를 수행한다.
+   * / Responds to a container resize: recalculates widths, re-renders the header, then
+   * re-renders the body.
+   */
   onResize(): void {
     const { width } = this._deps.getContainer().getBoundingClientRect();
     if (!width) return;
@@ -69,6 +96,14 @@ export class RenderController<T extends Record<string, any> = any> {
     this.doRender(...this.visRange());
   }
 
+  /**
+   * 전체 폭에서 고정 UI 요소(state/드래그/행번호/체크 컬럼)를 뺀 뒤 컬럼폭을 재계산한다.
+   * 사용자가 직접 조절한 폭은 보존한다.
+   * / Recalculate column widths from the total width minus fixed UI elements (state/drag/
+   * row-number/check columns). User-resized widths are preserved.
+   *
+   * @param totalWidth - 컨테이너 전체 폭(px) / Total container width in px
+   */
   recalcWidths(totalWidth: number): void {
     const colLayout = this._deps.getColLayout();
     const options = this._deps.getOptions();
@@ -91,7 +126,9 @@ export class RenderController<T extends Record<string, any> = any> {
     this._deps.setColWidths(widths);
   }
 
-  // 헤더(컬럼 제목 행)를 다시 그린다
+  /**
+   * 헤더(컬럼 제목 행)를 다시 그린다. / Re-render the header (column title row).
+   */
   renderHeader(): void {
     const renderer = this._deps.getRenderer();
     const colLayout = this._deps.getColLayout();
@@ -112,6 +149,10 @@ export class RenderController<T extends Record<string, any> = any> {
    * 렌더된 헤더의 실제 높이를 측정해 본문(bodyWrap) 높이와 뷰포트 높이에 반영한다.
    * 줄바꿈이 없는 헤더는 측정 높이가 headerHeight 이하라 기존 고정 동작과 동일하다.
    * (public: OpenGrid 가 `_syncHeaderLayout` 위임으로 노출 — 특성화 테스트가 직접 호출한다.)
+   * / Measures the rendered header's actual height and applies it to the body (bodyWrap)
+   * height and viewport height. Headers without wrapping measure at or below `headerHeight`,
+   * so existing fixed-height behavior is unchanged. (Public: `OpenGrid` exposes this via a
+   * `_syncHeaderLayout` delegate — characterization tests call it directly.)
    */
   syncHeaderLayout(): void {
     const renderer = this._deps.getRenderer();
@@ -140,6 +181,14 @@ export class RenderController<T extends Record<string, any> = any> {
     vs.setViewportHeight(vpHeight);
   }
 
+  /**
+   * 지정 범위의 본문 행을 렌더한다(autoHeight 활성 시 범위 인자를 무시하고 전체 행을 렌더).
+   * / Render body rows within the given range (when autoHeight is active, the range
+   * arguments are ignored and all rows are rendered).
+   *
+   * @param startIndex - 렌더 시작 flat index / Starting flat index to render
+   * @param endIndex - 렌더 끝 flat index / Ending flat index to render
+   */
   doRender(startIndex: number, endIndex: number): void {
     const renderer = this._deps.getRenderer();
     const vs = this._deps.getVs();
@@ -198,7 +247,11 @@ export class RenderController<T extends Record<string, any> = any> {
     this._deps.getRangeMgr().repaint();
   }
 
-  // 현재 화면에 보이는 행 범위를 반환한다
+  /**
+   * 현재 화면에 보이는 행 범위를 반환한다. / Return the currently visible row range.
+   *
+   * @returns `[시작, 끝]` flat index 쌍 / `[start, end]` flat index pair
+   */
   visRange(): [number, number] {
     const options = this._deps.getOptions();
     const pagination = this._deps.getPagination();
@@ -218,6 +271,7 @@ export class RenderController<T extends Record<string, any> = any> {
     return [r?.startIndex ?? 0, Math.min((r?.endIndex ?? 30) + this._visCount() + 5, total - 1)];
   }
 
+  /** @internal */
   private _visCount(): number {
     const options = this._deps.getOptions();
     const h = this._deps.getContainer().getBoundingClientRect().height;

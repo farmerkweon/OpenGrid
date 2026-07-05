@@ -13,13 +13,25 @@ export function ctxT(ctx: RenderContext, key: string, params?: Record<string, st
   return ctx.t ? ctx.t(key, params) : _globalT(key, params);
 }
 
+/**
+ * 셀 렌더러/에디터에 전달되는 렌더 컨텍스트. / Render context passed to cell renderers/editors.
+ *
+ * @typeParam T - 행 데이터 타입 / Row data type
+ */
 export interface RenderContext<T = any> {
+  /** 셀 원시 값. / Raw cell value. */
   value: any;
+  /** 행 데이터. / Row data. */
   row: T;
+  /** flat 행 인덱스. / Flat row index. */
   rowIndex: number;
+  /** 컬럼 정의. / Column definition. */
   column: ColumnDef<T>;
+  /** 컬럼 인덱스. / Column index. */
   colIndex: number;
+  /** 선택 여부. / Whether selected. */
   isSelected: boolean;
+  /** 행 변경 상태. / Row mutation state. */
   rowState: 'none' | 'added' | 'edited' | 'removed';
   /** i18n: 인스턴스 로케일 해석기(GridRenderer/CellEditManager 가 주입, 미주입 시 전역 t 폴백). / i18n: instance locale resolver (injected; global-t fallback). */
   t?: (key: string, params?: Record<string, string | number>) => string;
@@ -33,7 +45,9 @@ export interface RenderContext<T = any> {
   hasCellFormula?: boolean;
 }
 
+/** 셀 렌더러 인터페이스 — ctx 로 셀 엘리먼트를 만든다. / Cell renderer interface — builds a cell element from ctx. */
 export interface CellRenderer {
+  /** 셀 엘리먼트를 렌더한다. / Render the cell element. */
   render(ctx: RenderContext): HTMLElement;
 }
 
@@ -50,8 +64,11 @@ export interface CellRenderer {
 
 // ─── 수식 평가 헬퍼 ───────────────────────────────────────
 /**
- * 컬럼에 formula가 있으면 OGDecimal로 평가해 표시값(string)을 반환.
- * formula가 없으면 null 반환 → 기존 ctx.value 사용.
+ * 컬럼에 formula 가 있으면 OGDecimal 로 평가해 표시값(string)을 반환. 없으면 null(→ 기존 ctx.value 사용).
+ * / If the column has a formula, evaluate it via OGDecimal and return the display string; null otherwise (→ use ctx.value).
+ *
+ * @param ctx - 렌더 컨텍스트 / Render context
+ * @returns 표시 문자열, 또는 formula 없음/skip 시 null / Display string, or null when no formula / skipped
  */
 export function resolveFormula(ctx: RenderContext): string | null {
   // C7(F3-R14): 이 셀에 셀 수식(F3)이 저장돼 있으면 컬럼 수식(ColumnDef.formula) 재평가를
@@ -85,8 +102,17 @@ export function resolveFormula(ctx: RenderContext): string | null {
 
 // ─── 숫자 포맷 유틸 ───────────────────────────────────────
 /**
- * 숫자 포맷.
- *  format 문자열:
+ * 숫자 포맷. / Format a number.
+ *
+ * @param value - 포맷할 값 / Value to format
+ * @param format - 포맷 문자열(아래 참조) / Format string (see below)
+ * @param precision - 소수 자리수(있으면 반올림) / Decimal precision (rounds if set)
+ * @param currency - ISO 통화코드 지정 시 Intl 로케일 통화 포맷 우선 / When an ISO currency code is set, Intl locale currency format takes priority
+ * @param field - 컬럼 field(선택) / Column field (optional)
+ * @param row - 행 데이터(선택) / Row data (optional)
+ * @returns 포맷된 문자열 / Formatted string
+ *
+ *  format 문자열 / format string:
  *   '#,##0'          천단위 콤마, 정수
  *   '#,##0.00'       천단위 콤마, 소수 2자리
  *   '₩#,##0'         통화 접두 (₩1,234)
@@ -143,6 +169,15 @@ export function formatNumber(value: any, format?: string, precision?: number, cu
 }
 
 // ─── 날짜 포맷 유틸 ───────────────────────────────────────
+/**
+ * 날짜 포맷(yyyy/MM/dd 토큰 치환). / Format a date (replaces yyyy/MM/dd tokens).
+ *
+ * @param value - Date 또는 파싱 가능한 값 / A Date or a parseable value
+ * @param format - 포맷 문자열(기본 'yyyy-MM-dd') / Format string (default 'yyyy-MM-dd') @defaultValue 'yyyy-MM-dd'
+ * @param field - 컬럼 field(선택) / Column field (optional)
+ * @param row - 행 데이터(선택) / Row data (optional)
+ * @returns 포맷된 문자열 / Formatted string
+ */
 export function formatDate(value: any, format = 'yyyy-MM-dd', field?: string, row?: any): string {
   if (!value) return '';
   const d = value instanceof Date ? value : new Date(value);
@@ -216,6 +251,7 @@ function _renderMasked(original: string, col: ColumnDef, rowIndex: number, ctx: 
 }
 
 // ─── TextRenderer ────────────────────────────────────────
+/** 기본 텍스트 렌더러(formula/displayValue/valueMap/마스킹 처리 포함). / Default text renderer (handles formula/displayValue/valueMap/masking). */
 export class TextRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const span = document.createElement('span');
@@ -259,6 +295,7 @@ export class TextRenderer implements CellRenderer {
 }
 
 // ─── SelectRenderer ───────────────────────────────────────
+/** 셀렉트 값→라벨 매핑 렌더러(옵션 배열 또는 행별 옵션 함수). / Select value→label renderer (option array or per-row options function). */
 export class SelectRenderer implements CellRenderer {
   private _opts: Array<{ label: string; value: any }>;
   private _fn: ((row: any, ri: number) => Array<{ label?: string; text?: string; value: any }>) | null;
@@ -293,6 +330,7 @@ export class SelectRenderer implements CellRenderer {
 }
 
 // ─── NumberRenderer ───────────────────────────────────────
+/** 숫자 렌더러(formula/displayFormatter/통화·포맷 처리, 우측 정렬). / Number renderer (formula/displayFormatter/currency·format, right-aligned). */
 export class NumberRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const span = document.createElement('span');
@@ -323,6 +361,7 @@ export class NumberRenderer implements CellRenderer {
 }
 
 // ─── DateRenderer ─────────────────────────────────────────
+/** 날짜 렌더러(displayFormatter 우선, 없으면 formatDate). / Date renderer (displayFormatter first, else formatDate). */
 export class DateRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const span = document.createElement('span');
@@ -340,6 +379,7 @@ export class DateRenderer implements CellRenderer {
 }
 
 // ─── CheckboxRenderer ─────────────────────────────────────
+/** 체크박스 렌더러(표시 전용, 클릭은 셀 이벤트가 처리). / Checkbox renderer (display-only; clicks handled by cell events). */
 export class CheckboxRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const wrap = document.createElement('span');
@@ -356,17 +396,22 @@ export class CheckboxRenderer implements CellRenderer {
 }
 
 // ─── ButtonRenderer ───────────────────────────────────────
+/** 버튼 렌더러 설정. / Button renderer definition. */
 export interface ButtonRendererDef {
   type: 'button';
+  /** 버튼 라벨(문자열 또는 (값,행)→문자열). / Button label (string or (value,row)→string). */
   label?: string | ((value: any, row: any) => string);
-  /** R12c: 라벨과 함께 표시할 아이콘 role/key(renderIcon). 미지정 시 라벨만(기존과 동일). */
+  /** R12c: 라벨과 함께 표시할 아이콘 role/key(renderIcon). 미지정 시 라벨만. / Icon role/key shown with the label (renderIcon); label-only when unset. */
   icon?: string;
-  /** 아이콘 위치(기본 'left'). */
+  /** 아이콘 위치. 기본 'left'. / Icon position. Default 'left'. @defaultValue 'left' */
   iconPos?: 'left' | 'right';
+  /** 버튼에 추가할 CSS 클래스. / Extra CSS class for the button. */
   buttonClass?: string;
+  /** 인라인 스타일. / Inline style. */
   style?: string;
 }
 
+/** 버튼 렌더러(라벨±아이콘). / Button renderer (label ± icon). */
 export class ButtonRenderer implements CellRenderer {
   constructor(private def?: ButtonRendererDef) {}
 
@@ -406,6 +451,7 @@ export class ButtonRenderer implements CellRenderer {
 }
 
 // ─── BadgeRenderer (상태/태그 표시용) ─────────────────────
+/** 배지 렌더러(상태/태그 색상 표시). / Badge renderer (colored status/tag pill). */
 export class BadgeRenderer implements CellRenderer {
   constructor(
     private colorMap?: Record<string, string>,
@@ -432,6 +478,7 @@ export class BadgeRenderer implements CellRenderer {
 }
 
 // ─── LinkRenderer ─────────────────────────────────────────
+/** 링크(a) 렌더러(hrefFn·target 지원). / Link (a) renderer (supports hrefFn·target). */
 export class LinkRenderer implements CellRenderer {
   constructor(
     private hrefFn?: (value: any, row: any) => string,
@@ -451,6 +498,7 @@ export class LinkRenderer implements CellRenderer {
 }
 
 // ─── TemplateRenderer (사용자 정의 HTML) ──────────────────
+/** 템플릿 렌더러(사용자 함수가 HTML 문자열 생성). / Template renderer (user function produces an HTML string). */
 export class TemplateRenderer implements CellRenderer {
   constructor(private templateFn: (value: any, row: any, rowIndex: number) => string) {}
 
@@ -464,15 +512,22 @@ export class TemplateRenderer implements CellRenderer {
 }
 
 // ─── ImageRenderer ────────────────────────────────────────
+/** 이미지 렌더러 설정. / Image renderer definition. */
 export interface ImageRendererDef {
   type: 'image';
+  /** 너비(px). 기본 28. / Width in px. Default 28. @defaultValue 28 */
   width?: number;
+  /** 높이(px). 기본 28. / Height in px. Default 28. @defaultValue 28 */
   height?: number;
+  /** 모서리 반경(px). 기본 4. / Corner radius in px. Default 4. @defaultValue 4 */
   radius?: number;
+  /** 값→src URL 함수. / Value→src URL function. */
   srcFn?: (value: any, row: any) => string;
+  /** alt 텍스트 또는 함수. / alt text or function. */
   alt?: string | ((value: any, row: any) => string);
 }
 
+/** 이미지(썸네일) 렌더러. / Image (thumbnail) renderer. */
 export class ImageRenderer implements CellRenderer {
   constructor(private def?: ImageRendererDef) {}
 
@@ -495,14 +550,20 @@ export class ImageRenderer implements CellRenderer {
 }
 
 // ─── ProgressRenderer ─────────────────────────────────────
+/** 진행바 렌더러 설정. / Progress-bar renderer definition. */
 export interface ProgressRendererDef {
   type: 'progress';
+  /** 최댓값. 기본 100. / Max value. Default 100. @defaultValue 100 */
   max?: number;
+  /** 채움 색. / Fill color. */
   color?: string;
+  /** 퍼센트 라벨 표시(기본 true). / Show percent label (default true). @defaultValue true */
   showLabel?: boolean;
+  /** 값→색 함수(color 오버라이드). / Value→color function (overrides color). */
   colorFn?: (value: number) => string;
 }
 
+/** 진행바 렌더러. / Progress-bar renderer. */
 export class ProgressRenderer implements CellRenderer {
   constructor(private def?: ProgressRendererDef) {}
 
@@ -536,14 +597,20 @@ export class ProgressRenderer implements CellRenderer {
 }
 
 // ─── SparklineRenderer (인라인 미니 차트) ─────────────────
+/** 스파크라인 렌더러 설정(값 배열 → 미니 차트). / Sparkline renderer definition (value array → mini chart). */
 export interface SparklineRendererDef {
   type: 'sparkline';
+  /** 캔버스 너비(px). 기본 80. / Canvas width in px. Default 80. @defaultValue 80 */
   width?: number;
+  /** 캔버스 높이(px). 기본 22. / Canvas height in px. Default 22. @defaultValue 22 */
   height?: number;
+  /** 선/바 색. / Line/bar color. */
   color?: string;
+  /** 미니 차트 종류(기본 'bar'). / Mini chart type (default 'bar'). @defaultValue 'bar' */
   chartType?: 'bar' | 'line' | 'area';
 }
 
+/** 스파크라인(인라인 미니 차트) 렌더러. / Sparkline (inline mini chart) renderer. */
 export class SparklineRenderer implements CellRenderer {
   constructor(private def?: SparklineRendererDef) {}
 
@@ -609,6 +676,7 @@ export class SparklineRenderer implements CellRenderer {
 }
 
 // ─── SwitchRenderer (토글 스위치 표시) ───────────────────
+/** 토글 스위치 렌더러(표시 전용). / Toggle-switch renderer (display-only). */
 export class SwitchRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const wrap = document.createElement('span');
@@ -630,12 +698,16 @@ export class SwitchRenderer implements CellRenderer {
 }
 
 // ─── RatingRenderer (별점 표시) ───────────────────────────
+/** 별점 렌더러 설정. / Rating (stars) renderer definition. */
 export interface RatingRendererDef {
   type: 'rating';
+  /** 최대 별 수. 기본 5. / Max stars. Default 5. @defaultValue 5 */
   max?: number;
+  /** 채워진 별 색. / Filled-star color. */
   color?: string;
 }
 
+/** 별점 렌더러. / Rating (stars) renderer. */
 export class RatingRenderer implements CellRenderer {
   constructor(private def?: RatingRendererDef) {}
 
@@ -656,6 +728,7 @@ export class RatingRenderer implements CellRenderer {
 }
 
 // ─── RadioRenderer ────────────────────────────────────────
+/** 라디오 렌더러(표시 전용, group 지원). / Radio renderer (display-only, supports group). */
 export class RadioRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const wrap = document.createElement('span');
@@ -673,6 +746,7 @@ export class RadioRenderer implements CellRenderer {
 }
 
 // ─── ImgRenderer ──────────────────────────────────────────
+/** 단순 이미지 렌더러(셀 값 = 이미지 URL). / Simple image renderer (cell value = image URL). */
 export class ImgRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const wrap = document.createElement('span');
@@ -705,6 +779,7 @@ function _sanitizeHtml(html: string): string {
   return div.innerHTML;
 }
 
+/** HTML 렌더러(기본 sanitize; column.sanitize=false 로 해제 가능). / HTML renderer (sanitizes by default; disable via column.sanitize=false). */
 export class HtmlRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const wrap = document.createElement('span');
@@ -753,6 +828,7 @@ function _encodeC128B(text: string): string {
   return codes.map(c => _c128Bits(_C128W[c]!)).join('') + _c128Bits(_C128_STOP) + '11';
 }
 
+/** 바코드 렌더러(Code128B, SVG + 하단 텍스트). / Barcode renderer (Code128B, SVG plus caption text). */
 export class BarcodeRenderer implements CellRenderer {
   render(ctx: RenderContext): HTMLElement {
     const val = String(ctx.value ?? '');
@@ -803,16 +879,25 @@ function _barcodeSvg(text: string, H: number): string {
  *  - image/progress/sparkline/rating/template 은 def(설정 객체) 없이는 원래 TextRenderer 로 떨어졌으므로
  *    def 유무로 게이트한다(문자열 렌더러명만 준 미완성 설정 = 기존과 동일 폴백).
  */
+/** 셀 렌더러 팩토리 시그니처 `(col, def?) => CellRenderer`. / Cell-renderer factory signature `(col, def?) => CellRenderer`. */
 export type RendererFactory = (col: ColumnDef, def?: RendererDef) => CellRenderer;
 
 const _rendererRegistry = new Map<string, RendererFactory>();
 
-/** 커스텀 셀 렌더러 타입을 코어 편집 없이 등록(OCP). 프로세스 전역. */
+/**
+ * 커스텀 셀 렌더러 타입을 코어 편집 없이 등록(OCP). 프로세스 전역.
+ * / Register a custom cell-renderer type without editing core (OCP). Process-global.
+ *
+ * @param typeName - 렌더러 타입 이름(예: 'sparkline') / Renderer type name (e.g. 'sparkline')
+ * @param factory - 렌더러 팩토리 / Renderer factory
+ * @example
+ * registerRenderer('stars', (col, def) => new RatingRenderer(def as any));
+ */
 export function registerRenderer(typeName: string, factory: RendererFactory): void {
   _rendererRegistry.set(typeName, factory);
 }
 
-/** 등록 여부 조회(내부/테스트용). */
+/** 렌더러 타입 등록 여부 조회(내부/테스트용). / Whether a renderer type is registered (internal/test use). */
 export function hasRenderer(typeName: string): boolean {
   return _rendererRegistry.has(typeName);
 }
@@ -839,6 +924,13 @@ registerRenderer('rating',    (_col, def) => def ? new RatingRenderer(def as Rat
 registerRenderer('template',  (_col, def) => def ? new TemplateRenderer(def.templateFn) : new TextRenderer());
 
 // ─── Renderer 팩토리 ──────────────────────────────────────
+/**
+ * 컬럼 정의로부터 셀 렌더러를 생성한다(레지스트리 해석, 미등록 시 TextRenderer 폴백).
+ * / Create a cell renderer from a column definition (registry resolution; falls back to TextRenderer when unregistered).
+ *
+ * @param col - 컬럼 정의 / Column definition
+ * @returns 셀 렌더러 / A cell renderer
+ */
 export function createRenderer(col: ColumnDef): CellRenderer {
   const renderer = col.renderer;
   let name: string;

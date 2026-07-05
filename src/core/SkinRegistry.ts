@@ -42,14 +42,22 @@ const FUNC_COLOR_LITERAL = /\b(?:rgba?|hsla?)\(\s*\d/;
 /** 흔한 named color 몇 개(스킨 델타엔 색이 오면 안 되므로 대표만 차단). */
 const NAMED_COLOR = /\b(?:red|green|blue|black|white|gray|grey|yellow|orange|purple|pink|brown|cyan|magenta)\b/i;
 
+/** 스킨 정의 결과. / Result of a skin definition. */
 export interface SkinDefineResult {
-  /** 실제 등록된(가드레일 클램프가 반영된) 델타. */
+  /** 실제 등록된(가드레일 클램프가 반영된) 델타. / The actually registered delta (with guardrail clamps applied). */
   readonly delta: SkinTokenDelta;
-  /** 접근성 가드레일이 조정한 토큰 경고(있으면 콘솔에도 출력). */
+  /** 접근성 가드레일이 조정한 토큰 경고(있으면 콘솔에도 출력). / Warnings for tokens adjusted by accessibility guardrails (also logged to console when present). */
   readonly warnings: string[];
 }
 
-/** 스킨 델타가 색 리터럴을 담고 있는지 검사하고, 위반 시 던진다(FORM-only, Rule 2). */
+/**
+ * 스킨 델타가 색 리터럴을 담고 있는지 검사하고, 위반 시 던진다(FORM-only, Rule 2).
+ * / Assert a skin delta carries no color literal; throws on violation (FORM-only, Rule 2).
+ *
+ * @param id - 스킨 id / Skin id
+ * @param delta - 검사할 토큰 델타 / Token delta to validate
+ * @throws FORM 토큰이 아니거나 색 리터럴이 있으면 Error / Throws if a non-FORM token or a color literal is present
+ */
 export function assertFormOnly(id: string, delta: SkinTokenDelta): void {
   for (const [rawKey, rawVal] of Object.entries(delta)) {
     const key = rawKey as SkinTokenName;
@@ -70,10 +78,18 @@ export function assertFormOnly(id: string, delta: SkinTokenDelta): void {
 }
 
 /**
- * HANMS 접근성 가드레일(불변식) 적용 — 정의 시점 클램프(§6.4, HANMS P0-4).
- *  - focus-width < 2px → 2px 로 클램프(가시 포커스 비협상).
+ * 접근성 가드레일(불변식) 적용 — 정의 시점 클램프(§6.4).
+ * / Apply accessibility guardrails (invariants) — clamp at definition time (§6.4).
+ *
+ *  - focus-width < 2px → 2px 로 클램프(가시 포커스 비협상). / clamp to 2px (visible focus is non-negotiable).
  *  - focus-style: none → solid.
+ *
  * 반환은 조정된 델타 + 경고 목록(silent override 아님 — 무엇을 클램프했는지 알린다).
+ * / Returns the adjusted delta plus a warning list (not a silent override — it reports what was clamped).
+ *
+ * @param id - 스킨 id / Skin id
+ * @param delta - 조정할 토큰 델타 / Token delta to adjust
+ * @returns 조정된 델타 + 경고 목록 / Adjusted delta plus warnings
  */
 export function applyGuardrails(id: string, delta: SkinTokenDelta): SkinDefineResult {
   const out: SkinTokenDelta = { ...delta };
@@ -98,12 +114,23 @@ export function applyGuardrails(id: string, delta: SkinTokenDelta): SkinDefineRe
 /**
  * 프로세스 전역 스킨 등록소. defineSkin(사용자) 는 검증+가드레일+`<style>` 주입,
  * registerBuiltin(내장) 은 검증+가드레일만(CSS 는 skins.css 정적 번들 소유).
+ * / Process-global skin registry. `define` (user) does validation + guardrails + `<style>` injection;
+ * `registerBuiltin` (built-in) does validation + guardrails only (CSS is owned by the skins.css static bundle).
+ *
+ * @example
+ * skinRegistry.define('my-skin', { '--og-radius-md': '10px', '--og-border-style': 'solid' });
  */
 export class SkinRegistry {
   private _skins = new Map<string, SkinTokenDelta>();
   private _styleEl: HTMLStyleElement | null = null;
 
-  /** 내장 스킨 등록(주입 없음 — CSS 는 skins.css 가 전달). 검증/가드레일은 동일 적용. */
+  /**
+   * 내장 스킨 등록(주입 없음 — CSS 는 skins.css 가 전달). 검증/가드레일은 동일 적용.
+   * / Register a built-in skin (no injection — CSS is delivered by skins.css). Validation/guardrails still apply.
+   *
+   * @param id - 스킨 id / Skin id
+   * @param delta - FORM 토큰 델타 / FORM token delta
+   */
   registerBuiltin(id: string, delta: SkinTokenDelta): void {
     assertFormOnly(id, delta);
     const { delta: safe } = applyGuardrails(id, delta);
@@ -113,6 +140,12 @@ export class SkinRegistry {
   /**
    * 사용자 스킨 등록. FORM-only 검증 + 가드레일 클램프 후 런타임 `<style>` 로
    * `.og-container[data-og-skin="id"]` 블록을 주입(브라우저 환경). 반환은 조정 결과.
+   * / Register a user skin. After FORM-only validation and guardrail clamps, injects a
+   * `.og-container[data-og-skin="id"]` block via a runtime `<style>` (browser env). Returns the adjusted result.
+   *
+   * @param id - 스킨 id / Skin id
+   * @param delta - FORM 토큰 델타 / FORM token delta
+   * @returns 조정된 델타 + 경고 목록 / Adjusted delta plus warnings
    */
   define(id: string, delta: SkinTokenDelta): SkinDefineResult {
     assertFormOnly(id, delta);
@@ -126,9 +159,11 @@ export class SkinRegistry {
     return result;
   }
 
+  /** 스킨 id 등록 여부. / Whether a skin id is registered. */
   has(id: string): boolean { return this._skins.has(id); }
+  /** 등록된 스킨 델타 조회(없으면 undefined). / Get a registered skin delta (undefined if absent). */
   get(id: string): SkinTokenDelta | undefined { return this._skins.get(id); }
-  /** 등록된 모든 스킨 id(내장 + 사용자). */
+  /** 등록된 모든 스킨 id(내장 + 사용자). / All registered skin ids (built-in + user). */
   list(): string[] { return [...this._skins.keys()]; }
 
   /** 런타임 `<style>` 주입(테스트/SSR 등 document 없으면 no-op). 같은 태그를 누적 사용. */
@@ -152,7 +187,7 @@ export class SkinRegistry {
 // 값은 item3 §3.1~§3.6 + HANMS §3(Material) 의 구체 토큰. density 행은 **권장 밀도 힌트**
 // (실제 relayout 은 data-og-density 축 소유, item4 C1 — setSkin 은 무비용).
 
-/** Sharp/Gothic — 엔터프라이즈 고밀도·각짐(§3.1). HANMS: APPROVE-WITH-GUARDRAIL(G-S1). */
+/** Sharp/Gothic — 엔터프라이즈 고밀도·각짐(§3.1). / Sharp/Gothic — enterprise high-density, squared corners (§3.1). */
 export const SKIN_SHARP: SkinTokenDelta = {
   '--og-radius-sm': '0', '--og-radius-md': '0', '--og-radius-lg': '0',
   '--og-radius-pill': '0', '--og-radius-container': '0', '--og-container-radius': '0',
@@ -164,7 +199,7 @@ export const SKIN_SHARP: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'miter',
 };
 
-/** Rounded — 소비자 SaaS 소프트(§3.2). HANMS: APPROVE. */
+/** Rounded — 소비자 SaaS 소프트(§3.2). / Rounded — consumer-SaaS soft look (§3.2). */
 export const SKIN_ROUNDED: SkinTokenDelta = {
   '--og-radius-sm': '4px', '--og-radius-md': '8px', '--og-radius-lg': '12px',
   '--og-radius-pill': '999px', '--og-radius-container': '12px', '--og-container-radius': '12px',
@@ -178,7 +213,7 @@ export const SKIN_ROUNDED: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** Stitch — 핸드크래프트(§3.3). HANMS: APPROVE-WITH-GUARDRAIL(G-ST1~3). 색(리넨/자수)은 theme 축. */
+/** Stitch — 핸드크래프트(§3.3). 색(리넨/자수)은 theme 축. / Stitch — handcrafted look (§3.3); color (linen/embroidery) lives on the theme axis. */
 export const SKIN_STITCH: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '3px', '--og-radius-lg': '4px', '--og-container-radius': '3px',
   '--og-border-width': '1px', '--og-border-style': 'dashed', '--og-divider-style': 'dashed',
@@ -193,7 +228,7 @@ export const SKIN_STITCH: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** Flat/Minimal — 플랫 2.0(§3.5). HANMS: APPROVE-WITH-GUARDRAIL(G-F1: 플로팅 표면 1px 보더). */
+/** Flat/Minimal — 플랫 2.0(§3.5). / Flat/Minimal — flat 2.0 (§3.5). */
 export const SKIN_FLAT: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '3px', '--og-radius-lg': '4px', '--og-container-radius': '4px',
   '--og-border-width': '1px', '--og-border-style': 'solid', '--og-divider-style': 'solid',
@@ -205,7 +240,7 @@ export const SKIN_FLAT: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** High-Contrast — 접근성 우선·레퍼런스(§3.6). HANMS: APPROVE(안전 폴백). */
+/** High-Contrast — 접근성 우선·레퍼런스(§3.6). / High-Contrast — accessibility-first reference skin (§3.6). */
 export const SKIN_HIGH_CONTRAST: SkinTokenDelta = {
   '--og-radius-sm': '0', '--og-radius-md': '2px', '--og-radius-lg': '2px', '--og-container-radius': '2px',
   '--og-border-width': '2px', '--og-border-width-strong': '3px',
@@ -218,7 +253,7 @@ export const SKIN_HIGH_CONTRAST: SkinTokenDelta = {
   '--og-icon-size': '18px', '--og-icon-fill': '1', '--og-icon-stroke-width': '2', '--og-icon-corner': 'miter',
 };
 
-/** Material/Elevated — Neumorph 대체(HANMS §3): 중간 반경 + 정직한 그림자 엘리베이션. APPROVE. */
+/** Material/Elevated — 중간 반경 + 정직한 그림자 엘리베이션. / Material/Elevated — medium radius plus honest shadow elevation. */
 export const SKIN_MATERIAL: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '4px', '--og-radius-lg': '8px', '--og-container-radius': '8px',
   '--og-radius-control': '4px', '--og-radius-widget': '4px',
@@ -231,7 +266,7 @@ export const SKIN_MATERIAL: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** 내장 스킨 카탈로그(HANMS 확정 6종, Neumorph 제외). id → 델타. */
+/** 내장 스킨 카탈로그(확정 6종). id → 델타. / Built-in skin catalog (6 finalized skins). id → delta. */
 export const BUILTIN_SKINS: ReadonlyArray<readonly [string, SkinTokenDelta]> = [
   ['sharp', SKIN_SHARP],
   ['rounded', SKIN_ROUNDED],
@@ -241,6 +276,7 @@ export const BUILTIN_SKINS: ReadonlyArray<readonly [string, SkinTokenDelta]> = [
   ['material', SKIN_MATERIAL],
 ];
 
-/** 프로세스 전역 기본 레지스트리 — 내장 스킨을 부트스트랩 등록(주입 없음, CSS=skins.css). */
+/** 프로세스 전역 기본 레지스트리 — 내장 스킨을 부트스트랩 등록(주입 없음, CSS=skins.css).
+ *  / Process-global default registry — bootstraps the built-in skins (no injection; CSS=skins.css). */
 export const skinRegistry = new SkinRegistry();
 for (const [id, delta] of BUILTIN_SKINS) skinRegistry.registerBuiltin(id, delta);

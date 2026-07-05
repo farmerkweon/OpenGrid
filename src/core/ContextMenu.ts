@@ -10,12 +10,25 @@ import type { ContextMenuItem } from './types.js';
 
 export type { ContextMenuItem };
 
+/**
+ * 기본 컨텍스트 메뉴 항목이 위임하는 액션 핸들러 모음. / Action handlers that the default context-menu items delegate to.
+ *
+ * `OpenGrid` 가 생성 시 주입하며, 커스텀 메뉴 항목이 `action: 'sortAsc'` 등
+ * 문자열 액션을 쓸 때 실제 동작을 제공한다. / Injected by `OpenGrid` at construction time;
+ * provides the real behavior when a custom menu item uses a string `action` like `'sortAsc'`.
+ */
 export interface ContextMenuActions {
+  /** 오름차순 정렬 실행. / Runs ascending sort. */
   onSortAsc:  () => void;
+  /** 내림차순 정렬 실행. / Runs descending sort. */
   onSortDesc: () => void;
+  /** 찾기 바 열기. / Opens the find bar. */
   onFind:     () => void;
+  /** Excel 내보내기 실행. / Runs the Excel export. */
   onExcel:    () => void;
+  /** CSV 내보내기 실행. / Runs the CSV export. */
   onCsv:      () => void;
+  /** 인쇄 실행. / Runs print. */
   onPrint:    () => void;
 }
 
@@ -59,6 +72,17 @@ function _buildDefaultItems(t: ContextMenuT | undefined): ContextMenuItem[] {
   );
 }
 
+/**
+ * 우클릭 팝업 컨텍스트 메뉴 관리자. / Manages the right-click popup context menu.
+ *
+ * 메뉴는 `document.body` 자식으로 추가한다(그리드 컨테이너의 조상에 transform/filter
+ * 가 있어도 `position:fixed` 기준점이 뷰포트에 고정되도록). 테마(`data-og-theme`)와
+ * 스킨(`data-og-skin`) 속성은 앵커 엘리먼트에서 복사해 CSS 변수 상속을 보존한다.
+ * / The menu is appended as a child of `document.body` (so its `position:fixed`
+ * reference stays the viewport even when an ancestor of the grid container has a
+ * transform/filter). The theme (`data-og-theme`) and skin (`data-og-skin`) attributes
+ * are copied from the anchor element to preserve CSS-variable inheritance.
+ */
 export class ContextMenuManager {
   private _el: HTMLElement | null = null;
   private _docClick:     ((e: MouseEvent)    => void) | null = null;
@@ -68,8 +92,9 @@ export class ContextMenuManager {
   private _focusIdx = -1;
 
   /**
-   * @param _anchor  그리드 컨테이너 엘리먼트 — CSS 변수 상속 기준점
-   * @param _actions 기본 액션 핸들러 (OpenGrid에서 주입)
+   * @param _anchor - 그리드 컨테이너 엘리먼트 — CSS 변수 상속 기준점 / Grid container element — the reference point for CSS-variable inheritance
+   * @param _actions - 기본 액션 핸들러(OpenGrid에서 주입) / Default action handlers (injected by OpenGrid)
+   * @param _t - i18n 메시지 해석기(미주입 시 ko 기본 라벨) / i18n message resolver (falls back to ko default labels when absent)
    */
   constructor(
     private readonly _anchor: HTMLElement,
@@ -77,6 +102,17 @@ export class ContextMenuManager {
     private readonly _t?: ContextMenuT,
   ) {}
 
+  /**
+   * 지정 좌표에 컨텍스트 메뉴를 연다. / Open the context menu at the given coordinates.
+   *
+   * 이전 메뉴가 열려 있으면 먼저 닫는다. 항목을 지정하지 않으면 활성 로케일로
+   * 만든 기본 항목({@link DEFAULT_CONTEXT_ITEMS})을 사용한다.
+   * / Closes any previously open menu first. When no items are given, uses the
+   * default items ({@link DEFAULT_CONTEXT_ITEMS}) built in the active locale.
+   *
+   * @param e - 메뉴를 연 마우스 이벤트(좌표 기준) / Mouse event that opened the menu (used for positioning)
+   * @param customItems - 커스텀 메뉴 항목(생략 시 기본 항목) / Custom menu items (defaults when omitted)
+   */
   open(e: MouseEvent, customItems?: ContextMenuItem[]): void {
     this.close();
 
@@ -192,6 +228,7 @@ export class ContextMenuManager {
     this._moveFocus(1);
   }
 
+  /** 열려 있는 메뉴를 닫고 관련 리스너를 모두 해제한다. / Close the open menu and detach all related listeners. */
   close(): void {
     this._el?.remove();
     this._el = null;
@@ -203,10 +240,12 @@ export class ContextMenuManager {
     this._focusIdx = -1;
   }
 
+  /** 메뉴를 닫고 정리한다. / Close the menu and clean up. */
   destroy(): void { this.close(); }
 
   // ── 위치 결정 ─────────────────────────────────────────────
 
+  /** @internal 뷰포트 경계를 벗어나지 않도록 메뉴 위치를 계산해 배치한다. / Computes and applies the menu position, keeping it within viewport bounds. */
   private _position(menu: HTMLElement, x: number, y: number, onPositioned?: () => void): void {
     menu.style.cssText = 'position:fixed;visibility:hidden;left:0;top:0;';
 
@@ -223,6 +262,7 @@ export class ContextMenuManager {
 
   // ── 키보드 포커스 이동 ────────────────────────────────────
 
+  /** @internal 활성 항목 사이에서 키보드 포커스를 이동한다. / Moves keyboard focus between enabled items. */
   private _moveFocus(dir: 1 | -1): void {
     if (!this._el) return;
     const btns = Array.from(
@@ -235,6 +275,7 @@ export class ContextMenuManager {
 
   // ── 액션 실행 ─────────────────────────────────────────────
 
+  /** @internal 항목의 함수 액션 또는 문자열 액션(→ ContextMenuActions)을 실행한다. / Runs an item's function action, or its string action (dispatched to ContextMenuActions). */
   private _runAction(item: ContextMenuItem): void {
     if (typeof item.action === 'function') { item.action(); return; }
     switch (item.action) {
