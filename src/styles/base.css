@@ -123,6 +123,17 @@
      차단한다. 모든 후손(행·셀·헤더 <th> 포함)으로 normal이 cascade되어,
      고정 행/헤더 높이가 호스트 본문 line-height에 desync되는 것을 막는다. */
   line-height: normal;
+  /* host isolation(확장): 호스트 테마가 body/후손에 건 텍스트-흐름 상속 속성을 차단한다.
+     letter-spacing·word-spacing 이 상속되면 셀 텍스트가 "김 민 준"처럼 벌어지고(부모 div 오염),
+     text-transform/text-indent/font-style/font-variant 도 데이터 표시를 왜곡한다. 컨테이너에서
+     normal/기본으로 못박아 전 후손에 cascade — 특정 요소(헤더 letter-spacing·uppercase 등)는
+     자기 규칙으로 명시 재지정하므로 영향받지 않는다. */
+  letter-spacing: normal;
+  word-spacing:   normal;
+  text-transform: none;
+  text-indent:    0;
+  font-style:     normal;
+  font-variant:   normal;
   display:     flex;
   flex-direction: column;
   overflow:    hidden;

@@ -10,12 +10,22 @@
 //    OGDecimal.from()에 넘겨 정밀도 손실을 만들지 않는다.
 // ============================================================
 
-/** 수식 리터럴/셀 텍스트가 산술 가능한 숫자 형태인지 판별(정수/소수/과학표기). */
+/**
+ * 수식 리터럴/셀 텍스트가 산술 가능한 숫자 형태(정수/소수/과학표기)인지 판별하는 정규식.
+ * / Regex that tests whether a formula literal or cell text is an arithmetic-capable number
+ *   form (integer / decimal / scientific notation).
+ */
 export const NUMERIC_LITERAL_RE = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 /**
  * 과학표기(`1e-5`, `2.5E3`)를 정확한 10진 문자열로 변환한다(부호/자릿수 이동만 사용,
  * 부동소수점 경유 없음). 과학표기가 아니면 trim만 하여 그대로 반환.
+ * / Convert scientific notation (`1e-5`, `2.5E3`) into an exact decimal string using only
+ *   sign/digit shifting (never routed through a floating-point value, per §2.4/F3-R20). Input
+ *   that is not scientific notation is returned trimmed as-is.
+ *
+ * @param raw - 변환할 원시 숫자 문자열 / Raw numeric string to convert
+ * @returns 정확한 10진 문자열(과학표기가 아니면 trim된 원문) / Exact decimal string (trimmed original if not scientific)
  */
 export function normalizeNumericLiteral(raw: string): string {
   const s = raw.trim();

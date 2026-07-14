@@ -11,7 +11,13 @@
 
 import type { AstNode, CanonicalRef, FormulaGridAccessor, RawCellRefNode, RefMode } from './types.js';
 
-/** 열문자(A,B,...,Z,AA,...) → 0-based visibleLeaves 인덱스. */
+/**
+ * 열문자(A,B,...,Z,AA,...)를 0-based visibleLeaves 인덱스로 변환한다.
+ * / Convert column letters (A,B,...,Z,AA,...) to a 0-based visibleLeaves index.
+ *
+ * @param letters - 열문자 문자열(대소문자 무관) / Column-letter string (case-insensitive)
+ * @returns 0-based 열 인덱스 / 0-based column index
+ */
 export function colLettersToIndex(letters: string): number {
   let n = 0;
   for (const ch of letters.toUpperCase()) {
@@ -20,7 +26,15 @@ export function colLettersToIndex(letters: string): number {
   return n - 1;
 }
 
-/** 0-based visibleLeaves 인덱스 → 열문자(A,B,...,Z,AA,...). offsetFormula/serializeFormula 재사용. */
+/**
+ * 0-based visibleLeaves 인덱스를 열문자(A,B,...,Z,AA,...)로 변환한다.
+ * offsetFormula/serializeFormula 가 공유 재사용한다.
+ * / Convert a 0-based visibleLeaves index to column letters (A,B,...,Z,AA,...).
+ *   Shared by offsetFormula/serializeFormula.
+ *
+ * @param index - 0-based 열 인덱스 / 0-based column index
+ * @returns 열문자 문자열(빈 경우 'A') / Column-letter string ('A' when empty)
+ */
 export function indexToColLetters(index: number): string {
   let n = index + 1;
   let out = '';
@@ -63,6 +77,15 @@ function normalizeSingleRef(raw: RawCellRefNode, ctx: NormalizeCtx): CanonicalRe
 /**
  * 파서가 만든 원시 AST(rawRef/rawRange 포함)를 정규화해 ref/range/error 노드로 치환한다.
  * host = 이 수식이 저장된 셀(현재 행 컨텍스트, FieldRef·상대참조 기준점).
+ * / Normalize a raw AST (containing rawRef/rawRange) produced by the parser, replacing them
+ *   with ref/range/error nodes (§3.3 pipeline). `host` is the cell where this formula is
+ *   stored (current row context; anchor for FieldRef and relative refs).
+ *
+ * @param ast - 파서가 만든 원시 AST / Raw AST produced by the parser
+ * @param host - 수식이 저장된 호스트 셀(rowId·field) / Host cell (rowId, field) where the formula is stored
+ * @param accessor - 그리드 좌표/값 접근자 / Grid coordinate/value accessor
+ * @param refMode - 참조 정규화 모드('stable' 기본 / 'relative') / Reference normalization mode ('stable' default / 'relative')
+ * @returns 정규화된 AST / The normalized AST
  */
 export function normalizeAst(ast: AstNode, host: { rowId: string; field: string }, accessor: FormulaGridAccessor, refMode: RefMode = 'stable'): AstNode {
   const ctx: NormalizeCtx = { host, accessor, refMode };
@@ -94,7 +117,15 @@ export function normalizeAst(ast: AstNode, host: { rowId: string; field: string 
   return walk(ast);
 }
 
-/** 이 AST가 범위 참조를 포함하는지(§3.5 hasRangeRef, applySort/applyFilter dirty 대상). */
+/**
+ * 이 AST가 범위 참조를 하나라도 포함하는지 판별한다(§3.5 hasRangeRef,
+ * applySort/applyFilter 시 dirty 대상 판정에 사용).
+ * / Whether this AST contains any range reference (§3.5 hasRangeRef; used to decide the
+ *   dirty set on applySort/applyFilter).
+ *
+ * @param ast - 검사할 AST / AST to inspect
+ * @returns 범위 참조 포함 여부 / Whether a range reference is present
+ */
 export function computeHasRangeRef(ast: AstNode): boolean {
   switch (ast.t) {
     case 'range':

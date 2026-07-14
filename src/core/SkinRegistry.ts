@@ -17,8 +17,10 @@
 
 import type { SkinTokenDelta, SkinTokenName } from './types.js';
 
-/** 허용되는 FORM 토큰 이름(SkinTokenName 과 동일 집합의 런타임 가드). */
-const FORM_TOKENS: ReadonlySet<string> = new Set<SkinTokenName>([
+/** 허용되는 FORM 토큰 이름(SkinTokenName 과 동일 집합의 런타임 가드).
+ *  export 이유(DD-11): 테마 델타의 대칭 검증 `assertColorOnly` 가 이 집합을 denylist 로 재사용해
+ *  색축⊥형태축을 양방향으로 기계강제한다(형태/밀도/질감 shape 토큰이 테마 델타에 오면 거부). */
+export const FORM_TOKENS: ReadonlySet<string> = new Set<SkinTokenName>([
   '--og-radius-none', '--og-radius-sm', '--og-radius-md', '--og-radius-lg', '--og-radius-pill',
   '--og-radius-container', '--og-radius-control', '--og-radius-widget', '--og-container-radius',
   '--og-border-width', '--og-border-width-strong', '--og-border-style',

@@ -30,6 +30,7 @@ deselect
 destroy
 destroyCharts
 disableTree
+disconnectRealtime
 emit
 enableTree
 endBatch
@@ -133,7 +134,9 @@ restoreFilter
 resyncPanelWidths
 setCellFormula
 setColWidths
+setConditionalFormat
 setData
+setDensity
 setFilter
 setFilterSelect
 setFooter
@@ -143,8 +146,10 @@ setMaskEnabled
 setMessage
 setOptions
 setRangeSelection
+setRealtimeSource
 setSkin
 setSkinVar
+setTexture
 setTheme
 setThemeVar
 showColumn

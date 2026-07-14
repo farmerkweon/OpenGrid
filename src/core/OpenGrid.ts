@@ -7,6 +7,8 @@ import { GridRenderer } from './GridRenderer.js';
 import type { RendererCallbacks, DetailRenderContext } from './GridRenderer.js';
 import { AppearanceResolver, ThemeContext } from './AppearanceResolver.js';
 import { skinRegistry } from './SkinRegistry.js';
+import { densityRegistry, DENSITY_TOKENS } from './appearance/DensityRegistry.js';
+import { textureRegistry, TEXTURE_TOKENS } from './appearance/TextureRegistry.js';
 import { iconRegistry, IconRegistry } from './IconRegistry.js';
 import { localeRegistry, LocaleRegistry } from './i18n/LocaleRegistry.js';
 import type { PartialLocaleMessages, LocaleMessageKey, MessageValue } from './i18n/types.js';
@@ -51,6 +53,24 @@ import type { OverrideLayer } from './OverrideKernel.js';
 import { ExtensionPointRegistry } from './ExtensionPointRegistry.js';
 import { RecalcCoordinator } from './formula/RecalcCoordinator.js';
 import { cellKey, type FormulaErrorCode } from './formula/types.js';
+// DD-05 S2c-1(CF): 렌더 브리지(top-level core, DOM 적용기)는 정적 import(경량). CF 엔진(cf/**)은
+// setConditionalFormat 첫 호출 시에만 동적 import → 별 청크(베이스 번들 무증가). 타입은 전부 type-only(런타임 의존0).
+// / CF render bridge is a light static import; the cf/** engine is dynamically imported on first use (separate chunk). Types are type-only.
+import { applyVisualSpecs } from './CFRenderBridge.js';
+import { makeRect } from './coordinate/index.js';
+import type { CFRule } from './cf/CFRule.js';
+import type { CFEngine } from './cf/CFEngine.js';
+import type { ColumnStats } from './cf/eval-types.js';
+import type { AppearanceView } from './cf/appearance.js';
+// DD-07(RT): 실시간 서브시스템 배선. CF 와 동일 패턴 — 타입은 전부 type-only(런타임 의존0), 어댑터·컨트롤러
+// (realtime/**)는 setRealtimeSource 첫 호출 시에만 동적 import → 별 청크(베이스 번들 무증가). 미배선=byte-identical.
+// / RT wiring mirrors CF: type-only imports (no runtime dep); the realtime/** adapters & controller are
+//   dynamically imported on first setRealtimeSource call (separate chunk). Unwired = byte-identical.
+import type {
+  IRealtimeSource, RealtimeController, RealtimeControllerDeps,
+  RtAnnounceSummary, FrameScheduler, RtCommandSink, LiveStateSource, RtCoords,
+} from './realtime/index.js';
+import type { ICommandCtx } from './command/ICommand.js';
 import type {
   GridOptions, OpenGridInstance, ColumnDef,
   SortItem, FilterItem, ExportOptions,
@@ -61,6 +81,22 @@ import type {
 } from './types.js';
 
 const ROW_ID_FIELD = '_ogRowId';
+
+/**
+ * `setRealtimeSource` 옵션(DD-07). 전부 옵션 — 미지정 시 안전 기본값. / Options for `setRealtimeSource`; all optional.
+ */
+export interface RealtimeWireOptions {
+  /** 프레임당 최대 적용 셀 수(백프레셔). / Max cells applied per frame (backpressure). */
+  maxBatchPerFrame?: number;
+  /** 프레임 스케줄러 주입(헤드리스/테스트 결정론). 기본=rAF/폴백. / Injected frame scheduler; default rAF/fallback. */
+  scheduleFrame?: FrameScheduler;
+  /** stale 판정 임계(ms). 기본 5000. / Stale threshold(ms); default 5000. */
+  staleAfterMs?: number;
+  /** SR 규모요약 핸드오프(DD-12 aria-live). 미지정=no-op(경계 준수). / SR summary handoff; default no-op. */
+  announce?: (summary: RtAnnounceSummary) => void;
+  /** SR 디바운스 윈도우(ms). 기본 500. / SR debounce window(ms); default 500. */
+  debounceMs?: number;
+}
 
 /**
  * OPEN_GRID 코어 그리드 클래스. / The OPEN_GRID core grid class.
@@ -148,6 +184,22 @@ export class OpenGrid<T extends Record<string, any> = any>
   private _recalc!: RecalcCoordinator;
   /** F3(C2): writeCell 단건 쓰기가 쌓아두는 dirty seed. endBatch/즉시 flush 시 onValuesChanged 1회로 소비. */
   private _formulaDirtySeeds: Set<string> = new Set();
+
+  // ── DD-05 S2c-1(CF): 조건부서식 배선 상태(opt-in, 첫 setConditionalFormat 때 지연 조립) ──
+  /** CF 엔진(동적 import 로 조립). 미설정=null → applyCF 콜백 즉시 return(byte-identical). / CF engine (lazily assembled). */
+  private _cf: CFEngine | null = null;
+  /** 컬럼별 통계 캐시(per-render 재계산 금지 — setConditionalFormat/데이터변경 시에만 갱신). / Per-column stats cache. */
+  private _cfStats: Map<string, ColumnStats> = new Map();
+  /** 현재 적용된 CF 규칙(데이터 변경 시 통계 재계산에 재사용). / Currently applied CF rules. */
+  private _cfRules: CFRule[] = [];
+  /** CF 색 시드 읽기 포트(동적 import 후 보관 — cf/ 정적 참조 회피로 별 청크 유지). / CF appearance read port. */
+  private _cfAppearance: AppearanceView | null = null;
+  /** CF 통계 계산기(cf/ 동적 청크에서 보관 — 동기 재계산용, cf/ 정적 참조 회피). / CF stats computer captured from the dynamic chunk. */
+  private _cfComputeStats: ((values: readonly unknown[]) => ColumnStats) | null = null;
+
+  // ── DD-07(RT): 실시간 배선 상태(opt-in, 첫 setRealtimeSource 때 지연 조립) ──
+  /** RT 컨트롤러(동적 import 로 조립). 미설정=null → 실시간 미배선(byte-identical). / Realtime controller (lazily assembled). */
+  private _rt: RealtimeController<T> | null = null;
 
   // ── Phase 0(C2.1): 배치 쓰기 상태(_batchDepth/_batchDirty)는 R6 에서 MutationService 로 이관 ──
 
@@ -434,6 +486,22 @@ export class OpenGrid<T extends Record<string, any> = any>
       getFormulaMeta: (ri, field) => this._formula.getFormulaMeta(ri, field),
       // i18n: 렌더 컨텍스트 로케일 해석기 — 인스턴스 로케일이 전역보다 우선(그룹배지/셀 aria/빈상태/수식 라벨).
       t: (key, params) => this.t(key, params),
+      // DD-05 S2c-1(CF): 조건부서식 셀 적용 훅. CF 미설정(_cf=null)이거나 컬럼 통계 미캐시면 즉시 return
+      //   → 셀 DOM 변화0(제로코스트·byte-identical). 설정 시 순수 파이프(paintFor)로 VisualSpec[] 산출 후
+      //   렌더 브리지가 DOM 물질화. now 는 Date.now() 허용(OpenGrid 는 헤드리스 아님).
+      applyCF: (cellEl, ri, field, value, w, h) => {
+        if (!this._cf || !this._cfAppearance) return;
+        const stats = this._cfStats.get(field);
+        if (!stats) return;
+        const specs = this._cf.paintFor(
+          { value, rowIndex: ri, columnId: field, rowState: 'none' },
+          stats,
+          this._cfAppearance,
+          makeRect(0, 0, w, h),
+          { now: Date.now() },
+        );
+        applyVisualSpecs(cellEl, specs, w, h);
+      },
     }, this._appearance);
     // R5(§3.1 C4): 렌더 루프 컨트롤러 배선. 협력자(renderer/vs/pagination)는 여전히
     // 이 _mount 가 소유·생성하며, 값·협력자는 전부 getter 클로저로 주입(늦은-null / colLayout
@@ -600,6 +668,17 @@ export class OpenGrid<T extends Record<string, any> = any>
     // 워크시트(탭) 초기화
     if (this._options.worksheets?.length) {
       this._initWorksheets();
+    }
+
+    // DD-11 S2b: 외관 신규축(밀도·질감) additive 적용 — 옵션 지정 시에만(미지정=byte-identical).
+    // / DD-11 S2b: apply the new appearance axes (density·texture) — only when opted in (else byte-identical).
+    if (this._options.density != null) this.setDensity(this._options.density);
+    if (this._options.texture != null) this.setTexture(this._options.texture);
+
+    // DD-05 S2c-1(CF): 조건부서식 규칙이 옵션에 있으면 배선(동적 import → 첫 렌더 후 채색). additive·기본 undefined=byte-identical.
+    // / DD-05 S2c-1 (CF): if conditional-format rules are supplied, wire them (dynamic import → paint after first render). additive.
+    if (this._options.conditionalFormat?.length) {
+      void this.setConditionalFormat(this._options.conditionalFormat);
     }
 
     this._ro = new ResizeObserver(() => this._onResize());
@@ -999,7 +1078,12 @@ export class OpenGrid<T extends Record<string, any> = any>
    * @example
    * grid.setData([{ name: 'Kim' }, { name: 'Lee' }]);
    */
-  setData(data: T[]): void { this._mutation.setData(data); }
+  setData(data: T[]): void {
+    this._mutation.setData(data);
+    // DD-05 S2c-1(CF): 데이터 전량 교체 → 컬럼 통계 무효화·재계산(캐시 갱신). CF 미설정이면 무비용.
+    // / CF: full data replace → invalidate & recompute column stats (cache refresh). No-op when CF is unset.
+    if (this._cf) { this._recomputeCFStats(); this._doRender(...this._visRange()); }
+  }
 
   /** 현재(정렬/필터 반영) 데이터 배열. / Current data array (sort/filter applied). */
   getData(): T[] { return this._data.getData(); }
@@ -1022,6 +1106,166 @@ export class OpenGrid<T extends Record<string, any> = any>
     const n = this._data.rowCount;
     this._vs?.setTotalRows(this._flatModel.count());
     this._pagination?.setTotalRows(n);
+  }
+
+  /**
+   * 조건부서식(CF) 규칙을 설정한다 — 데이터바·히트맵·아이콘셋을 렌더 경로에 배선한다.
+   * CF 는 opt-in 이라 첫 호출 때 CF 엔진(cf/**)을 **동적 import** 로 조립한다(베이스 번들 무증가, 별 청크).
+   * 규칙이 걸린 컬럼마다 컬럼 통계를 1회 캐시 계산(per-render 재계산 금지)한 뒤 재렌더한다.
+   * `rules=[]` 를 넘기면 CF 를 해제한다(엔진·통계 캐시 clear + 잔재 제거 재렌더).
+   * / Set conditional-formatting rules — wires data-bars/heatmaps/icon-sets into the render path.
+   * CF is opt-in; the CF engine (cf/**) is assembled via **dynamic import** on first call (no base-bundle
+   * growth, separate chunk). Column stats are cached once per rule-bearing column (never re-computed
+   * per render), then a re-render paints them. Passing `rules=[]` clears CF (engine/cache reset + residue-stripping re-render).
+   *
+   * @param rules - CF 규칙 배열(빈 배열이면 해제) / CF rule array (empty array clears CF)
+   * @example
+   * await grid.setConditionalFormat([
+   *   { id: 'bar', when: { type: 'compare', op: '>=', a: 0 }, encode: { kind: 'bar', axis: 'zero' }, scope: { columnId: 'amount' }, priority: 0 },
+   * ]);
+   */
+  async setConditionalFormat(rules: CFRule[]): Promise<void> {
+    this._cfRules = rules;
+    if (!rules.length) {
+      // 해제: 엔진·통계 캐시 clear 후 재렌더(브리지가 이전 CF 잔재 제거).
+      this._cf = null;
+      this._cfStats.clear();
+      this._doRender(...this._visRange());
+      return;
+    }
+    // 동적 import — cf/ 는 별 청크. 로드 후 엔진 조립 + 색 시드 읽기 포트·통계 계산기 보관(cf/ 정적 참조 회피).
+    const cf = await import('./cf/index.js');
+    this._cf = new cf.CFEngine(new cf.CFRuleStore(rules));
+    this._cfAppearance = cf.staticAppearanceView();
+    this._cfComputeStats = cf.computeColumnStats;
+    this._recomputeCFStats();
+    this._doRender(...this._visRange());
+  }
+
+  /**
+   * CF 규칙이 걸린 컬럼마다 현재 데이터로 컬럼 통계를 계산해 캐시한다(per-render 재계산 금지의 근거).
+   * 통계 계산기는 setConditionalFormat 에서 cf/ 동적 청크로부터 보관한 참조를 동기 사용한다.
+   * / Recompute & cache per-column CF stats using the computer captured from the cf/ dynamic chunk.
+   */
+  private _recomputeCFStats(): void {
+    const compute = this._cfComputeStats;
+    if (!this._cfRules.length || !compute) { this._cfStats.clear(); return; }
+    const fields = new Set(this._cfRules.map(r => r.scope.columnId));
+    const rows = this._data.getData();
+    const next = new Map<string, ColumnStats>();
+    for (const field of fields) {
+      next.set(field, compute(rows.map(r => (r as any)[field])));
+    }
+    this._cfStats = next;
+  }
+
+  // ── DD-07(RT): 실시간 데이터 소스 배선(11 detailed-design/DD-07_realtime.md §2.3) ──────────
+  // ── DD-07(RT): realtime data-source wiring ──────────
+  /**
+   * 실시간 데이터 소스를 그리드에 배선한다(폴링/스트리밍/커스텀 — `IRealtimeSource` 구현 아무거나 DI).
+   * CF 와 동일하게 첫 호출 시에만 realtime/ 를 동적 import(별 청크·베이스 번들 무증가). 델타는 기존
+   * 단일 쓰기 경로(MutationService)를 재사용해 적용되므로 증분=전체 불변식·수식 재계산·차트 라이브
+   * 갱신(dataChange 구독)을 자연 상속한다. 재호출 시 이전 소스는 detach 후 교체.
+   * / Wire a realtime source (polling/streaming/custom — any `IRealtimeSource` via DI). Like CF, the
+   *   realtime/ chunk is dynamically imported only on first call (separate chunk; base bundle unchanged).
+   *   Deltas reuse the existing single write path (MutationService), inheriting the incremental=full
+   *   invariant, formula recompute, and live chart refresh (dataChange subscription). Re-calling
+   *   detaches and replaces the previous source.
+   *
+   * @param source - 실시간 소스(예: `new PollingSource({...})`) / Realtime source (e.g. `new PollingSource({...})`)
+   * @param opts - 백프레셔·신선도·SR 옵션(전부 옵션) / Backpressure/freshness/SR options (all optional)
+   * @returns 배선된 컨트롤러(`.connection`·`.backpressureStats`·`.onConnection`·`.detach()`) / The wired controller
+   * @example
+   * const src = new PollingSource({ intervalMs: 1000, fetcher: async () => ({ kind: 'delta', seq, cells }) });
+   * const rt = await grid.setRealtimeSource(src);
+   * rt.onConnection((s) => console.log(s.status));
+   */
+  async setRealtimeSource(source: IRealtimeSource<T>, opts?: RealtimeWireOptions): Promise<RealtimeController<T>> {
+    // 재호출 = 소스 교체: 이전 컨트롤러 detach(멱등). / Re-call = swap source: detach the previous controller.
+    this._rt?.detach();
+    this._rt = null;
+
+    const rt = await import('./realtime/index.js');
+
+    // ── 좌표 이음새: rowId↔flat index 는 프로젝트 SSOT(FlatRowModel)로 해소(FormulaController 와 동일 규약). ──
+    // / Coordinate seam: rowId↔flat index resolved via the project SSOT (FlatRowModel), same convention as FormulaController.
+    const coords: ICommandCtx<T>['coords'] = {
+      rowCount: () => this._flatModel.count(),
+      rowIdAt: (i) => this._flatModel.rowIdOfFlat(i) ?? undefined,
+      indexOf: (rowId) => this._flatModel.flatIndexOfRowId(rowId),
+      getCellValue: (rowId, field) => this._data.getCellValueByRowId(rowId, field),
+      getRowSnapshot: (rowId) => {
+        const r = this._data.getRowById(rowId);
+        return r ? ({ ...(r as Record<string, unknown>) }) : undefined;
+      },
+    };
+
+    // ── 쓰기 이음새: RtApplyCommand 가 만지는 유일한 표면 = 기존 MutationService 초크포인트(우회 없음). ──
+    // / Write seam: the only surface RtApplyCommand touches = the existing MutationService chokepoint (no bypass).
+    const ctx: ICommandCtx<T> = {
+      mutation: {
+        writeCell: (ri, field, value) => this._mutation.writeCell(ri, field, value),
+        writeCells: (patches) => this._mutation.writeCells(patches.map((p) => ({ ...p }))),
+        insertRow: (item, position) => this._mutation.insertRow(item, (position as any) ?? 'last'),
+        deleteRows: (indices) => this._mutation.deleteRow([...indices]),
+        beginBatch: () => this._mutation.beginBatch(),
+        endBatch: () => this._mutation.endBatch(),
+      },
+      coords,
+      values: { equals: (a, b) => Object.is(a, b) },
+      clock: { now: () => Date.now() },
+    };
+
+    // ── 단일 쓰기 sink: dispatchSilent = do 만(undo 스택 미적재). 프레임 배치는 mutation 배치로 coalesce. ──
+    // / Silent sink: dispatchSilent = do only (no undo push); frame batch coalesces via the mutation batch.
+    const sink: RtCommandSink<T> = {
+      dispatchSilent: (cmd) => cmd.do(ctx),
+      beginBatch: () => this._mutation.beginBatch(),
+      endBatch: () => this._mutation.endBatch(),
+    };
+
+    // ── 상태 보존: 선택/스크롤은 그리드가 이미 rowId 기준 재정합(RangeSelectionManager·VirtualScroll). ──
+    //     따라서 최소 안전 어댑터(비방해). 편집충돌(S-1) 심화 정책은 DD-07 스파이크로 이관.
+    // / State preservation: selection/scroll are already reconciled by rowId (RangeSelectionManager/VirtualScroll),
+    //   so a minimal non-intrusive adapter suffices; deep edit-conflict policy (S-1) is deferred to the DD-07 spike.
+    const rtCoords: RtCoords = {
+      rowIdToIndex: (rowId) => this._flatModel.flatIndexOfRowId(rowId),
+      indexToRowId: (i) => this._flatModel.rowIdOfFlat(i) ?? undefined,
+    };
+    const liveState: LiveStateSource = {
+      readSelection: () => [],
+      readScroll: () => ({ pixelWithinRow: 0, scrollLeft: this._renderer?.bodyWrapper.scrollLeft ?? 0 }),
+      readEditing: () => undefined,
+      readSortFilterSig: () => '',
+      writeSelection: () => {},
+      writeScroll: () => {},
+      writeEditing: () => {},
+    };
+
+    const deps: RealtimeControllerDeps<T> = {
+      sink,
+      stateGuard: new rt.LiveStateGuard(liveState, rtCoords),
+      freshness: new rt.FreshnessClock({ staleAfterMs: opts?.staleAfterMs ?? 5000 }),
+      announce: new rt.RtAnnouncePolicy({
+        announce: opts?.announce ?? (() => {}),
+        ...(opts?.debounceMs !== undefined ? { debounceMs: opts.debounceMs } : {}),
+      }),
+      ...(opts?.scheduleFrame ? { scheduleFrame: opts.scheduleFrame } : {}),
+      ...(opts?.maxBatchPerFrame !== undefined ? { maxBatchPerFrame: opts.maxBatchPerFrame } : {}),
+      // UC-3 전체 스냅샷 = 기존 setData 경로 재사용(_vs 총행수·aria·컬럼폭 재계산 포함). / Full snapshot via existing setData.
+      applySnapshot: (rows) => this.setData(rows as T[]),
+    };
+
+    const controller = new rt.RealtimeController<T>(source, deps);
+    this._rt = controller;
+    controller.attach();
+    return controller;
+  }
+
+  /** 실시간 소스 배선을 해제한다(구독·타이머·소켓 정리, 멱등). / Disconnect the realtime source (teardown; idempotent). */
+  disconnectRealtime(): void {
+    this._rt?.detach();
+    this._rt = null;
   }
 
   /** 모든 행을 제거한다(컬럼·옵션 유지). / Remove all rows (columns & options kept). */
@@ -1633,6 +1877,53 @@ export class OpenGrid<T extends Record<string, any> = any>
     }
     this._container.style.setProperty(k, v);
   }
+
+  /**
+   * DD-11 S2b: 밀도(DENSITY 축, 제4 외관축) 전환 — data-og-density + `--og-density-*` 토큰(순수 additive).
+   * `densityRegistry.resolve(name)` 로 델타를 얻어 ①attr(named=설정, default/미등록=속성 제거로 byte-identical)
+   * ②밀도 이름공간 토큰을 컨테이너 인라인 CSS 변수로 ③행높이 브리지(`--og-density-row-height` → base.css 가
+   * 소비하는 `--og-row-height` 로 미러) ④`requiresRelayout` 이면 **리사이즈와 동일 경로**(`_onResize`)로 좌표
+   * 재파생(신규 relayout 로직 없음). 색⊥형태⊥밀도⊥질감 직교라 theme/skin attr·토큰을 건드리지 않는다.
+   * 미등록 name 은 never-throw(빈 델타 폴백 = default 취급). ⚠️ 밀도 10만행 relayout 실측은 S3 도커 이연.
+   * / DD-11 S2b: switch the density axis (4th appearance axis) — additive `data-og-density` + `--og-density-*`
+   * tokens. Named → set attr/tokens (+ mirror row-height, + relayout via the resize path); default/unknown →
+   * remove attr and reset the density namespace (byte-identical). Orthogonal to theme/skin. Never throws.
+   *
+   * @param name - 밀도 값 id(예 'compact', 'comfortable') / Density value id (e.g. 'compact')
+   */
+  setDensity(name: string): void {
+    const res = densityRegistry.resolve(name);
+    // ① attr: named → 설정, default/미등록(빈 델타) → 제거(byte-identical).
+    if (res.attr) this._container.setAttribute(res.attr.name, res.attr.value);
+    else this._container.removeAttribute('data-og-density');
+    // ② 밀도 이름공간 토큰 리셋(default 복귀 시 이전 델타 잔존 방지) — 밀도는 행높이 authority.
+    for (const k of DENSITY_TOKENS) this._container.style.removeProperty(k);
+    this._container.style.removeProperty('--og-row-height'); // 행높이 미러도 리셋
+    for (const [k, v] of Object.entries(res.tokens)) this._container.style.setProperty(k, v);
+    // ③ 행높이 브리지: --og-density-row-height 를 base.css 소비 토큰 --og-row-height 로 미러.
+    const rowHeight = res.tokens['--og-density-row-height'];
+    if (rowHeight != null) this._container.style.setProperty('--og-row-height', rowHeight);
+    // ④ relayout: 밀도만 좌표 재파생 요구 → 리사이즈와 동일 경로 재사용(신규 로직 없음).
+    if (res.requiresRelayout) this._onResize();
+  }
+
+  /**
+   * DD-11 S2b: 질감(TEXTURE 축, 제3 외관축) 전환 — data-og-texture + `--og-texture-*` 토큰(순수 additive).
+   * `textureRegistry.resolve(name)` 로 델타를 얻어 attr(named=설정, default/미등록=제거) + 질감 이름공간
+   * CSS 변수만 적용한다. 질감은 배경 페인트만이라 relayout 없음(좌표 불변). 색·형태·밀도 축과 직교.
+   * 미등록 name 은 never-throw(빈 델타 폴백). ⚠️ 질감 실렌더 육안 확인은 S3 도커 이연.
+   * / DD-11 S2b: switch the texture axis (3rd appearance axis) — additive `data-og-texture` + `--og-texture-*`
+   * tokens only. Background paint only → no relayout. Orthogonal to color/form/density. Never throws.
+   *
+   * @param name - 질감 값 id(예 'linen', 'paper-grain', 'graph') / Texture value id (e.g. 'linen')
+   */
+  setTexture(name: string): void {
+    const res = textureRegistry.resolve(name);
+    if (res.attr) this._container.setAttribute(res.attr.name, res.attr.value);
+    else this._container.removeAttribute('data-og-texture');
+    for (const k of TEXTURE_TOKENS) this._container.style.removeProperty(k);
+    for (const [k, v] of Object.entries(res.tokens)) this._container.style.setProperty(k, v);
+  }
   /**
    * 트리거 등록('before:{op}' 취소 가능, 'after:{op}' 결과 수신). / Register a trigger
    * ('before:{op}' can cancel, 'after:{op}' receives the result).
@@ -1668,6 +1959,8 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._trigMgr.clear();
     this._ro?.disconnect();
     this._vs?.destroy();
+    this._rt?.detach();                // DD-07: 실시간 구독·타이머·소켓 누수 방지. / Detach realtime subscriptions/timers/sockets.
+    this._rt = null;
     this._chartMgr?.destroyCharts();   // F4: 열린 차트 패널·구독 누수 방지(§5.2)
     this._detailMgr?.destroy();
     this._filterPanel?.destroy();

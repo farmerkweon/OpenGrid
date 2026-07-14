@@ -194,7 +194,14 @@ export type PartialLocaleMessages = { [S in keyof LocaleMessages]?: Partial<Loca
 export type LocaleMessageKey =
   { [S in keyof LocaleMessages]: `${S & string}.${keyof LocaleMessages[S] & string}` }[keyof LocaleMessages];
 
-/** 로케일 포맷 파라미터(문자열 아님): Intl 태그·방향·수출 폰트. / Locale format params (non-string): Intl tag, direction, export font. */
+/**
+ * 문화 규칙 단일 컨텍스트(REQ-T9-816, DD-12 §2.4). 값객체·포맷터·정렬·검색이 문화를 **오직 여기서만**
+ * 조회한다(불변식 3). 아래 확장 필드는 전부 additive·옵셔널 — 기존 3필드·소비처 불변(semver 하위호환).
+ * ★대표 소유 = DD-12: DD-04 `FormatContext.locale`·DD-15 `ExportRunCtx.locale` 는 이 타입을 import(재선언 금지).
+ * / Single culture context (REQ-T9-816, DD-12 §2.4). The only lawful culture-lookup path (invariant 3).
+ *   The extension fields below are all additive & optional — original 3 fields/consumers unchanged.
+ *   ★Canonical owner = DD-12; DD-04/DD-15 import this type (no re-declaration).
+ */
 export interface LocaleMeta {
   /** BCP-47 태그(toLocaleString/lang/인쇄 템플릿용). 예 'ko-KR'. / BCP-47 tag (for toLocaleString/lang/print template). e.g. 'ko-KR'. */
   readonly intlLocale: string;
@@ -202,6 +209,25 @@ export interface LocaleMeta {
   readonly dir?: 'ltr' | 'rtl';
   /** Excel 내보내기 기본 폰트. / Default font for Excel export. */
   readonly exportFont?: string;
+  // ── DD-12 §2.4 확장(additive·옵셔널) / DD-12 §2.4 extension (additive & optional) ──
+  /** 기본 통화코드(ISO 4217) — Money 미지정 시 폴백. / Default currency (ISO 4217). */
+  readonly currency?: string;
+  /** 달력 체계(gregory/japanese/…) — Intl.DateTimeFormat 위임. / Calendar system. */
+  readonly calendar?: string;
+  /** 콜레이션 규칙(정렬 tie-break·대소문자·발음구별) — Intl.Collator 옵션. / Collation for sort/search. */
+  readonly collation?: {
+    readonly sensitivity?: 'base' | 'accent' | 'case' | 'variant';
+    readonly numeric?: boolean;
+    readonly caseFirst?: 'upper' | 'lower' | 'false';
+  };
+  /** 숫자 체계(latn/arab/…). / Numbering system. */
+  readonly numbering?: string;
+  /** 시간대. / Time zone. */
+  readonly timeZone?: string;
+  /** 주 시작요일(0=일·1=월·6=토). / First day of week. */
+  readonly firstDayOfWeek?: 0 | 1 | 6;
+  /** 텍스트팽창 계수(레이아웃 예산 힌트·의사로케일). 예 de≈1.35, 의사로케일=1.4(REQ-T9-817). / Text-expansion factor. */
+  readonly textExpansion?: number;
 }
 
 /** register() 결과 — 누락 키 정직 신호(막지 않음). / register() result — honest missing-key signal (never blocks). */

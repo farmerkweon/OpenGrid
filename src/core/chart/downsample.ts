@@ -1,13 +1,21 @@
 /**
  * F4 — 다운샘플/집계 (§8.2 / NFR-2 / REQ-20). 순수 함수, DOM/그리드 비의존.
+ * / F4 — downsampling/aggregation (§8.2 / NFR-2 / REQ-20). Pure functions, DOM/grid-agnostic.
  *
  * 계약 근거: 11_design_F4_v2.md §8.2(line/area=LTTB+min/max 엔벨로프 정확 보존,
  * bar/pie=인접 category 버킷 집계), §C(sampled/sampledFrom/To → 배지), §10 downsample.spec
  * (series.data.length ≤ maxPoints && max/min(down)==max/min(orig)).
+ * / Contract basis: §8.2 (line/area = LTTB + exact min/max envelope preservation; bar/pie =
+ * adjacent-category bucket aggregation), §C (sampled/sampledFrom/To → badge), and the
+ * downsample spec (series.data.length ≤ maxPoints && max/min(down) == max/min(orig)).
  *
  * LTTB = Largest-Triangle-Three-Buckets(Steinarsson 2013). 시각적 형태 보존 다운샘플의
  * 표준. 본 구현은 여기에 **엔벨로프 강제 보존**을 더한다 — 각 series 의 argmin/argmax 인덱스를
  * 반드시 선택 집합에 포함시켜, 다운샘플 후에도 각 series 의 극값(min/max)이 정확히 살아남는다.
+ * / LTTB = Largest-Triangle-Three-Buckets (Steinarsson 2013), the standard shape-preserving
+ * downsample. This implementation adds **forced envelope preservation** — each series's
+ * argmin/argmax index is always kept in the selection set, so every series's extrema (min/max)
+ * survive exactly after downsampling.
  */
 
 import type { ChartDataModel, ChartSeries, ChartType } from './types.js';
@@ -40,6 +48,12 @@ function envelopeIndices(data: Array<number | null>): number[] {
 /**
  * LTTB 코어 — x(=category index 0..n-1)·y(대표값) 에서 threshold 개 인덱스를 고른다.
  * 항상 첫/마지막을 포함한다. threshold>=n 이면 전 인덱스 반환.
+ * / LTTB core — pick `threshold` indices from x (= category index 0..n-1) and y (representative
+ * values). Always includes the first and last; returns all indices when threshold ≥ n.
+ *
+ * @param y - 대표값 배열(null 은 0 취급) / Representative-value array (null treated as 0)
+ * @param threshold - 목표 선택 개수 / Target number of picks
+ * @returns 오름차순 선택 인덱스 배열 / Ascending array of selected indices
  */
 export function lttbIndices(y: Array<number | null>, threshold: number): number[] {
   const n = y.length;
@@ -75,14 +89,19 @@ export function lttbIndices(y: Array<number | null>, threshold: number): number[
   return sampled;
 }
 
+/** 다운샘플 결과. / Downsample result. */
 export interface DownsampleResult {
+  /** 축약된(또는 원본) 차트 데이터 모델. / The downsampled (or original) chart data model. */
   model: ChartDataModel;
-  /** true 면 축약이 일어났다(배지 §C). */
+  /** true 면 축약이 일어났다(배지 §C). / true when downsampling occurred (badge §C). */
   sampled: boolean;
 }
 
+/** 다운샘플 옵션(a11y 테이블 재생성용). / Downsample options (for a11y-table regeneration). */
 export interface DownsampleOptions {
+  /** a11y 캡션 제목. / a11y caption title. */
   title?: string | undefined;
+  /** 셀 값 포맷터. / Cell value formatter. */
   numberFormat?: ChartNumberFormat | undefined;
 }
 
@@ -90,9 +109,23 @@ export interface DownsampleOptions {
  * `ChartDataModel`을 maxPoints 이하로 축약한다(§8.2). categories/series 를 함께 줄여
  * 정합을 유지하고, meta.sampled/sampledFrom/sampledTo 를 채운다(배지 §C). a11yTable 은
  * 축약된 데이터로 재생성해 모델 자기정합을 유지한다(§B.4: 셀 수 == categories×(series+1)).
+ * / Downsample a `ChartDataModel` to at most maxPoints (§8.2). categories and series are reduced
+ * together to stay consistent, and meta.sampled/sampledFrom/sampledTo are filled (badge §C). The
+ * a11yTable is regenerated from the reduced data to keep the model self-consistent
+ * (§B.4: cell count == categories×(series+1)).
  *
  * - line/area: 공유 인덱스 LTTB + 각 series 엔벨로프(argmin/argmax) 강제 포함 → 극값 정확 보존.
  * - 그 외(bar): 인접 category 를 균등 버킷으로 묶어 대표(첫 category 라벨) + 값 합산.
+ * / - line/area: shared-index LTTB plus each series's forced envelope (argmin/argmax) → exact
+ *   extrema preservation.
+ * - otherwise (bar): group adjacent categories into even buckets with a representative (first
+ *   category label) and summed values.
+ *
+ * @param model - 축약 대상 모델 / Model to downsample
+ * @param maxPoints - 목표 상한 포인트 수 / Target maximum point count
+ * @param type - 차트 종류(line/area vs 그 외 분기) / Chart type (line/area vs otherwise branch)
+ * @param opts - a11y 재생성용 제목·포맷터(선택) / Title/formatter for a11y regeneration (optional)
+ * @returns 축약 모델 + 축약 여부 / The (possibly) downsampled model plus whether it was sampled
  */
 export function downsampleModel(
   model: ChartDataModel,

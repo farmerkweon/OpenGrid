@@ -17,6 +17,7 @@
 import type {
   CanonicalRef, CellKey, CellValue, FormulaCell, FormulaErrorCode, FormulaGridAccessor, RefMode,
 } from './types.js';
+import type { FunctionRegistry } from './FunctionRegistry.js';
 import { cellKey, parseCellKey } from './types.js';
 import { parseFormula } from './FormulaParser.js';
 import { normalizeAst, computeHasRangeRef, indexToColLetters } from './normalizeRefs.js';
@@ -25,22 +26,55 @@ import { FormulaStore } from './FormulaStore.js';
 import { FormulaGraph } from './FormulaGraph.js';
 import { astToSource } from './serializeFormula.js';
 
+/**
+ * 재계산 1회의 요약 결과. / Summary of a single recalculation pass.
+ */
 export interface RecalcSummary {
+  /** 이번 패스에서 값이 갱신된 셀 키(위상순서 + 사이클). / Cell keys updated this pass (topological order + cycles). */
   changed: CellKey[];
+  /** 사이클(#CYCLE)로 판정된 셀 수. / Number of cells resolved as a cycle (#CYCLE). */
   cycles: number;
+  /** 소요 시간(ms). / Elapsed time in ms. */
   ms: number;
 }
 
+/**
+ * RecalcCoordinator 생성 옵션. 그리드가 접근자/콜백을 주입한다.
+ * / Construction options for RecalcCoordinator. The grid injects the accessor/callbacks.
+ */
 export interface RecalcCoordinatorOptions {
+  /** 그리드 좌표/값 접근자(FlatRowModel·ColumnLayout·DataLayer 경유). / Grid coordinate/value accessor (via FlatRowModel/ColumnLayout/DataLayer). */
   accessor: FormulaGridAccessor;
+  /** 계산 결과를 셀에 반영하는 콜백(§4.2 DataLayer.setComputedValue 상당). / Callback that writes a computed value back to a cell (≈ §4.2 DataLayer.setComputedValue). */
   setComputedValue: (rowId: string, field: string, value: CellValue) => void;
+  /** (선택) 수식 에러 통지 콜백(§8.3 formulaError 이벤트 재료). / (optional) Formula-error notification callback (source for the §8.3 formulaError event). */
   onFormulaError?: (rowId: string, field: string, error: FormulaErrorCode) => void;
-  refMode?: RefMode;              // §8.1 formula.refMode, 기본 'stable'(§3.2)
-  divisionPrecision?: number;     // §8.1 formula.divisionPrecision, 기본 30
+  /** 참조 정규화 모드(§8.1 formula.refMode, 기본 'stable' §3.2). / Reference normalization mode (§8.1 formula.refMode, default 'stable', §3.2). */
+  refMode?: RefMode;
+  /** 나눗셈 소수점 자리수(§8.1 formula.divisionPrecision, 기본 30). / Division decimal-place precision (§8.1 formula.divisionPrecision, default 30). */
+  divisionPrecision?: number;
+  /** (선택·additive, DD-08 §2.3) 함수 레지스트리 — 주입 시 override/확장 함수를 평가에 편입(미주입=내장 switch 만). / (optional·additive) Function registry — activates override/extended functions when injected. */
+  functions?: FunctionRegistry;
+  /** (선택·additive, DD-08 §2.4) 결정론 주입 시각(volatile 함수용). / (optional·additive) Injected deterministic clock (for volatile funcs). */
+  now?: () => number;
 }
 
+/**
+ * F3 셀 수식 오케스트레이션: 파싱→정규화→저장→그래프→배치 재계산을 조율한다.
+ * 헤드리스 계층으로 DOM/OpenGrid 를 전혀 모르며, 그리드가 accessor·setComputedValue 를
+ * 주입한다(§5.3/§8.2). 배선(OpenGrid 연결)은 후속 태스크 몫이다.
+ * / F3 cell-formula orchestration: coordinates parse → normalize → store → graph → batch
+ *   recalculation. A headless layer that knows nothing of DOM/OpenGrid; the grid injects the
+ *   accessor and setComputedValue (§5.3/§8.2). Wiring into OpenGrid is a follow-up task.
+ *
+ * @example
+ * const coord = new RecalcCoordinator({ accessor, setComputedValue });
+ * coord.setCellFormula('r1', 'total', '=[price] * [qty]');
+ */
 export class RecalcCoordinator {
+  /** 수식 사이드카 저장소. / Formula sidecar store. */
   readonly store = new FormulaStore();
+  /** 의존성 그래프. / Dependency graph. */
   readonly graph = new FormulaGraph();
 
   private readonly _accessor: FormulaGridAccessor;
@@ -48,6 +82,8 @@ export class RecalcCoordinator {
   private readonly _onFormulaError: ((rowId: string, field: string, error: FormulaErrorCode) => void) | undefined;
   private readonly _refMode: RefMode;
   private readonly _prec: number;
+  private readonly _functions: FunctionRegistry | undefined;
+  private readonly _now: (() => number) | undefined;
 
   constructor(opts: RecalcCoordinatorOptions) {
     this._accessor = opts.accessor;
@@ -55,11 +91,30 @@ export class RecalcCoordinator {
     this._onFormulaError = opts.onFormulaError;
     this._refMode = opts.refMode ?? 'stable';
     this._prec = opts.divisionPrecision ?? 30;
+    this._functions = opts.functions;
+    this._now = opts.now;
+  }
+
+  /** DD-08 §2.3: evaluate 옵션에 레지스트리/결정론 시각을 주입(미주입 시 undefined → 기존 동작). / Assemble evaluate options with the injected registry/clock (undefined preserves prior behavior). */
+  private _evalOpts(): { divisionPrecision: number; functions?: FunctionRegistry; now?: () => number } {
+    const o: { divisionPrecision: number; functions?: FunctionRegistry; now?: () => number } = { divisionPrecision: this._prec };
+    if (this._functions) o.functions = this._functions;
+    if (this._now) o.now = this._now;
+    return o;
   }
 
   // ── 컴파일(파싱+정규화) — setCellFormula 내부 및 단독 검증용 ──
 
-  /** src("=...")를 파싱+정규화한다. 파싱 자체가 실패하면 #ERR/#NAME 을 담은 error AST로 폴백. */
+  /**
+   * src("=...")를 파싱+정규화한다. 파싱 자체가 실패하면 #ERR 을 담은 error AST로 폴백한다.
+   * setCellFormula 내부 및 단독 검증용.
+   * / Parse + normalize `src` ("=..."). On a parse failure, falls back to an error AST holding
+   *   #ERR. Used inside setCellFormula and for standalone validation.
+   *
+   * @param src - 수식 원문 / Formula source text
+   * @param host - 수식이 저장될 호스트 셀(rowId·field) / Host cell (rowId, field) where the formula is stored
+   * @returns 정규화 AST 와 범위참조 포함 여부 / The normalized AST and whether it bears a range reference
+   */
   compile(src: string, host: { rowId: string; field: string }): { ast: FormulaCell['ast']; hasRangeRef: boolean } {
     let ast;
     try {
@@ -75,6 +130,13 @@ export class RecalcCoordinator {
 
   /**
    * setCellFormula(§8.2) — 저장 후 즉시 평가하고, 기존 dependents 가 있으면 함께 dirty 처리.
+   * / setCellFormula (§8.2) — store the formula, evaluate it immediately, and also dirty any
+   *   existing dependents.
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @param field - 컬럼 field 명 / Column field name
+   * @param src - 수식 원문(예: "=[price] * [qty]") / Formula source (e.g. "=[price] * [qty]")
+   * @returns 이번 재계산 요약 / Summary of the resulting recalculation
    *
    * ⚠️ 순서가 중요하다(사이클 탐지 정합성): 새 수식을 등록하는 바로 그 순간에 사이클이
    * "완성"될 수 있다(예: A1=B1 이미 있고 지금 B1=A1 을 등록). onValuesChanged 의
@@ -93,21 +155,46 @@ export class RecalcCoordinator {
     this.store.setFormula(rowId, field, cell);
     const key = cellKey(rowId, field);
 
-    const probe = evaluate(ast, host, this._accessor, { divisionPrecision: this._prec });
+    const probe = evaluate(ast, host, this._accessor, this._evalOpts());
     this.graph.addFormula(key, probe.touched);
 
     return this.onValuesChanged([key]);
   }
 
+  /**
+   * (rowId, field) 셀의 수식 원문을 반환한다(없으면 null).
+   * / Return the formula source of the (rowId, field) cell (null if none).
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @param field - 컬럼 field 명 / Column field name
+   * @returns 수식 원문 또는 null / Formula source or null
+   */
   getCellFormula(rowId: string, field: string): string | null {
     return this.store.getFormula(rowId, field)?.src ?? null;
   }
 
+  /**
+   * (rowId, field) 셀에 수식이 있는지 여부.
+   * / Whether the (rowId, field) cell has a formula.
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @param field - 컬럼 field 명 / Column field name
+   * @returns 수식 존재 여부 / Whether a formula exists
+   */
   hasCellFormula(rowId: string, field: string): boolean {
     return this.store.hasFormula(rowId, field);
   }
 
-  /** clearCellFormula(§8.2) — 사이드카+그래프에서 제거. 값(row[field])은 그리드 쪽 책임(값 유지). */
+  /**
+   * clearCellFormula(§8.2) — 사이드카+그래프에서 수식을 제거한다. 값(row[field])은 그리드
+   * 쪽 책임이라 그대로 유지된다.
+   * / clearCellFormula (§8.2) — remove the formula from the sidecar and graph. The value
+   *   (row[field]) is the grid's responsibility and is kept as-is.
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @param field - 컬럼 field 명 / Column field name
+   * @returns 재계산이 필요한 (구) dependents 키 배열 / Keys of the former dependents that need recalculation
+   */
   clearCellFormula(rowId: string, field: string): CellKey[] {
     const key = cellKey(rowId, field);
     const dependents = this.graph.getDependents(key);
@@ -116,11 +203,27 @@ export class RecalcCoordinator {
     return dependents;
   }
 
+  /**
+   * (rowId, field) 셀의 마지막 평가 에러 코드를 반환한다(에러 없으면 null).
+   * / Return the last evaluation error code of the (rowId, field) cell (null if none).
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @param field - 컬럼 field 명 / Column field name
+   * @returns 에러 코드 또는 null / Error code or null
+   */
   getCellError(rowId: string, field: string): FormulaErrorCode | null {
     return this.store.getFormula(rowId, field)?.error ?? null;
   }
 
-  /** 디버깅용(§8.2 getDependents) — flat 좌표가 아닌 (rowId,field) 그대로 반환(헤드리스 계층). */
+  /**
+   * 디버깅용(§8.2 getDependents) — flat 좌표가 아니라 (rowId, field) 그대로 반환한다(헤드리스 계층).
+   * / For debugging (§8.2 getDependents) — returns (rowId, field) as-is rather than flat
+   *   coordinates (headless layer).
+   *
+   * @param rowId - 대상 행의 stable id / Stable id of the target row
+   * @param field - 컬럼 field 명 / Column field name
+   * @returns 이 셀에 의존하는 셀들의 {rowId, field} 배열 / Array of {rowId, field} for cells depending on this one
+   */
   getDependents(rowId: string, field: string): Array<{ rowId: string; field: string }> {
     return this.graph.getDependents(cellKey(rowId, field)).map(parseCellKey);
   }
@@ -132,6 +235,14 @@ export class RecalcCoordinator {
    * 폐포를 구해 Kahn 위상 1패스로 재계산한다. 삭제 무효화(F3-R28)는 별도 특수 로직 없이,
    * 호출부가 "삭제된 rowId/field 를 이미 grid 에서 제거한 뒤" 그 dependents 를 keys 로
    * 넘기면 evaluate 과정에서 accessor.hasRow/hasField 가 false → 자연스럽게 #REF.
+   * / C2 batch entry point: from `keys` (leaf cells whose value changed, or formula cells that
+   *   need re-evaluation) it computes the dependents closure and recalculates in a single Kahn
+   *   topological pass. Delete invalidation (F3-R28) needs no special logic: if the caller
+   *   passes the dependents as `keys` after the deleted rowId/field is already removed from the
+   *   grid, accessor.hasRow/hasField return false during evaluate → naturally #REF.
+   *
+   * @param keys - 변경 시작 셀 키 배열(seed) / Seed cell keys where the change starts
+   * @returns 이번 재계산 요약 / Summary of this recalculation
    */
   onValuesChanged(keys: CellKey[]): RecalcSummary {
     const t0 = _now();
@@ -158,7 +269,7 @@ export class RecalcCoordinator {
     const cell = this.store.getFormula(rowId, field);
     if (!cell) return; // 방어적: dirty 집합엔 수식 키만 있어야 하지만 방어적으로 skip.
 
-    const outcome = evaluate(cell.ast, { rowId, field }, this._accessor, { divisionPrecision: this._prec });
+    const outcome = evaluate(cell.ast, { rowId, field }, this._accessor, this._evalOpts());
     // 동적 의존성 재등록(모듈 상단 주석 참조) — 범위 멤버십 변화도 다음 평가에 반영.
     this.graph.addFormula(key, outcome.touched);
 
@@ -170,7 +281,14 @@ export class RecalcCoordinator {
     if (outcome.error) this._onFormulaError?.(rowId, field, outcome.error);
   }
 
-  /** recalculate()(§8.2) — 전체 수식 노드 위상정렬 후 평가(setData/컬럼 변경 등). */
+  /**
+   * recalculate()(§8.2) — 등록된 전체 수식 노드를 위상정렬 후 평가한다(setData/컬럼 변경 등
+   * 광범위 변경 시).
+   * / recalculate() (§8.2) — topologically sort and evaluate every registered formula node
+   *   (for broad changes such as setData or column changes).
+   *
+   * @returns 이번 재계산 요약 / Summary of this recalculation
+   */
   recalculateAll(): RecalcSummary {
     const t0 = _now();
     const all = this.graph.allFormulaKeys();
@@ -186,17 +304,37 @@ export class RecalcCoordinator {
     return { changed: [...order, ...cycles], cycles: cycles.length, ms: _now() - t0 };
   }
 
-  /** applySort/applyFilter 후크가 호출할 편의 메서드 — range 보유 수식 전부 dirty(§3.5 P0). */
+  /**
+   * applySort/applyFilter 후크가 호출할 편의 메서드 — range 보유 수식을 전부 dirty 처리한다(§3.5 P0).
+   * / Convenience method for applySort/applyFilter hooks — dirties every range-bearing formula
+   *   (§3.5 P0).
+   *
+   * @returns 이번 재계산 요약 / Summary of this recalculation
+   */
   recalcRangeBearing(): RecalcSummary {
     return this.onValuesChanged(this.store.getRangeBearingKeys());
   }
 
-  /** removeRow 후크 편의 메서드 — 이 rowId 를 deps 로 가진 수식들을 재계산(자연 #REF, §5.1). */
+  /**
+   * removeRow 후크 편의 메서드 — 이 rowId 를 deps 로 가진 수식들을 재계산한다(자연 #REF, §5.1).
+   * / Convenience method for the removeRow hook — recalculates formulas that depend on this
+   *   rowId (naturally #REF, §5.1).
+   *
+   * @param rowId - 삭제/무효화된 행의 stable id / Stable id of the deleted/invalidated row
+   * @returns 이번 재계산 요약 / Summary of this recalculation
+   */
   invalidateRow(rowId: string): RecalcSummary {
     return this.onValuesChanged(this.graph.formulasReferencing(rowId));
   }
 
-  /** removeColumn 후크 편의 메서드 — 이 field 를 deps 로 가진 수식들을 재계산(자연 #REF). */
+  /**
+   * removeColumn 후크 편의 메서드 — 이 field 를 deps 로 가진 수식들을 재계산한다(자연 #REF).
+   * / Convenience method for the removeColumn hook — recalculates formulas that depend on this
+   *   field (naturally #REF).
+   *
+   * @param field - 삭제된 컬럼 field 명 / Field name of the deleted column
+   * @returns 이번 재계산 요약 / Summary of this recalculation
+   */
   invalidateField(field: string): RecalcSummary {
     return this.onValuesChanged(this.graph.formulasReferencingField(field));
   }
@@ -205,11 +343,23 @@ export class RecalcCoordinator {
 
   /**
    * srcRowId/srcField 의 저장된 수식에서 "상대(비-$) 축만" dRow/dCol 만큼 오프셋한 새
-   * 수식 원문을 만든다. 절대($) 축은 불변(C3). 대상 위치가 범위를 벗어나면 해당 참조는
-   * "#REF!" 텍스트로 대체된다(Excel 관례, 이 문자열은 재파싱 시 #NAME 이 아니라 명시적
+   * 수식 원문을 만든다(§8.2/C3, F1 fill 전용). 절대($) 축은 불변(C3). 대상 위치가 범위를
+   * 벗어나면 해당 참조는 "#REF!" 텍스트로 대체된다(관용 표기, 이 문자열은 재파싱 시 명시적
    * 깨짐을 사용자가 알아볼 수 있게 하기 위한 것 — 실제 파서가 #REF! 토큰 자체를 정식
    * 문법으로 지원하진 않으므로, F1 배선 시 이 반환값을 그대로 setCellFormula 에 넘기면
    * 파싱 실패 → #ERR 로 귀결한다는 점을 후속 배선 태스크가 인지해야 한다).
+   * / Build a new formula source from the formula stored at srcRowId/srcField, offsetting only
+   *   the relative (non-$) axes by dRow/dCol (§8.2/C3, for F1 fill). Absolute ($) axes are
+   *   unchanged (C3). If a target lands out of range, that reference is replaced with the
+   *   literal "#REF!" text (a conventional marker so the user sees an explicit break; the parser
+   *   does not accept a #REF! token as real grammar, so a follow-up wiring task must note that
+   *   feeding this return value straight into setCellFormula yields a parse failure → #ERR).
+   *
+   * @param srcRowId - 원본 수식이 있는 행의 stable id / Stable id of the row holding the source formula
+   * @param srcField - 원본 수식이 있는 컬럼 field 명 / Field of the column holding the source formula
+   * @param dRow - 행 오프셋(표시 순서 기준) / Row offset (in displayed order)
+   * @param dCol - 열 오프셋(visibleFields 기준) / Column offset (in visibleFields)
+   * @returns 오프셋된 새 수식 원문("=..."), 원본이 없으면 빈 문자열 / Offset formula source ("=..."), or empty string if no source
    */
   offsetFormula(srcRowId: string, srcField: string, dRow: number, dCol: number): string {
     const src = this.store.getFormula(srcRowId, srcField);

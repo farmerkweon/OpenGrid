@@ -18,13 +18,24 @@
 
 import { OGDecimal, type OGDecimalLike } from './OGDecimal.js';
 
+/**
+ * 컬럼 수식의 필드값 컨텍스트(행 데이터). `[field]` 참조가 이 맵에서 값을 읽는다.
+ * / Field-value context (row data) for a column formula. `[field]` references read values
+ *   from this map.
+ */
 export type FormulaContext = Record<string, OGDecimalLike>;
 
 /**
- * 문자열 수식을 평가해 OGDecimal 결과를 반환한다.
- * @param expr - 수식 문자열 (예: "[price] * [qty] * 0.035")
- * @param ctx  - 필드값 컨텍스트 (행 데이터)
- * @param divisionPrecision - 나눗셈 소수점 자리수 (기본 30)
+ * 문자열 수식을 평가해 OGDecimal 정밀 결과를 반환한다.
+ * / Evaluate a string formula and return an exact OGDecimal result.
+ *
+ * @param expr - 수식 문자열(예: "[price] * [qty] * 0.035") / Formula string (e.g. "[price] * [qty] * 0.035")
+ * @param ctx - 필드값 컨텍스트(행 데이터) / Field-value context (row data)
+ * @param divisionPrecision - 나눗셈 소수점 자리수(기본 30) / Division decimal-place precision (default 30)
+ * @returns 평가 결과 OGDecimal / The evaluated OGDecimal result
+ * @throws SyntaxError|ReferenceError 문법 오류 또는 미존재 필드 참조 시 / on grammar errors or references to a missing field
+ * @example
+ * const total = evaluateFormula('[price] * [qty]', { price: '10.5', qty: '3' });
  */
 export function evaluateFormula(
   expr: string,

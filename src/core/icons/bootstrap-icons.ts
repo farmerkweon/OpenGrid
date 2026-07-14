@@ -6,25 +6,42 @@
 //   `90_skin_system_design.md` §5.1 delivery = "curated inline SVG symbol sprite / per-role SVG".
 //   코어는 **런타임 npm 의존 0** 원칙이므로 `bootstrap-icons` 를 런타임 dependency 로 넣지 않고,
 //   그리드 UI 가 실제로 쓰는 글리프만 **소스에 임베드**한다(build-time 큐레이션 = tree-shake).
+// / Design rationale (Why):
+//   The adopted icon set (item3 §1/§5) = **Bootstrap Icons v1.13.1 (MIT)**. Delivery (§5.1) =
+//   "curated inline SVG symbol sprite / per-role SVG". Since the core follows a **zero runtime
+//   npm dependency** principle, `bootstrap-icons` is not added as a runtime dependency; only the
+//   glyphs the grid UI actually uses are **embedded in source** (build-time curation = tree-shake).
 //
 // 라이선스(필수):
 //   이 파일이 재배포하는 글리프는 Bootstrap Icons(MIT, Copyright (c) 2019-2024 The Bootstrap Authors)
 //   에서 그대로 가져온 SVG path 데이터다. MIT 고지·전문은 저장소 루트 `THIRD_PARTY_LICENSES.txt` 에
 //   동봉되어 npm 배포물과 함께 출하된다(package.json `files`). 항목 3 참조.
+// / License (required):
+//   The glyphs redistributed here are SVG path data taken verbatim from Bootstrap Icons
+//   (MIT, Copyright (c) 2019-2024 The Bootstrap Authors). The MIT notice/full text ships in the
+//   repo-root `THIRD_PARTY_LICENSES.txt`, bundled with the npm artifact (package.json `files`).
 //
 // 형식:
 //   각 값은 `<svg viewBox="0 0 16 16">` **내부** 마크업(<path>/<g>)만 담는다. `IconRegistry` 가
 //   size/aria/skin 토큰과 함께 래핑한다. 모든 글리프 viewBox 는 16×16(BI 표준 그리드).
 //   `eye-reveal` 만은 BI 원본이 아닌, 기존 마스킹 셀의 커스텀 눈 글리프(2-tone, 흰 동공)로
 //   **행동 보존(byte-identical)** 을 위해 그대로 보존한 것이다(원본 아이콘 세트 아님을 명시).
+// / Format:
+//   Each value holds only the markup **inside** `<svg viewBox="0 0 16 16">` (<path>/<g>);
+//   `IconRegistry` wraps it with size/aria/skin tokens. Every glyph viewBox is 16×16 (BI standard
+//   grid). Only `eye-reveal` is not from BI — it is the existing masking-cell custom eye glyph
+//   (2-tone, white pupil), preserved byte-identically for behavior parity (explicitly not part of
+//   the source icon set).
 // ============================================================
 
-/** 모든 큐레이션 글리프 공통 viewBox(Bootstrap Icons 16px 그리드). */
+/** 모든 큐레이션 글리프 공통 viewBox(Bootstrap Icons 16px 그리드). / Common viewBox for all curated glyphs (Bootstrap Icons 16px grid). */
 export const ICON_VIEWBOX = '0 0 16 16';
 
 /**
  * symbolId → SVG 내부 마크업(<path>/<g>). Bootstrap Icons v1.13.1(MIT)에서 큐레이션.
  * `eye-reveal` 는 예외(기존 마스킹 셀 커스텀 글리프, 행동 보존용).
+ * / symbolId → inner SVG markup (<path>/<g>). Curated from Bootstrap Icons v1.13.1 (MIT).
+ *   `eye-reveal` is the exception (existing masking-cell custom glyph, kept for behavior parity).
  */
 export const BOOTSTRAP_ICONS: Readonly<Record<string, string>> = {
   // ── Sorting ──
@@ -118,5 +135,5 @@ export const BOOTSTRAP_ICONS: Readonly<Record<string, string>> = {
   'eye-reveal': '<path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8z"/><path d="M8 5.5A2.5 2.5 0 1 0 8 10.5 2.5 2.5 0 0 0 8 5.5zm0 4A1.5 1.5 0 1 1 8 6.5a1.5 1.5 0 0 1 0 3z" fill="#fff"/>',
 };
 
-/** 큐레이션에 포함된 symbol 개수(테스트/디버깅용). `eye-reveal`(커스텀 1) 포함. */
+/** 큐레이션에 포함된 symbol 개수(테스트/디버깅용). `eye-reveal`(커스텀 1) 포함. / Count of curated symbols (for tests/debugging), including `eye-reveal` (1 custom). */
 export const BOOTSTRAP_ICON_COUNT = Object.keys(BOOTSTRAP_ICONS).length;

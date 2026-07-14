@@ -1,17 +1,23 @@
 /**
  * OPEN_GRID 성능 벤치마크
+ * / OPEN_GRID performance benchmark.
  *
  * 브라우저 콘솔 또는 Node 환경에서 실행:
  *   npx vite-node src/bench/perf.ts
+ * / Run in the browser console or a Node environment:
+ *   npx vite-node src/bench/perf.ts
  *
- * 측정 항목:
- *  - 10만 행 데이터 생성 시간
- *  - DataLayer.setData() 시간
- *  - DataLayer.applySort() 시간
- *  - DataLayer.applyFilter() 시간
- *  - buildGroups() 시간
- *  - buildTree() 시간
- *  - MergeEngine.applyAutoMerge() 시간
+ * 측정 항목: / Measured items:
+ *  - 10만 행 데이터 생성 시간 / Time to generate 100k rows
+ *  - DataLayer.setData() 시간 / DataLayer.setData() time
+ *  - DataLayer.applySort() 시간 / DataLayer.applySort() time
+ *  - DataLayer.applyFilter() 시간 / DataLayer.applyFilter() time
+ *  - buildGroups() 시간 / buildGroups() time
+ *  - buildTree() 시간 / buildTree() time
+ *  - MergeEngine.applyAutoMerge() 시간 / MergeEngine.applyAutoMerge() time
+ *
+ * @internal 개발용 벤치 스크립트 — 공개 API 아님. / Dev-only benchmark script — not part of the public API.
+ * @packageDocumentation
  */
 
 import { DataLayer } from '../core/DataLayer.js';
@@ -19,7 +25,16 @@ import { buildGroups } from '../core/GroupEngine.js';
 import { buildTree } from '../core/TreeEngine.js';
 import { MergeEngine } from '../core/MergeEngine.js';
 
-// ── 유틸 ──────────────────────────────────────────────────
+// ── 유틸 ────────────────────────────────────────────────── / utils
+
+/**
+ * fn 실행 시간을 측정해 콘솔에 찍고 결과를 그대로 반환. / Measure fn's run time, log it, and pass the result through.
+ *
+ * @param label - 측정 라벨 / Measurement label
+ * @param fn - 측정할 함수 / Function to measure
+ * @returns fn 의 반환값 / The return value of fn
+ * @internal
+ */
 function time<T>(label: string, fn: () => T): T {
   const t0 = performance.now();
   const result = fn();
@@ -28,11 +43,18 @@ function time<T>(label: string, fn: () => T): T {
   return result;
 }
 
-// ── 데이터 생성 ──────────────────────────────────────────
+// ── 데이터 생성 ────────────────────────────────────────── / data generation
 const NAMES    = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve'];
 const DEPTS    = ['Engineering', 'Marketing', 'HR', 'Finance', 'Operations'];
 const PRODUCTS = ['Laptop', 'Phone', 'Tablet', 'Monitor', 'Keyboard'];
 
+/**
+ * 벤치용 합성 행을 n개 생성(약 30% 부모-자식 관계 포함). / Generate n synthetic rows for the bench (~30% parent-child relations).
+ *
+ * @param n - 생성할 행 수 / Number of rows to generate
+ * @returns 합성 행 배열 / Array of synthetic rows
+ * @internal
+ */
 function generateRows(n: number) {
   return Array.from({ length: n }, (_, i) => ({
     id: i,
@@ -47,7 +69,14 @@ function generateRows(n: number) {
   }));
 }
 
-// ── 벤치마크 실행 ────────────────────────────────────────
+// ── 벤치마크 실행 ──────────────────────────────────────── / run the benchmark
+
+/**
+ * 지정 행 수로 전체 파이프라인(생성·정렬·필터·그룹·트리·병합·갱신)을 측정. / Measure the full pipeline (generate, sort, filter, group, tree, merge, update) at the given row count.
+ *
+ * @param rowCount - 벤치에 사용할 행 수 / Row count to benchmark
+ * @internal
+ */
 async function runBench(rowCount: number) {
   console.log(`\n${'='.repeat(50)}`);
   console.log(`  OPEN_GRID 벤치마크 (${rowCount.toLocaleString()} 행)`);
@@ -113,7 +142,7 @@ async function runBench(rowCount: number) {
   console.log();
 }
 
-// ── 단계별 실행 ──────────────────────────────────────────
+// ── 단계별 실행 ────────────────────────────────────────── / staged execution
 (async () => {
   await runBench(10_000);
   await runBench(100_000);

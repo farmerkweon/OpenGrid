@@ -696,6 +696,8 @@ export interface GridOptions<T = any> {
   masterDetail?: MasterDetailOptions<T>;
   /** F4: 그리드 데이터 통합 차트(C5.1 단일 중첩). 타입은 chart/types 순환-안전 type-only import. / F4: grid-data integrated chart (C5.1 single nesting). Type is a cycle-safe type-only import from chart/types. */
   chart?: import('./chart/types.js').ChartGlobalOptions;
+  /** DD-05: 조건부서식(CF) 규칙(opt-in, 기본 undefined=byte-identical). 지정 시 _mount 가 setConditionalFormat 로 배선(동적 import). 타입은 cf 순환-안전 type-only import. / DD-05: conditional-format rules (opt-in; default undefined = byte-identical). Type is a cycle-safe type-only import from cf. */
+  conditionalFormat?: import('./cf/CFRule.js').CFRule[];
 
   // 정렬/필터 / sort & filter
   /** 전역 정렬 허용. / Global sort switch. */
@@ -776,6 +778,10 @@ export interface GridOptions<T = any> {
   theme?: string;
   /** 스킨 (FORM 축, R12b) — data-og-skin. 미지정 시 'default'(오늘과 byte-identical). / Skin (FORM axis, R12b) — data-og-skin. Default 'default' (byte-identical to stock look). */
   skin?: string;
+  /** DD-11: 밀도 (DENSITY 축) — data-og-density. 미지정 시 미적용(byte-identical). / Density (DENSITY axis, DD-11) — data-og-density. Unset = not applied (byte-identical). */
+  density?: string;
+  /** DD-11: 질감 (TEXTURE 축) — data-og-texture. 미지정 시 미적용(byte-identical). / Texture (TEXTURE axis, DD-11) — data-og-texture. Unset = not applied (byte-identical). */
+  texture?: string;
   /** 컨테이너에 주입할 CSS 변수 맵. / CSS custom properties injected on the container. */
   cssVars?: Record<string, string>;
 
@@ -1027,6 +1033,13 @@ export interface OpenGridInstance<T = any> {
   pushData(data: T[]): void;
   prefixData(data: T[]): void;
   clearData(): void;
+  /**
+   * DD-05: 조건부서식(CF) 규칙 설정 — 데이터바·히트맵·아이콘셋을 렌더 경로에 배선(opt-in, 동적 import).
+   * 규칙이 걸린 컬럼 통계를 캐시 계산 후 재렌더한다. 빈 배열이면 CF 해제(잔재 제거).
+   * / DD-05: set conditional-format rules — wires data-bars/heatmaps/icon-sets into the render path
+   * (opt-in, dynamic import). Caches rule-bearing column stats, then re-renders. Empty array clears CF.
+   */
+  setConditionalFormat(rules: import('./cf/CFRule.js').CFRule[]): Promise<void>;
 
   // 행 CRUD
   insertRow(item: Partial<T>, position?: Position): void;
@@ -1207,6 +1220,10 @@ export interface OpenGridInstance<T = any> {
   getSkin(): string;
   /** R12b: FORM 축 단일 토큰 런타임 오버라이드(setThemeVar 의 형태-축 형제). 색 값은 거부. */
   setSkinVar(varName: string, value: string): void;
+  /** DD-11: 밀도(DENSITY 축) 전환 — data-og-density + --og-density-* 토큰(+행높이 미러, relayout). 미등록 never-throw. 색⊥형태⊥밀도⊥질감 직교. / DD-11: switch the density axis — additive data-og-density + --og-density-* tokens (row-height mirror + relayout). Never throws. */
+  setDensity(name: string): void;
+  /** DD-11: 질감(TEXTURE 축) 전환 — data-og-texture + --og-texture-* 토큰(배경 페인트만, relayout 없음). 미등록 never-throw. / DD-11: switch the texture axis — additive data-og-texture + --og-texture-* tokens (paint only, no relayout). Never throws. */
+  setTexture(name: string): void;
 
   // i18n: 로케일 전환·조회·메시지 오버라이드·해석 / i18n: locale switch/read/override/resolve
   /** UI 로케일 전환 — 크롬+가시창 재렌더 + emit('localeChange'). 미등록 로케일은 never-throw. */

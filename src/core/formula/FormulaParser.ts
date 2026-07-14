@@ -15,6 +15,15 @@ import { normalizeNumericLiteral } from './numericLiteral.js';
 /**
  * 셀 수식 원문(선두 '=' 포함 가능)을 파싱해 AST(원시 참조 노드 포함, 정규화 전)를 만든다.
  * 정규화(normalizeRefs)는 별도 단계(§3.3)에서 수행한다.
+ * / Parse cell-formula source (a leading '=' is allowed) into an AST that still holds raw
+ *   reference nodes (pre-normalization). Normalization (normalizeRefs) happens in a separate
+ *   stage (§3.3).
+ *
+ * @param src - 셀 수식 원문(예: "=SUM(A1:A5)") / Cell-formula source (e.g. "=SUM(A1:A5)")
+ * @returns 원시 참조 노드를 포함한 정규화 전 AST / Pre-normalization AST including raw reference nodes
+ * @throws SyntaxError 문법 오류(닫는 괄호 누락, 예상치 못한 토큰 등) / on grammar errors (missing paren, unexpected token, …)
+ * @example
+ * const ast = parseFormula('=[price] * 1.1');
  */
 export function parseFormula(src: string): AstNode {
   const body = src.startsWith('=') ? src.slice(1) : src;

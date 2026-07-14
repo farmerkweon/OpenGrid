@@ -1,13 +1,21 @@
 /**
  * F4 — 내장 zero-dep canvas 어댑터 (§3/§4/§B). ChartAdapter 구현체(id='builtin-canvas').
+ * / F4 — built-in zero-dependency canvas adapter (§3/§4/§B). ChartAdapter implementation (id='builtin-canvas').
  *
  * 계약 근거: 11_design_F4_v2.md §3.1(ChartAdapter)·§4(bar/line·축·범례·툴팁)·§B(a11y 하드
  * 게이트: 시각숨김 table·role=img·실 button 범례·키보드 순회)·§8.1(nice-number)·§8.3(hit-test).
- * 실코드 선례: SparklineRenderer(CellRenderer.ts:519-579, 유일 canvas 선례).
+ * 실코드 선례: SparklineRenderer(유일 canvas 선례).
+ * / Contract basis: §3.1 (ChartAdapter)·§4 (bar/line·axes·legend·tooltip)·§B (a11y hard gate:
+ * visually-hidden table·role=img·real button legend·keyboard traversal)·§8.1 (nice-number)·
+ * §8.3 (hit-test). Prior art: the sparkline renderer (the only existing canvas precedent).
  *
  * ⚠️ jsdom 은 `canvas.getContext('2d')` 가 null 이다. 따라서 **그리기(ctx)와 기하(PointGeom)를
  * 분리**한다 — 기하·DOM(테이블/범례/툴팁/aria)은 ctx 없이도 완전히 계산·구성되고, ctx 는
  * 실제 픽셀 그리기에만 쓰며 null 이면 조용히 건너뛴다. 단위테스트는 기하·DOM 만 assert 한다.
+ * / ⚠️ In jsdom `canvas.getContext('2d')` is null. So drawing (ctx) and geometry (PointGeom)
+ * are **kept separate** — geometry and DOM (table/legend/tooltip/aria) are computed and built
+ * fully without ctx; ctx is used only for actual pixel drawing and is silently skipped when null.
+ * Unit tests assert geometry and DOM only.
  */
 
 import type {
@@ -35,7 +43,17 @@ function fmt(v: number | null, spec: ChartRenderSpec, axis: 'x' | 'y' | 'tooltip
   return spec.numberFormat ? spec.numberFormat(v, { axis }) : String(v);
 }
 
+/**
+ * 내장 canvas 차트 어댑터. host 요소에 canvas·시각숨김 a11y 테이블·실 button 범례·툴팁·aria-live
+ * 를 마운트하고, `ChartDataModel`을 bar/line/area 로 렌더한다(§3/§4/§B). 기하(hit-test 대상)와
+ * DOM 은 ctx 없이도 완성되고, 픽셀 그리기만 ctx 에 의존한다(jsdom 안전).
+ * / Built-in canvas chart adapter. Mounts a canvas, a visually-hidden a11y table, a real
+ * `<button>` legend, a tooltip, and an aria-live region into the host element, and renders a
+ * `ChartDataModel` as bar/line/area (§3/§4/§B). Geometry (the hit-test target) and DOM are
+ * complete even without a 2D context; only pixel drawing depends on ctx (jsdom-safe).
+ */
 export class CanvasAdapter implements ChartAdapter {
+  /** 어댑터 식별자(ChartAdapter 레지스트리 키). / Adapter identifier (ChartAdapter registry key). */
   readonly id = 'builtin-canvas';
 
   private _host: HTMLElement | null = null;
@@ -55,6 +73,14 @@ export class CanvasAdapter implements ChartAdapter {
   private _onPoint: ((p: ChartPoint) => void) | null = null;
 
   // ── 라이프사이클 ────────────────────────────────────────────────────────
+  /**
+   * host 에 canvas·a11y 테이블·범례·툴팁·aria-live 를 마운트하고 포인터/키보드 리스너를 건다(§B).
+   * / Mount canvas, a11y table, legend, tooltip, and aria-live into the host, and attach the
+   * pointer/keyboard listeners (§B).
+   *
+   * @param host - 차트를 붙일 컨테이너 요소 / Container element the chart mounts into
+   * @param spec - 렌더 스펙(제목·팔레트·테마·포맷·a11y 옵션) / Render spec (title, palette, theme, format, a11y options)
+   */
   async init(host: HTMLElement, spec: ChartRenderSpec): Promise<void> {
     this._host = host;
     this._spec = spec;
@@ -112,6 +138,16 @@ export class CanvasAdapter implements ChartAdapter {
     canvas.addEventListener('keydown', this._onKeyDown);
   }
 
+  /**
+   * 데이터 모델을 렌더한다 — a11y 테이블·범례·기하 계산·픽셀 도색을 순서대로 수행하고, 라이브
+   * 갱신으로 categories/series 수가 줄면 커서를 즉시 클램프한다(§4/§B). 반복 호출 안전(라이브 재렌더).
+   * / Render the data model — refreshes the a11y table, legend, geometry, and pixel paint in
+   * order, and immediately clamps the cursor when a live update shrinks categories/series
+   * (§4/§B). Safe to call repeatedly (live re-render).
+   *
+   * @param model - 렌더할 차트 데이터 모델 / Chart data model to render
+   * @param spec - 렌더 스펙(테마·팔레트·툴팁/범례 토글 등) / Render spec (theme, palette, tooltip/legend toggles, …)
+   */
   render(model: ChartDataModel, spec: ChartRenderSpec): void {
     this._model = model;
     this._spec = spec;
@@ -133,16 +169,33 @@ export class CanvasAdapter implements ChartAdapter {
     this._hideTooltip();
   }
 
+  /**
+   * 표시 크기를 바꾸고(하한 80×60 클램프) 마지막 모델로 재렌더한다.
+   * / Change the display size (clamped to a minimum of 80×60) and re-render the last model.
+   *
+   * @param width - 새 너비(px) / New width in px
+   * @param height - 새 높이(px) / New height in px
+   */
   resize(width: number, height: number): void {
     this._w = Math.max(80, Math.floor(width));
     this._h = Math.max(60, Math.floor(height));
     if (this._model) this.render(this._model, this._spec);
   }
 
+  /**
+   * 데이터포인트 클릭/활성화(Enter·Space) 콜백을 등록한다(단일 콜백, 재호출 시 교체).
+   * / Register the data-point click/activation (Enter·Space) callback (single callback, replaced on re-call).
+   *
+   * @param cb - 클릭된 포인트를 받는 콜백 / Callback receiving the clicked point
+   */
   onPointClick(cb: (p: ChartPoint) => void): void {
     this._onPoint = cb;
   }
 
+  /**
+   * 리스너를 떼고 마운트한 모든 DOM(canvas·테이블·범례·툴팁·live)을 제거해 원상복구한다.
+   * / Detach listeners and remove all mounted DOM (canvas, table, legend, tooltip, live), restoring the host.
+   */
   destroy(): void {
     const c = this._canvas;
     if (c) {
@@ -163,7 +216,11 @@ export class CanvasAdapter implements ChartAdapter {
   }
 
   // ── 테스트/디버그 접근자 ────────────────────────────────────────────────
-  /** 렌더된 포인트 기하(hittest.spec/adapter.spec 검증용). */
+  /**
+   * 렌더된 포인트 기하(hit-test 검증용). / Rendered point geometry (for hit-test verification).
+   * @returns 마지막 렌더의 PointGeom 배열(읽기전용) / The last render's PointGeom array (read-only)
+   * @internal
+   */
   getGeometry(): readonly PointGeom[] { return this._geoms; }
 
   // ── a11y 테이블(§B.1) ───────────────────────────────────────────────────

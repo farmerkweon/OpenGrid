@@ -7,46 +7,81 @@ import { t as _globalT } from './i18n/LocaleRegistry.js';
 import type { ColumnDef, SortItem, TreeNodeIconDef, CellRange, GridOptions, FilterItem } from './types.js';
 
 // ─── RenderOptions ────────────────────────────────────────
-// R9(90_final_design §6-R9 / §2.5 R-4a): 렌더러가 소비하는 opts 타입.
-// 공개 GridOptions(생성 시 기본값 병합 완료 = Required) 위에, 렌더 파이프라인이 매 프레임
-// 주입하는 내부 증강 필드(언더스코어 접두)를 얹은 것. 내부 필드는 RenderController.renderHeader/
-// renderBody 에서만 채워지며 공개 API 가 아니다(값은 항상 매니저 최신값).
+/**
+ * R9(§6-R9 / §2.5 R-4a): 렌더러가 소비하는 opts 타입. 공개 GridOptions(생성 시 기본값 병합
+ * 완료 = Required) 위에, 렌더 파이프라인이 매 프레임 주입하는 내부 증강 필드(언더스코어 접두)를
+ * 얹은 것. 내부 필드는 렌더 파이프라인에서만 채워지며 공개 API 가 아니다(값은 항상 매니저 최신값).
+ * / R9 (§6-R9 / §2.5 R-4a): the opts type the renderer consumes. On top of the public GridOptions
+ * (defaults already merged at construction = Required), it adds internal augmentation fields
+ * (underscore-prefixed) injected each frame by the render pipeline. The internal fields are filled
+ * only by the render pipeline and are not public API (values are always the manager's latest).
+ * @internal
+ */
 export interface RenderOptions extends Required<GridOptions> {
-  /** ColumnLayout.frozenCount — 고정 컬럼 수(헤더/본문 좌측 오프셋 계산). */
+  /** ColumnLayout.frozenCount — 고정 컬럼 수(헤더/본문 좌측 오프셋 계산). / Frozen column count (header/body left-offset calc). */
   _frozenCount?: number;
-  /** SortFilterManager.filters — 필터 아이콘 활성 표시용. */
+  /** 활성 필터 — 필터 아이콘 활성 표시용. / Active filters — to mark the filter icon active. */
   _activeFilters?: Record<string, FilterItem[]>;
-  /** DnD 핸들에 넘길 총 행수. */
+  /** DnD 핸들에 넘길 총 행수. / Total row count passed to the DnD handle. */
   _totalRows?: number;
-  /** CellEditManager.focusCell — 포커스 셀 하이라이트. */
+  /** 포커스 셀 — 포커스 셀 하이라이트. / The focus cell — for focus-cell highlighting. */
   _focusCell?: { ri: number; ci: number } | null;
-  /** RangeSelectionManager — 범위 선택 rect 하이라이트 재적용 재료(비-'cells' 모드면 없음). */
+  /** 범위 선택 rect 하이라이트 재적용 재료(비-'cells' 모드면 없음). / Rects to re-apply range-selection highlight (absent outside 'cells' mode). */
   _rangeRects?: CellRange[];
 }
 
 // ─── RenderFrame ──────────────────────────────────────────
-// R3(90_final_design §6-R3 / §2.5 R-4b): renderBody 의 위치 인자 묶음을 단일 파라미터 객체로.
-// R9: opts 필드 타입 복원(any → RenderOptions). 나머지 필드는 기존 위치 인자의 타입 그대로.
+/**
+ * R3(§6-R3 / §2.5 R-4b): renderBody 의 위치 인자 묶음을 단일 파라미터 객체로.
+ * R9: opts 필드 타입 복원(any → RenderOptions). 나머지 필드는 기존 위치 인자의 타입 그대로.
+ * / R3 (§6-R3 / §2.5 R-4b): renderBody's positional arguments gathered into a single parameter
+ * object. R9: opts field typed as RenderOptions (was any); the remaining fields keep the types of
+ * the former positional arguments.
+ * @internal
+ */
 export interface RenderFrame {
+  /** 가시 구간 시작 flat 행 인덱스. / First visible flat row index. */
   startIndex: number;
+  /** 가시 구간 끝 flat 행 인덱스. / Last visible flat row index. */
   endIndex: number;
+  /** 행 데이터 소스. / Row data source. */
   data: DataLayer<any>;
+  /** 리프 컬럼 정의 배열. / Leaf column definitions. */
   leaves: ColumnDef[];
+  /** 리프 컬럼별 너비(px). / Per-leaf column widths (px). */
   widths: number[];
+  /** 렌더 옵션(내부 증강 포함). / Render options (with internal augmentation). */
   opts: RenderOptions;
+  /** 가상 스크롤 상단 오프셋(px). / Virtual-scroll top offset (px). */
   offsetY: number;
+  /** 전체 스크롤 높이(px). / Total scroll height (px). */
   totalHeight: number;
+  /** 선택된 행 집합. / Set of selected rows. */
   selectedRows: Set<number>;
+  /** 체크된 행 집합. / Set of checked rows. */
   checkedRows: Set<number>;
+  /** 그룹/트리 플랫 행(그룹핑 시). / Grouped/tree flat rows (when grouping). */
   groupFlatRows?: Array<any> | null;
+  /** 그룹 접기/펴기 콜백. / Group collapse/expand callback. */
   onGroupToggle?: ((key: string) => void) | undefined;
+  /** 트리 노드 접기/펴기 콜백. / Tree-node collapse/expand callback. */
   onTreeToggle?: ((nodeId: any) => void) | undefined;
+  /** opts 위에 병합할 추가 옵션(DnD 총행수 등). / Extra options merged over opts (e.g. DnD total rows). */
   extraOpts?: Record<string, any>;
+  /** 셀 병합 엔진(있으면). / Cell-merge engine (if any). */
   mergeEngine?: MergeEngine | undefined;
+  /** 마스터/디테일 렌더 배선(F2, 비활성 시 undefined). / Master/detail render wiring (F2; undefined when disabled). */
   detailApi?: DetailRenderContext | undefined;
 }
 
 // ─── RendererCallbacks ────────────────────────────────────
+/**
+ * 렌더러가 상위(RenderController/OpenGrid)로 이벤트를 되돌리고 상태를 질의하는 콜백 묶음.
+ * 매 렌더 최신값으로 채워진다.
+ * / The callback bundle through which the renderer sends events back to and queries state from the
+ * host (RenderController/OpenGrid). Filled with the latest values each render.
+ * @internal
+ */
 export interface RendererCallbacks {
   onHeaderClick: (field: string, shiftKey: boolean) => void;
   onCellClick: (ri: number, ci: number, e: MouseEvent) => void;
@@ -64,33 +99,55 @@ export interface RendererCallbacks {
   onColDragStart: (colIndex: number) => void;
   onColDrop: (toIndex: number) => void;
   getColDragIdx: () => number | null;
-  // 추가: override/strategy 활성 시 string, 미등록이면 null → 기존 경로 폴백
+  // override/strategy 활성 시 string, 미등록이면 null → 기존 경로 폴백
+  // / string when override/strategy is active, null when unregistered → falls back to the default path
   getDisplayText?: (rowIndex: number, field: string) => string | null;
   // R11(§4.2): 렌더훅 레지스트리 진입점. 채널별(displayText/cellClass/ariaLabel …) 등록된 훅을
   // 게이트와 함께 해석한다(미등록/게이트닫힘 → null, 제로코스트). 하드코딩 분기 대신 데이터 구동.
+  // / R11 (§4.2): entry point to the render-hook registry. Resolves per-channel (displayText/
+  // cellClass/ariaLabel …) registered hooks together with their gate (unregistered/gate-closed →
+  // null, zero-cost). Data-driven instead of hardcoded branching.
   resolveRenderHook?: (channel: string, rowIndex: number, field: string) => any;
   // R1b: 렌더러측 Number/Date 가 ctx.value 위에 적용할 per-instance displayFormatter 전략. 미설정 시 null → 기본 포맷.
+  // / R1b: the per-instance displayFormatter strategy the renderer-side Number/Date applies over ctx.value. null when unset → default format.
   getDisplayFormatter?: () => ((value: any, field: string, row: any) => string | null) | null;
-  // F3(11_design_F3_v2.md §7.4/§7.5/§7.6, C7): 셀 수식 메타(마커/에러 툴팁/aria-label). 없으면 null.
+  // F3(§7.4/§7.5/§7.6, C7): 셀 수식 메타(마커/에러 툴팁/aria-label). 없으면 null.
+  // / F3 (§7.4/§7.5/§7.6, C7): cell formula meta (marker/error tooltip/aria-label). null when none.
   getFormulaMeta?: (rowIndex: number, field: string) => { src: string; error: string | null; approx: boolean } | null;
   // i18n: 렌더 컨텍스트 로케일 해석기(OpenGrid 가 주입, 미주입 시 전역 t 폴백). 인스턴스 로케일 우선.
+  // / i18n: the render-context locale resolver (injected by OpenGrid; falls back to global t when unset). Instance locale wins.
   t?: (key: string, params?: Record<string, string | number>) => string;
+  // DD-05 S2c-1(CF): 조건부서식 셀 적용 훅. CF 미배선/미설정이면 미제공 또는 즉시 return → 셀 DOM 변화0(byte-identical).
+  // 셀 내용 렌더 후 호출된다(데이터바/히트맵/아이콘셋/잉크/aria 텍스트 쌍둥이 적용). w/h 는 병합 반영 셀 크기.
+  // / DD-05 S2c-1 (CF): conditional-format cell-apply hook. Unwired/unset → absent or early-return → zero cell-DOM change (byte-identical).
+  applyCF?: (cellEl: HTMLElement, rowIndex: number, field: string, value: unknown, cellW: number, cellH: number) => void;
 }
 
 /**
- * F2(11_design_F2_v2.md §4/§5, C6/C10): renderBody 가 detail head/filler 분기·expander 셀을
- * 그릴 때 소비하는 배선 콜백 묶음. OpenGrid._buildDetailRenderContext() 가 매 렌더 새로 만들어
- * 넘긴다(옵션/상태는 항상 DetailManager 최신값). masterDetail.enabled 가 아니면 undefined.
+ * F2(§4/§5, C6/C10): renderBody 가 detail head/filler 분기·expander 셀을 그릴 때 소비하는 배선
+ * 콜백 묶음. 매 렌더 새로 만들어 넘긴다(옵션/상태는 항상 DetailManager 최신값). masterDetail.enabled
+ * 가 아니면 undefined.
+ * / F2 (§4/§5, C6/C10): the wiring-callback bundle renderBody consumes when drawing detail
+ * head/filler branches and the expander cell. Rebuilt and passed each render (options/state are
+ * always DetailManager's latest). undefined unless masterDetail.enabled.
+ * @internal
  */
 export interface DetailRenderContext {
+  /** 토글 위치 모드(전용 컬럼 vs 첫 셀). / Toggle placement mode (dedicated column vs first cell). */
   toggleMode: 'expander-col' | 'first-cell';
+  /** 디테일 패널 aria-label. / Detail-panel aria-label. */
   ariaLabel: string;
+  /** 행 → rowId 해소. / Resolve a row to its rowId. */
   getRowId: (row: any) => string;
+  /** rowId 가 펼쳐졌는가. / Whether the rowId is expanded. */
   isExpanded: (rowId: string) => boolean;
+  /** 토글 클릭 처리. / Handle a toggle click. */
   onToggle: (rowIndex: number, rowId: string) => void;
+  /** 확장 상태별 글리프·라벨·title. / Glyph/label/title per expanded state. */
   getGlyph: (expanded: boolean) => { glyph: string; ariaLabel: string; title: string };
+  /** rowId 의 영속 패널 host 요소. / The persistent panel host element for a rowId. */
   getPanelHost: (rowId: string) => HTMLElement;
-  /** renderBody 매 호출 시작(teardown 직전) — 편집중 host hoist + 나머지 detach(§5). */
+  /** renderBody 매 호출 시작(teardown 직전) — 편집중 host hoist + 나머지 detach(§5). / Start of each renderBody call (just before teardown) — hoist the editing host, detach the rest (§5). */
   onBeforeTeardown: () => void;
 }
 
@@ -107,6 +164,16 @@ const _FORMULA_ERROR_KEY: Record<string, string> = {
 };
 
 // ─── GridRenderer ─────────────────────────────────────────
+/**
+ * 그리드의 DOM 렌더러. 루트에 헤더·본문 래퍼를 마운트하고, 가상 스크롤 프레임마다 헤더/본문 셀을
+ * 다시 그린다. 스타일 결정은 AppearanceResolver(R12a C10) 한 곳을 경유하고, host-isolation 을 위해
+ * load-bearing 스타일은 인라인으로 쓴다. 상위 상태 접근·이벤트 반환은 전부 RendererCallbacks 경유.
+ * / The grid's DOM renderer. Mounts the header and body wrapper into the root and repaints
+ * header/body cells for each virtual-scroll frame. Style decisions route through the single
+ * AppearanceResolver (R12a C10), and load-bearing styles are written inline for host isolation.
+ * All host-state access and event return goes through RendererCallbacks.
+ * @internal
+ */
 export class GridRenderer {
   private _root: HTMLElement;
   private _header: HTMLElement;
@@ -119,6 +186,7 @@ export class GridRenderer {
   // rowIndex → {colIndex → cellEl} 맵
   private _cellMap: Map<number, Map<number, HTMLElement>> = new Map();
 
+  /** 본문 스크롤 래퍼 요소(스크롤/뷰포트 계산 접근용). / The body scroll-wrapper element (for scroll/viewport calculations). */
   get bodyWrapper() { return this._bodyWrap; }
 
   /** i18n: 렌더 로케일 해석기 — cbs.t(인스턴스 로케일) 우선, 미주입 시 전역 t. / i18n: cbs.t (instance locale) first, global t otherwise. */
@@ -126,6 +194,15 @@ export class GridRenderer {
     return this._cbs.t ? this._cbs.t(key, params) : _globalT(key, params);
   }
 
+  /**
+   * 루트에 헤더·본문 래퍼를 마운트하고 헤더-본문 가로 스크롤을 동기화한다.
+   * / Mount the header and body wrapper into the root and sync header–body horizontal scroll.
+   *
+   * @param root - 렌더러가 채울 컨테이너 요소 / Container element the renderer fills
+   * @param opts - 렌더 옵션(기본값 병합 완료) / Render options (defaults already merged)
+   * @param cbs - 이벤트/상태 콜백 묶음 / Event/state callback bundle
+   * @param appearance - 스타일 결정 resolver(미주입 시 테마 컨텍스트로 생성) / Style-decision resolver (created from the theme context if not injected)
+   */
   constructor(root: HTMLElement, opts: RenderOptions, cbs: RendererCallbacks, appearance?: AppearanceResolver) {
     this._root = root;
     this._opts = opts;
@@ -156,15 +233,40 @@ export class GridRenderer {
     }, { passive: true });
   }
 
+  /**
+   * 본문 래퍼 높이를 전체 높이에서 헤더 높이를 뺀 값으로 설정한다.
+   * / Set the body wrapper's height to the total height minus the header height.
+   *
+   * @param totalHeight - 그리드 전체 높이(px) / Total grid height (px)
+   * @param headerHeight - 헤더 높이(px) / Header height (px)
+   */
   updateSize(totalHeight: number, headerHeight: number): void {
     this._bodyWrap.style.height = `${totalHeight - headerHeight}px`;
   }
 
-  /** 현재 렌더된 헤더 영역의 실제 높이(px). 헤더 줄바꿈으로 늘어난 높이를 레이아웃에 반영할 때 사용. */
+  /**
+   * 현재 렌더된 헤더 영역의 실제 높이(px). 헤더 줄바꿈으로 늘어난 높이를 레이아웃에 반영할 때 사용.
+   * / The actual height (px) of the currently rendered header. Used to reflect height grown by
+   * header wrapping back into layout.
+   *
+   * @returns 헤더 offsetHeight(px) / The header offsetHeight (px)
+   */
   getHeaderHeight(): number {
     return this._header.offsetHeight;
   }
 
+  /**
+   * 헤더 영역을 다시 그린다 — 다단 헤더 행·정렬/필터 아이콘·리사이저·컬럼 재정렬·고정 컬럼
+   * 오프셋을 반영한다. 매 호출 헤더 innerHTML 을 재구성한다.
+   * / Repaint the header — reflecting multi-row headers, sort/filter icons, resizers, column
+   * reordering, and frozen-column offsets. Rebuilds the header innerHTML each call.
+   *
+   * @param headerRows - 다단 헤더 셀 행렬 / Multi-row header cell matrix
+   * @param leaves - 리프 컬럼 정의 / Leaf column definitions
+   * @param widths - 리프 컬럼 너비(px) / Leaf column widths (px)
+   * @param sortList - 활성 정렬 항목 / Active sort items
+   * @param opts - 렌더 옵션(고정 컬럼 수·필터 등) / Render options (frozen count, filters, …)
+   */
   renderHeader(
     headerRows: any[][],
     leaves: ColumnDef[],
@@ -435,6 +537,15 @@ export class GridRenderer {
     this._header.appendChild(table);
   }
 
+  /**
+   * 본문 가시 구간을 다시 그린다 — 그룹/트리 행·상태/선택 배경·고정 컬럼·셀 병합·마스터/디테일
+   * 패널·수식 메타를 반영하고, rowIndex→colIndex→cellEl 맵을 재구성한다(getCellEl 근거).
+   * / Repaint the visible body range — reflecting group/tree rows, state/selection backgrounds,
+   * frozen columns, cell merges, master/detail panels, and formula meta, and rebuilding the
+   * rowIndex→colIndex→cellEl map (the basis for getCellEl).
+   *
+   * @param frame - 렌더 프레임(구간·데이터·컬럼·상태·배선) / The render frame (range, data, columns, state, wiring)
+   */
   renderBody(frame: RenderFrame): void {
     // R3: 위치 인자 → 파라미터 객체. opts 는 아래에서 재할당되므로 let 지역, 나머지는 구조분해.
     const {
@@ -980,6 +1091,10 @@ export class GridRenderer {
         });
         _treeRenderTarget.appendChild(rendered);
 
+        // ── DD-05 S2c-1(CF): 조건부서식 적용 훅 — 셀 내용 렌더 후 데이터바/히트맵/아이콘셋/잉크 적용.
+        // 미배선/미설정이면 콜백 미제공 또는 즉시 return → 셀 DOM 변화0(byte-identical·제로코스트).
+        this._cbs.applyCF?.(cellEl, ri, col.field, rowData ? rowData[col.field] : undefined, mergedWidth, mergedHeight);
+
         // 이벤트
         const localRi = ri, localCi = ci;
         cellEl.addEventListener('click',     (e) => { e.stopPropagation(); this._cbs.onCellClick(localRi, localCi, e); });
@@ -1034,6 +1149,15 @@ export class GridRenderer {
     this._body.appendChild(frag);
   }
 
+  /**
+   * 마지막 renderBody 가 만든 셀 요소를 조회한다(맵 미스면 undefined — 가시 구간 밖이거나 병합 은닉).
+   * / Look up a cell element from the last renderBody (undefined on map miss — outside the visible
+   * range or hidden by a merge).
+   *
+   * @param rowIndex - flat 행 인덱스 / Flat row index
+   * @param colIndex - 리프 컬럼 인덱스 / Leaf column index
+   * @returns 셀 요소 또는 undefined / The cell element, or undefined
+   */
   getCellEl(rowIndex: number, colIndex: number): HTMLElement | undefined {
     return this._cellMap.get(rowIndex)?.get(colIndex);
   }
@@ -1069,6 +1193,10 @@ export class GridRenderer {
     frag.appendChild(panel);
   }
 
+  /**
+   * 렌더러가 마운트한 DOM 을 전부 제거해 루트를 비운다.
+   * / Remove all DOM the renderer mounted, emptying the root.
+   */
   destroy(): void {
     this._root.innerHTML = '';
   }
@@ -1097,16 +1225,29 @@ function _resolveTreeIcon(
 }
 
 // ─── DOM 유틸 ─────────────────────────────────────────────
+/**
+ * 태그(+선택 className)로 요소를 만든다. / Create an element from a tag (+optional className).
+ * @internal
+ */
 export function _el(tag: string, className?: string): HTMLElement {
   const e = document.createElement(tag);
   if (className) e.className = className;
   return e;
 }
 
+/**
+ * 요소 style 에 부분 스타일을 병합한다. / Merge a partial style bag into an element's style.
+ * @internal
+ */
 export function _style(el: HTMLElement, styles: Partial<CSSStyleDeclaration>): void {
   Object.assign(el.style, styles);
 }
 
+/**
+ * 문자열 내용을 파일로 다운로드시킨다(Blob URL 생성 후 즉시 해제).
+ * / Trigger a file download of string content (creates then immediately revokes a Blob URL).
+ * @internal
+ */
 export function _downloadText(content: string, filename: string, mime = 'text/plain;charset=utf-8'): void {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);

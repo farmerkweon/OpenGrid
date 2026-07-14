@@ -23,16 +23,39 @@ import {
   type FormulaErrorCode, type FormulaGridAccessor, type CanonicalRef,
 } from './types.js';
 import { NUMERIC_LITERAL_RE, normalizeNumericLiteral } from './numericLiteral.js';
+import type { FunctionRegistry, FunctionDef, FnArg, FnEvalCtx, FnArgResult } from './FunctionRegistry.js';
 
+/**
+ * 수식 1개 평가 결과. / Outcome of evaluating a single formula.
+ */
 export interface EvalOutcome {
+  /** 평가된 값(에러면 에러 토큰 문자열). / Evaluated value (an error token string on error). */
   value: CellValue;
+  /** 에러 코드(정상이면 null). / Error code (null when successful). */
   error: FormulaErrorCode | null;
+  /** SQRT·비정수 거듭제곱 등 float 근사가 섞였는지. / Whether a float approximation (SQRT, non-integer power, …) was involved. */
   approx: boolean;
+  /** 평가 중 실제로 읽은 셀 키 집합(그래프 엣지 재등록용, §5.3 동적 의존성). / Cell keys actually read during evaluation (for graph edge re-registration, §5.3 dynamic deps). */
   touched: Set<CellKey>;
 }
 
+/**
+ * 평가 옵션. / Evaluation options.
+ */
 export interface EvalOptions {
-  divisionPrecision?: number; // §8.1 formula.divisionPrecision, 기본 30(FormulaEngine 계승)
+  /** 나눗셈 소수점 자리수(§8.1 formula.divisionPrecision, 기본 30, FormulaEngine 계승). / Division decimal-place precision (§8.1 formula.divisionPrecision, default 30, inherited from FormulaEngine). */
+  divisionPrecision?: number;
+  /**
+   * (선택·additive, DD-08 §2.3) 함수 레지스트리. 주입 시 `callFunction` 이 내장 switch 보다
+   * **먼저** 레지스트리를 조회한다 — override/확장 함수가 여기서 활성된다. 미주입 시 내장 switch
+   * 만 동작해 기존 동작과 셀 단위 동일(회귀 0).
+   * / (optional·additive, DD-08 §2.3) Function registry. When injected, `callFunction` consults
+   *   the registry *before* the built-in switch (override/extended functions activate here). When
+   *   omitted, only the built-in switch runs — cell-for-cell identical to prior behavior (zero regression).
+   */
+  functions?: FunctionRegistry;
+  /** (선택·additive, DD-08 §2.4/불변식1) 결정론 주입 시각(volatile 함수용, 기본 Date.now). / (optional·additive) Injected deterministic clock (for volatile funcs, default Date.now). */
+  now?: () => number;
 }
 
 /** 평가 중 격리 전파용 내부 예외(§6 F3-R24) — evaluate() 경계에서만 캐치한다. */
@@ -42,14 +65,25 @@ class FormulaEvalError extends Error {
   }
 }
 
-/** 정규화된 AST 하나를 평가한다. 절대 throw 하지 않는다(에러는 outcome.error 로 격리, F3-R24). */
+/**
+ * 정규화된 AST 하나를 평가해 값/에러/근사여부/touched 를 산출한다. 절대 throw 하지 않는다
+ * (에러는 outcome.error 로 격리, F3-R24).
+ * / Evaluate a single normalized AST, producing value / error / approx flag / touched set.
+ *   Never throws (errors are isolated into outcome.error, F3-R24).
+ *
+ * @param ast - 평가할 정규화 AST / Normalized AST to evaluate
+ * @param host - 이 수식이 저장된 호스트 셀(rowId·field) / Host cell (rowId, field) where the formula lives
+ * @param accessor - 그리드 좌표/값 접근자 / Grid coordinate/value accessor
+ * @param opts - 평가 옵션(divisionPrecision 등) / Evaluation options (divisionPrecision, …)
+ * @returns 값·에러·근사여부·touched 를 담은 결과 / Outcome carrying value, error, approx flag and touched set
+ */
 export function evaluate(ast: AstNode, host: { rowId: string; field: string }, accessor: FormulaGridAccessor, opts: EvalOptions = {}): EvalOutcome {
   const touched = new Set<CellKey>();
   const approxBox = { v: false };
   const prec = opts.divisionPrecision ?? 30;
 
   try {
-    const value = evalNode(ast, host, accessor, touched, approxBox, prec);
+    const value = evalNode(ast, host, accessor, touched, approxBox, prec, opts.functions, opts.now);
     return { value, error: null, approx: approxBox.v, touched };
   } catch (e) {
     const code: FormulaErrorCode = e instanceof FormulaEvalError ? e.code : '#ERR';
@@ -278,12 +312,12 @@ function looseEquals(l: unknown, r: unknown): boolean {
 
 // ── 함수 테이블 (§2.4) ───────────────────────────────────────
 
-type EvalCtx = { host: { rowId: string; field: string }; accessor: FormulaGridAccessor; touched: Set<CellKey>; prec: number; approxBox: { v: boolean } };
+type EvalCtx = { host: { rowId: string; field: string }; accessor: FormulaGridAccessor; touched: Set<CellKey>; prec: number; approxBox: { v: boolean }; functions?: FunctionRegistry | undefined; now?: (() => number) | undefined };
 
 /** 함수 인자 하나를 "집계용 값 목록"으로 평가(range 는 멤버 나열, 스칼라는 단일 원소). */
 function evalArgAsList(node: AstNode, ctx: EvalCtx): unknown[] {
   if (node.t === 'range') return resolveRangeMembers(node.ref, ctx.host, ctx.accessor, ctx.touched);
-  return [evalNode(node, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec)];
+  return [evalNode(node, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now)];
 }
 
 /** 집계 함수 인자 전체를 평탄화. C11: 에러 토큰 멤버는 "제외"(집계 오염 차단), 예외 전파 안 함. */
@@ -307,6 +341,12 @@ function isNumericValue(v: unknown): boolean {
 }
 
 function callFunction(name: string, args: AstNode[], ctx: EvalCtx): CellValue {
+  // DD-08 §2.3 opt-in 레지스트리 seam: 레지스트리가 주입돼 있고 이 이름이 등록돼 있으면(override/확장)
+  // 레지스트리 정의를 우선 사용한다. 미주입이거나 미등록이면 아래 내장 switch 로 폴백(회귀 0).
+  if (ctx.functions) {
+    const def = ctx.functions.get(name);
+    if (def) return callRegistryFn(def, args, ctx);
+  }
   switch (name) {
     case 'SUM': {
       const vals = flattenAggArgs(args, ctx);
@@ -339,70 +379,107 @@ function callFunction(name: string, args: AstNode[], ctx: EvalCtx): CellValue {
     }
     case 'IF': {
       if (args.length < 2) throw new FormulaEvalError('#ERR');
-      const cond = evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec);
-      if (toBool(cond)) return evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec);
-      if (args.length > 2) return evalNode(args[2], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec);
+      const cond = evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now);
+      if (toBool(cond)) return evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now);
+      if (args.length > 2) return evalNode(args[2], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now);
       return false;
     }
     case 'AND':
-      return args.every((a) => toBool(evalNode(a, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec)));
+      return args.every((a) => toBool(evalNode(a, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now)));
     case 'OR':
-      return args.some((a) => toBool(evalNode(a, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec)));
+      return args.some((a) => toBool(evalNode(a, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now)));
     case 'NOT':
       if (args.length !== 1) throw new FormulaEvalError('#ERR');
-      return !toBool(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
+      return !toBool(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
     case 'ROUND': {
       if (args.length !== 2) throw new FormulaEvalError('#ERR');
-      const x = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
-      const dp = Number(toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec)).toFixed(0));
+      const x = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
+      const dp = Number(toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now)).toFixed(0));
       return roundHalfUp(x, dp);
     }
     case 'ROUNDUP':
     case 'ROUNDDOWN': {
       if (args.length !== 2) throw new FormulaEvalError('#ERR');
-      const x = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
-      const dp = Number(toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec)).toFixed(0));
+      const x = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
+      const dp = Number(toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now)).toFixed(0));
       return truncateToDp(x, dp, name === 'ROUNDUP' ? 'up' : 'down');
     }
     case 'ABS': {
       if (args.length !== 1) throw new FormulaEvalError('#ERR');
-      return toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec)).abs();
+      return toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now)).abs();
     }
     case 'INT': {
       if (args.length !== 1) throw new FormulaEvalError('#ERR');
-      return floorDecimal(toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec)));
+      return floorDecimal(toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now)));
     }
     case 'MOD': {
       if (args.length !== 2) throw new FormulaEvalError('#ERR');
-      const a = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
-      const b = toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
+      const a = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
+      const b = toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
       if (b.isZero()) throw new FormulaEvalError('#DIV0');
       return a.mod(b);
     }
     case 'POWER': {
       if (args.length !== 2) throw new FormulaEvalError('#ERR');
-      const base = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
-      const exp = toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
+      const base = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
+      const exp = toNumericOrThrow(evalNode(args[1], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
       return powDecimal(base, exp, ctx.prec, ctx.approxBox);
     }
     case 'SQRT': {
       if (args.length !== 1) throw new FormulaEvalError('#ERR');
-      const x = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec));
+      const x = toNumericOrThrow(evalNode(args[0], ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now));
       if (x.isNeg()) throw new FormulaEvalError('#NUM');
       ctx.approxBox.v = true;
       return OGDecimal.from(String(Math.sqrt(x.toNumber())));
     }
     case 'CONCAT': {
-      return args.map((a) => toDisplayString(evalNode(a, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec))).join('');
+      return args.map((a) => toDisplayString(evalNode(a, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now))).join('');
     }
     default:
       throw new FormulaEvalError('#NAME');
   }
 }
 
+/**
+ * DD-08 §2.3 브리지: FunctionDef 를 evaluator 내부 헬퍼(evalNode/집계/변환)로 배선해 평가한다.
+ * 확장/오버라이드 함수가 evaluator 내부에 손대지 않고 자기완결적으로 동작하게 한다(무예외 격리 동일).
+ * / Bridge that wires a FunctionDef to the evaluator's internal helpers so extended/override
+ *   functions run self-contained under the same never-throw isolation.
+ */
+function callRegistryFn(def: FunctionDef, argNodes: AstNode[], ctx: EvalCtx): CellValue {
+  const { min, max } = def.arity;
+  if (argNodes.length < min || (max !== 'variadic' && argNodes.length > max)) {
+    throw new FormulaEvalError('#ERR');
+  }
+  const fnArgs: FnArg[] = argNodes.map((node) => ({
+    scalar: (): CellValue => evalNode(node, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now),
+    tryScalar: (): FnArgResult => {
+      try {
+        return { ok: true, value: evalNode(node, ctx.host, ctx.accessor, ctx.touched, ctx.approxBox, ctx.prec, ctx.functions, ctx.now) };
+      } catch (e) {
+        return { ok: false, error: e instanceof FormulaEvalError ? e.code : '#ERR' };
+      }
+    },
+    list: (): CellValue[] => evalArgAsList(node, ctx) as CellValue[],
+  }));
+  const fnCtx: FnEvalCtx = {
+    prec: ctx.prec,
+    now: ctx.now ?? (() => Date.now()),
+    argCount: argNodes.length,
+    markApprox: () => { ctx.approxBox.v = true; },
+    fail: (code: FormulaErrorCode): never => { throw new FormulaEvalError(code); },
+    toNum: (v) => toNumericOrThrow(v),
+    toBool: (v) => toBool(v),
+    toStr: (v) => toDisplayString(v),
+    isNumeric: (v) => isNumericValue(v),
+    collect: () => flattenAggArgs(argNodes, ctx) as CellValue[],
+  };
+  return def.evaluate(fnArgs, fnCtx);
+}
+
 // ── 메인 재귀 평가 ───────────────────────────────────────────
 
-function evalNode(node: AstNode, host: { rowId: string; field: string }, accessor: FormulaGridAccessor, touched: Set<CellKey>, approxBox: { v: boolean }, prec: number): CellValue {
+function evalNode(node: AstNode, host: { rowId: string; field: string }, accessor: FormulaGridAccessor, touched: Set<CellKey>, approxBox: { v: boolean }, prec: number, functions?: FunctionRegistry, now?: () => number): CellValue {
   switch (node.t) {
     case 'num': return OGDecimal.from(node.v);
     case 'str': return node.v;
@@ -424,16 +501,16 @@ function evalNode(node: AstNode, host: { rowId: string; field: string }, accesso
       // 단독 범위(함수 인자 밖)는 스칼라로 쓸 수 없음 — 안전한 명시적 실패.
       throw new FormulaEvalError('#VALUE');
     case 'call':
-      return callFunction(node.name, node.args, { host, accessor, touched, prec, approxBox });
+      return callFunction(node.name, node.args, { host, accessor, touched, prec, approxBox, functions, now });
     case 'unary': {
-      const v = toNumericOrThrow(evalNode(node.arg, host, accessor, touched, approxBox, prec));
+      const v = toNumericOrThrow(evalNode(node.arg, host, accessor, touched, approxBox, prec, functions, now));
       return node.op === '-' ? v.neg() : v;
     }
     case 'bin':
       return evalBin(
         node.op,
-        evalNode(node.left, host, accessor, touched, approxBox, prec),
-        evalNode(node.right, host, accessor, touched, approxBox, prec),
+        evalNode(node.left, host, accessor, touched, approxBox, prec, functions, now),
+        evalNode(node.right, host, accessor, touched, approxBox, prec, functions, now),
         prec,
         approxBox,
       );

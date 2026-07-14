@@ -36,7 +36,16 @@ const BIN_TEXT: Record<string, string> = {
   '=': '=', '<>': '<>', '<': '<', '<=': '<=', '>': '>', '>=': '>=',
 };
 
-/** 정규화 AST를 다시 "=..." 형태의 A1 원문으로 직렬화한다(offsetFormula 결과물 조립용). */
+/**
+ * 정규화 AST를 다시 "=..." 형태의 A1 원문으로 직렬화한다(offsetFormula 결과물 조립용).
+ * / Serialize a normalized AST back into "=..." A1 source text (used to assemble
+ *   offsetFormula results; see §4.3 / §8.2 / C3).
+ *
+ * @param ast - 직렬화할 정규화 AST / Normalized AST to serialize
+ * @param host - 상대참조 기준점이 되는 호스트 셀(rowId·field) / Host cell (rowId, field) anchoring relative refs
+ * @param accessor - 그리드 좌표/값 접근자 / Grid coordinate/value accessor
+ * @returns "=" 로 시작하는 A1 원문 문자열 / A1 source string prefixed with "="
+ */
 export function astToSource(ast: AstNode, host: { rowId: string; field: string }, accessor: FormulaGridAccessor): string {
   return '=' + render(ast, host, accessor);
 }

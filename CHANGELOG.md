@@ -2,6 +2,17 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.3.0] - 2026-07-15
+
+### Added
+- **조건부서식(CF)** / Conditional formatting — 데이터바·히트맵·아이콘셋·규칙 우선순위(DD-05).
+- **통합 차트 서브시스템** / Integrated chart subsystem — 헤드리스 차트 코어·소스 어댑터(DD-06).
+- **실시간 데이터** / Realtime data — 스트리밍/폴링 소스·백프레셔(DD-07).
+- **외관 신규 축** / Appearance axes — 밀도(density)·질감(texture) setter (DD-11).
+
+### Notes
+- 데모/차트 연동(Apache ECharts)은 라이브러리에 번들되지 않으며 외부에서 로드된다(번들 크기 영향 0).
+
 ## [1.2.1] - 2026-07-05
 
 ### Fixed
