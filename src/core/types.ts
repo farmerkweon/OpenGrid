@@ -2,18 +2,50 @@
 // OPEN_GRID 핵심 타입 정의 / OPEN_GRID core type definitions
 // ============================================================
 
-/** 컬럼 데이터 타입. / Column data type. */
+/**
+ * 컬럼이 담는 값의 종류. 이 값 하나로 그리드가 "어떻게 정렬하고, 기본 렌더러로 무엇을 쓰고,
+ * 편집기를 무엇으로 열지"를 결정합니다. 지정하지 않으면 문자열처럼 다룹니다.
+ * / What kind of value a column holds. This single choice drives how the grid sorts, which
+ * default renderer it uses, and which editor it opens. Unset behaves like a string.
+ *
+ *  - `'string'`  : 일반 텍스트. / Plain text.
+ *  - `'number'`  : 숫자(오른쪽 정렬·숫자 비교·천단위 포맷). / Number (right-aligned, numeric compare, thousand separators).
+ *  - `'date'`    : 날짜(달력 편집기·날짜 비교). / Date (calendar editor, date compare).
+ *  - `'boolean'` : 참/거짓(체크박스 표시). / True/false (rendered as a checkbox).
+ *  - `'select'`  : 목록에서 하나 선택(드롭다운 편집기). / Single choice from a list (dropdown editor).
+ *  - `'radio'`   : 같은 그룹 안에서 하나 선택. / Single choice within a radio group.
+ *  - `'img'`     : 셀 값을 이미지 주소로 보고 그림 표시. / Treat the value as an image URL and show it.
+ *  - `'html'`    : HTML 문자열을 그대로 렌더(기본 sanitize). / Render an HTML string (sanitized by default).
+ *  - `'barcode'` : 값을 바코드 그래픽으로 표시. / Show the value as a barcode graphic.
+ */
 export type DataType = 'string' | 'number' | 'date' | 'boolean' | 'select' | 'radio' | 'img' | 'html' | 'barcode';
 
 // ─── F5: 마스킹 타입 (MaskingEngine.ts에 구현) / F5: masking types (implemented in MaskingEngine.ts) ─────────────
 export type { MaskType, MaskDef } from './MaskingEngine.js';
 // i18n: 인스턴스 메시지 오버라이드 타입(GridOptions.messages) / i18n: instance message override type (GridOptions.messages)
 import type { PartialLocaleMessages, LocaleMessageKey, MessageValue } from './i18n/types.js';
-/** 선택 모드('cells' = F1 범위 선택). / Selection mode ('cells' = F1 range selection). */
-export type SelectionMode = 'single' | 'row' | 'multiple' | 'cells';
-/** 정렬 방향. / Sort direction. */
+/**
+ * 사용자가 클릭·드래그로 무엇을 선택할 수 있는지 정하는 모드.
+ * / What the user can select by clicking or dragging.
+ *
+ *  - `'single'`   : 한 번에 한 행만. / One row at a time.
+ *  - `'row'`      : 행 단위 선택(다중 가능은 UI에 따름). / Row-level selection.
+ *  - `'multiple'` : 여러 행을 함께(Ctrl/Shift). / Multiple rows together (Ctrl/Shift).
+ *  - `'cells'`    : 스프레드시트처럼 셀 사각형 범위를 선택(채우기 핸들 포함). / Spreadsheet-style rectangular cell range (with fill handle).
+ */
+export type SelectionMode = 'single' | 'row' | 'multiple' | 'cells'; // 'cells' = F1 범위 선택
+/** 정렬 방향. `'asc'` 오름차순(작은 값 먼저), `'desc'` 내림차순(큰 값 먼저). / Sort direction: 'asc' ascending (smallest first), 'desc' descending (largest first). */
 export type SortDir = 'asc' | 'desc';
-/** 삽입 위치(키워드 또는 인덱스). / Insertion position (keyword or index). */
+/**
+ * 새 항목을 어디에 끼워 넣을지. 키워드로 상대 위치를 주거나, 숫자로 정확한 인덱스를 줍니다.
+ * / Where to insert a new item — a keyword for a relative spot, or a number for an exact index.
+ *
+ *  - `'first'`  : 맨 앞. / At the very front.
+ *  - `'last'`   : 맨 뒤. / At the very end.
+ *  - `'before'` : 기준 위치 바로 앞. / Just before the reference position.
+ *  - `'after'`  : 기준 위치 바로 뒤. / Just after the reference position.
+ *  - `number`   : 해당 인덱스 자리. / At that exact index.
+ */
 export type Position = 'first' | 'last' | 'before' | 'after' | number;
 /** 내장 셀 렌더러 타입 이름. / Built-in cell renderer type name. */
 export type RendererType = 'text' | 'number' | 'date' | 'checkbox' | 'button' | 'link' | 'image' | 'icon' | 'switch' | 'sparkline' | 'template' | 'custom' | 'badge' | 'progress' | 'rating' | 'radio' | 'img' | 'html' | 'barcode';
@@ -22,72 +54,120 @@ export type EditorType = 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'c
 
 // ─── 이벤트 타입 / event types ───────────────────────────────────────────
 /**
- * 셀 마우스 이벤트 페이로드(cellClick/cellDblClick/cellMouseOver …).
- * / Cell mouse event payload (cellClick/cellDblClick/cellMouseOver …).
+ * 사용자가 셀을 마우스로 조작할 때(클릭·더블클릭·마우스 올림 등) 그 핸들러로 전달되는 정보 묶음입니다.
+ * "어느 행·어느 컬럼의 어떤 값이, 어떤 DOM 요소에서, 원래 어떤 브라우저 이벤트로" 일어났는지를
+ * 한 번에 담아 주므로 핸들러 안에서 좌표를 다시 계산할 필요가 없습니다.
+ * / The payload handed to your handler when the user manipulates a cell with the mouse
+ * (click / dbl-click / mouse-over …). It bundles which row & column, what value, which DOM
+ * element, and the original browser event — so your handler never has to recompute coordinates.
+ * 관련 옵션 / Related options: onCellClick, onCellDblClick, onCellMouseOver …
  *
  * @typeParam T - 행 데이터 타입 / Row data type
  */
 export interface CellEvent<T = any> {
+  /** 이벤트 이름('cellClick' 등). / The event name (e.g. 'cellClick'). */
   type: string;
+  /** 대상 행의 화면 표시 순서 인덱스. / Screen-order index of the target row. */
   rowIndex: number;
+  /** 대상 컬럼의 인덱스. / Index of the target column. */
   columnIndex: number;
+  /** 대상 컬럼의 field 이름. / field name of the target column. */
   field: string;
+  /** 그 셀의 원시 값. / Raw value of that cell. */
   value: any;
+  /** 그 행의 데이터 객체 전체. / The full row-data object. */
   row: T;
+  /** 그 컬럼의 정의. / The column's definition. */
   column: ColumnDef<T>;
+  /** 실제 클릭된 셀 DOM 요소. / The actual clicked cell DOM element. */
   target: HTMLElement;
+  /** 브라우저 원본 마우스 이벤트(좌표·수식어 키 등). / The underlying browser mouse event (coords, modifier keys …). */
   originalEvent: MouseEvent;
 }
 
 /**
- * 셀 편집 이벤트 페이로드(editStart/editEnd/editBefore).
- * / Cell edit event payload (editStart/editEnd/editBefore).
+ * 셀 값 편집의 흐름(편집 시작 → 커밋 직전 → 편집 끝) 각 지점에서 핸들러로 오는 정보입니다.
+ * 편집 전 값(oldValue)과 편집 후 값(newValue)을 함께 주므로, 값이 실제로 바뀌었는지 비교하거나
+ * 커밋 직전 훅에서 검증 후 되돌릴 수 있습니다.
+ * / Delivered at each point in a cell edit (start → just-before-commit → end). It carries both the
+ * value before (oldValue) and after (newValue) so you can compare, or validate and veto the commit.
+ * 관련 옵션 / Related options: onEditStart, onEditBefore, onEditEnd
  *
  * @typeParam T - 행 데이터 타입 / Row data type
  */
 export interface EditEvent<T = any> {
+  /** 이벤트 이름('editStart'/'editEnd'/'editBefore'). / The event name. */
   type: string;
+  /** 편집 중인 행의 화면 표시 순서 인덱스. / Screen-order index of the row being edited. */
   rowIndex: number;
+  /** 편집 중인 컬럼의 인덱스. / Index of the column being edited. */
   columnIndex: number;
+  /** 편집 중인 컬럼의 field 이름. / field name of the column being edited. */
   field: string;
+  /** 편집 전 값. / Value before the edit. */
   oldValue: any;
+  /** 편집 후 들어온 값. / Value after the edit. */
   newValue: any;
+  /** 편집 중인 행의 데이터 객체. / The row-data object being edited. */
   row: T;
+  /** 편집 중인 컬럼의 정의. / The column's definition. */
   column: ColumnDef<T>;
-  /** true 로 바꾸면 편집 커밋 취소. / Set true to cancel the edit commit. */
+  /** 편집 커밋 직전(onEditBefore)에 true 로 바꾸면 그 편집을 무효화합니다. / In the pre-commit hook (onEditBefore), set true to reject the edit. */
   cancel?: boolean;
 }
 
 /**
- * 행 마우스 이벤트 페이로드(rowClick/rowDblClick/rowMouseOver …).
- * / Row mouse event payload (rowClick/rowDblClick/rowMouseOver …).
+ * 셀이 아니라 "행 전체"를 마우스로 조작했을 때(행 클릭·더블클릭·마우스 올림 등) 오는 정보입니다.
+ * 컬럼 정보 없이 어느 행인지와 그 행 데이터만 필요할 때 CellEvent 보다 가볍게 씁니다.
+ * / Delivered when the user manipulates a whole row (row click / dbl-click / mouse-over …). Lighter
+ * than CellEvent for when you only need which row and its data, not the column.
+ * 관련 옵션 / Related options: onRowClick, onRowDblClick, onRowMouseOver …
  *
  * @typeParam T - 행 데이터 타입 / Row data type
  */
 export interface RowEvent<T = any> {
+  /** 이벤트 이름('rowClick' 등). / The event name (e.g. 'rowClick'). */
   type: string;
+  /** 대상 행의 화면 표시 순서 인덱스. / Screen-order index of the target row. */
   rowIndex: number;
+  /** 그 행의 데이터 객체 전체. / The full row-data object. */
   row: T;
+  /** 이벤트가 일어난 행 DOM 요소. / The row DOM element where the event occurred. */
   target: HTMLElement;
+  /** 브라우저 원본 마우스 이벤트. / The underlying browser mouse event. */
   originalEvent: MouseEvent;
 }
 
 /**
- * 셀 키보드 이벤트 페이로드(cellKeyDown/cellKeyUp/cellKeyPress).
- * / Cell keyboard event payload (cellKeyDown/cellKeyUp/cellKeyPress).
+ * 셀에 포커스가 있는 상태에서 키를 눌렀을 때(키 다운·업·프레스) 오는 정보입니다. CellEvent 가 담는
+ * 행·컬럼·값에 더해, 눌린 키 이름(key)을 함께 주므로 Enter 이동·Delete 지우기 같은 단축키를 직접 구현할 수 있습니다.
+ * / Delivered when a key is pressed while a cell has focus (keydown/keyup/keypress). On top of the
+ * row/column/value that CellEvent carries, it adds the pressed `key` name so you can build
+ * shortcuts like Enter-to-move or Delete-to-clear.
+ * 관련 옵션 / Related options: onCellKeyDown, onCellKeyUp, onCellKeyPress
  *
  * @typeParam T - 행 데이터 타입 / Row data type
  */
 export interface CellKeyEvent<T = any> {
+  /** 이벤트 이름('cellKeyDown' 등). / The event name. */
   type: string;
+  /** 대상 행의 화면 표시 순서 인덱스. / Screen-order index of the target row. */
   rowIndex: number;
+  /** 대상 컬럼의 인덱스. / Index of the target column. */
   columnIndex: number;
+  /** 대상 컬럼의 field 이름. / field name of the target column. */
   field: string;
+  /** 그 셀의 원시 값. / Raw value of that cell. */
   value: any;
+  /** 그 행의 데이터 객체 전체. / The full row-data object. */
   row: T;
+  /** 그 컬럼의 정의. / The column's definition. */
   column: ColumnDef<T>;
+  /** 눌린 키 이름(KeyboardEvent.key: 'Enter','ArrowDown','a' …). / The pressed key name (KeyboardEvent.key). */
   key: string;
+  /** 이벤트가 일어난 셀 DOM 요소. / The cell DOM element where the event occurred. */
   target: HTMLElement;
+  /** 브라우저 원본 키보드 이벤트(수식어 키 등). / The underlying browser keyboard event (modifier keys …). */
   originalEvent: KeyboardEvent;
 }
 
@@ -168,44 +248,62 @@ export interface SelectionEvent<T = any> {
 }
 
 /**
- * 셀 범위(사각형) 좌표. / Cell range (rectangle) coordinates.
+ * 선택된 셀들의 사각형 범위를 네 모서리 인덱스로 나타냅니다(엑셀의 A1:C5 같은 개념).
+ * 범위 선택 기능이 이 값을 만들어 내고, 수식의 참조 대상과 차트의 데이터 소스가 이 좌표를 그대로 읽어 씁니다.
+ * / A rectangular block of selected cells, given as its four corner indexes (think of a spreadsheet's
+ * A1:C5). Range selection produces it; cell formulas and chart sources consume the same coordinates.
  *
- * CellRangeSemantics — CellRange 의미 규범(C0.4, 15_cross_contracts.md). 소유자 = F1(범위 선택).
- * / CellRange semantic contract (C0.4, 15_cross_contracts.md). Owner = F1 (range selection).
- * F3(수식 ref)·F4(차트 소스)는 이 의미로만 CellRange 를 소비한다.
- *  - startRow/endRow : flat/visual index (C0.2 — FlatRowModel 이 다루는 화면 표시 순서).
- *    group/tree pseudo-row, (F2 도입 후) detail head/filler 도 포함한 인덱스 공간이며,
- *    display index(정렬/필터만 반영, group/tree 제외)와 다르다.
- *  - startCol/endCol : `ColumnLayout.visibleLeaves` 인덱스(숨김 컬럼 제외). 숨김 컬럼은
- *    좌표를 흔들지 않되, 언하이드 시 재렌더로 좌표 표시(A1 등)가 갱신된다.
- *  - 선택 자체의 영속 정체성은 이 인덱스가 아니라 stable (rowId × field) 앵커로 저장한다
- *    (C0.5) — CellRange 는 어디까지나 "현재 화면에 투영된" 사각형 표현이다.
+ * 좌표가 가리키는 것 / What the coordinates mean:
+ *  - 행 인덱스(startRow/endRow)는 "화면에 보이는 순서"입니다. 그룹·트리의 가상 행이나 펼쳐진 상세 행까지
+ *    포함한 순서라서, 정렬·필터만 반영한 순수 데이터 순서와는 다를 수 있습니다.
+ *    / Row indexes are in on-screen order — they include group/tree pseudo-rows and expanded detail
+ *    rows, so they can differ from the pure data order that reflects only sort/filter.
+ *  - 컬럼 인덱스(startCol/endCol)는 "지금 보이는 컬럼들" 기준입니다(숨긴 컬럼 제외). 컬럼을 다시 보이게 하면
+ *    재렌더 때 좌표 표시가 갱신됩니다.
+ *    / Column indexes count only currently visible columns (hidden ones excluded); un-hiding a column
+ *    refreshes the displayed coordinates on the next render.
+ *
+ * 주의 / Note: 선택의 "영구 신원"은 이 인덱스가 아니라 안정적인 (행 id × field) 앵커로 저장됩니다.
+ * CellRange 는 어디까지나 "지금 화면에 투영된" 사각형 표현입니다.
+ * / The persistent identity of a selection is stored as a stable (rowId × field) anchor, not as these
+ * indexes — CellRange is only the "currently projected onto screen" rectangle.
  */
+// CellRangeSemantics(C0.4, 15_cross_contracts.md). 소유자 = F1(범위 선택). F3(수식 ref)·F4(차트 소스)가 소비.
+// 행=flat/visual index(C0.2, FlatRowModel), 컬=ColumnLayout.visibleLeaves, 영속 신원=stable rowId×field 앵커(C0.5).
 export interface CellRange {
+  /** 위쪽 경계 행(화면 표시 순서). / Top boundary row (on-screen order). */
   startRow: number;
+  /** 아래쪽 경계 행(화면 표시 순서). / Bottom boundary row (on-screen order). */
   endRow: number;
+  /** 왼쪽 경계 컬럼(보이는 컬럼 기준). / Left boundary column (among visible columns). */
   startCol: number;
+  /** 오른쪽 경계 컬럼(보이는 컬럼 기준). / Right boundary column (among visible columns). */
   endCol: number;
 }
 
 // ─── F1: 범위 선택 + 채우기 핸들 옵션/이벤트(11_design_F1_v2.md §6, C5) ────
 // ─── F1: range selection + fill handle options/events ────
-/** F1 범위 선택 옵션. / F1 range-selection options. */
+/**
+ * 스프레드시트식 범위 선택과 채우기 핸들의 세부 동작을 조절합니다. selection: 'cells' 로 켠 뒤,
+ * 채우기 핸들을 보일지·자동 스크롤 폭·시리즈 자동 감지 여부 등을 여기서 미세 조정합니다.
+ * / Fine-tunes spreadsheet-style range selection and the fill handle. After enabling selection:
+ * 'cells', tweak whether the handle shows, the autoscroll band, series auto-detection, and so on.
+ */
 export interface RangeSelectionOptions {
-  /** 기본 selection==='cells' 와 동치 / Equivalent to selection==='cells'. Default follows selection. */
+  /** 범위 선택 켜기. 생략 시 selection==='cells' 여부를 따릅니다. / Enable range selection. Unset follows whether selection==='cells'. */
   enabled?: boolean;
-  /** 기본 true — 핸들 표시/드래그 / Default true — show/drag the fill handle */
+  /** 선택 영역 모서리의 채우기 핸들(작은 사각형)을 보이고 드래그할 수 있게 할지. 기본 true. / Show and allow dragging the fill handle (the small corner square). Default true. */
   fillHandle?: boolean;
-  /** 기본 false — Ctrl 멀티 rect(Full, 미구현) / Default false — Ctrl multi-rect (Full tier, not implemented) */
+  /** Ctrl 로 사각형 여러 개를 동시에 선택하게 할지. 기본 false(아직 미구현). / Whether Ctrl selects several rectangles at once. Default false (not implemented yet). */
   multiRange?: boolean;
-  /** 기본 24(px) — autoscroll 밴드 폭 / Default 24(px) — autoscroll edge band width */
+  /** 드래그가 이 가장자리 폭(px) 안에 들어오면 화면이 자동으로 스크롤됩니다. 기본 24. / When the drag enters this edge band (px), the view auto-scrolls. Default 24. */
   autoScrollEdge?: number;
-  /** 기본 true — false 면 항상 copy(시리즈 감지 비활성) / Default true — false forces copy (disables series detection) */
+  /** 1,2,3… 같은 규칙을 자동 감지해 이어 채울지. 기본 true. false 면 항상 단순 복사만 합니다. / Whether to auto-detect series (1,2,3…) and extend them. Default true; false always plain-copies. */
   seriesFill?: boolean;
-  /** 기본 false — 그룹/트리 모드 범위선택(MVP 비활성) / Default false — range selection in group/tree mode (off in MVP) */
+  /** 그룹·트리 모드에서도 범위 선택을 허용할지. 기본 false(현재 비활성). / Whether range selection also works in group/tree mode. Default false (off for now). */
   enabledInTreeGroup?: boolean;
-  /** 기본 false — 수식 대상 덮어쓰기(C3.2 opt-in) / Default false — overwrite formula cells on fill (C3.2 opt-in) */
-  fillOverwriteFormula?: boolean;
+  /** 채우기가 수식이 들어 있는 셀을 덮어쓰도록 허용할지. 기본 false(수식 보호). / Whether filling may overwrite cells that contain formulas. Default false (formulas protected). */
+  fillOverwriteFormula?: boolean; // C3.2 opt-in
 }
 
 /** F1 채우기 커밋 이벤트(onRangeFill). / F1 fill commit event (onRangeFill). */
@@ -235,22 +333,36 @@ export interface RangeChangeEvent {
 import type { FormulaErrorCode } from './formula/types.js';
 export type { FormulaErrorCode } from './formula/types.js';
 
-/** F3 셀 수식 옵션(C5.1 단일 중첩 — 최상위 flat 키 금지). / F3 cell-formula options (C5.1 single nesting — no top-level flat keys). */
+/**
+ * 셀에 '=' 로 시작하는 수식을 넣어 다른 셀을 참조·계산하게 하는 기능의 세부 설정입니다. 엑셀처럼
+ * 셀에 직접 '=A1+B2' 를 입력해 쓰게 할지, 참조를 어떻게 해석할지, 변경 시 자동으로 다시 계산할지 등을 정합니다.
+ * / Settings for cell formulas — cells that start with '=' and reference/compute other cells. Decide
+ * whether users can type '=A1+B2' directly, how references are interpreted, and whether edits
+ * trigger a recompute.
+ */
 export interface FormulaOptions {
-  /** 셀 수식 인-셀 '=' 편집 자동 인식 on(기본 false — 회귀 0). setCellFormula API 는 이 값과 무관하게 항상 동작. / Auto-recognize in-cell '=' edits (default false — zero regression). setCellFormula always works regardless. */
+  /** 셀에 '=' 를 직접 입력하면 수식으로 자동 인식할지. 기본 false(끄면 기존 편집과 동일). setCellFormula API 로는 이 값과 상관없이 언제나 수식을 넣을 수 있습니다. / Whether typing '=' in a cell is auto-recognized as a formula. Default false; the setCellFormula API works regardless. */
   enabled?: boolean;
-  /** 참조 정규화 정책(기본 'stable', §3.2). / Reference normalization policy (default 'stable', §3.2). */
-  refMode?: 'stable' | 'relative';
-  /** 나눗셈 소수 자리(기본 30, FormulaEngine 계승). / Division decimal precision (default 30, inherited from FormulaEngine). */
+  /**
+   * 참조를 어떻게 기억할지. 'stable'(기본)은 행을 정렬·이동해도 같은 셀을 계속 가리키고,
+   * 'relative'는 위치 기준(엑셀 A1 상대참조처럼)입니다.
+   * / How references are anchored. 'stable' (default) keeps pointing at the same cell even after
+   * sorting/moving rows; 'relative' is position-based (like a spreadsheet's relative A1 ref).
+   */
+  refMode?: 'stable' | 'relative'; // §3.2
+  /** 나눗셈 결과의 소수점 자리수. 기본 30. / Decimal precision for division results. Default 30. */
   divisionPrecision?: number;
-  /** 수식 바 표시(P1, 기본 false — 미구현). / Formula bar (P1, default false — not implemented). */
+  /** 상단 수식 입력 바를 보일지. 기본 false(아직 미구현). / Whether to show a top formula bar. Default false (not implemented yet). */
   formulaBar?: boolean;
-  /** 수식 셀 마커(기본 true — HANMS-09/R-FORMULA-MARKER). / Formula cell marker (default true). */
+  /** 수식이 든 셀에 표식(마커)을 달아 구분해 줄지. 기본 true. / Whether to mark formula-bearing cells so they stand out. Default true. */
   cellMarker?: boolean;
-  /** 편집 시 자동 재계산(기본 true). / Auto recalc on edit (default true). */
+  /** 참조된 셀이 바뀌면 수식을 자동으로 다시 계산할지. 기본 true. / Whether editing a referenced cell auto-recomputes the formula. Default true. */
   autoRecalc?: boolean;
+  /** 어떤 셀의 수식 자체가 바뀌었을 때 호출. / Fired when a cell's formula text itself changes. */
   onFormulaChange?: (e: FormulaChangeEvent) => void;
+  /** 재계산이 끝났을 때 호출(무엇이 바뀌었고 얼마나 걸렸는지). / Fired after a recompute finishes (what changed, how long it took). */
   onFormulaRecalc?: (e: FormulaRecalcEvent) => void;
+  /** 수식 계산 중 오류(순환 참조·0 나눗셈 등)가 났을 때 호출. / Fired on a formula error (circular ref, divide-by-zero …). */
   onFormulaError?: (e: FormulaErrorEvent) => void;
 }
 
@@ -268,7 +380,7 @@ export interface FormulaRecalcEvent {
   changed: string[];
   cycles: number;
   ms: number;
-  /** Spike-A §8 교훈: 폐포가 임계(500) 초과 시 true(가이드 문서화/모니터링용). / true when the dirty closure exceeded the threshold (500) — for docs/monitoring. */
+  /** 이번에 다시 계산해야 했던 셀 무리가 임계값(500)을 넘었으면 true. 성능 모니터링·경고용 신호입니다. / true when the recalculated cell set exceeded the threshold (500) — a signal for perf monitoring/warnings. */
   large: boolean;
 }
 
@@ -283,100 +395,156 @@ export type { RangeStats } from './range/RangeQuery.js';
 import type { RangeStats as _RangeStats } from './range/RangeQuery.js';
 
 // ─── F2: 마스터/디테일 옵션/이벤트(11_design_F2_v2.md §6, 15_cross_contracts.md C5) ─────
-/** masterDetail.renderer 3번째 인자(§6.1). / Third argument of masterDetail.renderer (§6.1). */
+/**
+ * 상세 패널을 직접 그릴 때(renderer) 세 번째 인자로 받는 도우미 묶음입니다. 방금 펼쳐진 행의 정보와,
+ * 그 패널을 접거나 다시 재는 조작을 담고 있어 커스텀 패널 안에서 그리드를 되짚을 수 있습니다.
+ * / The helper bundle passed as the 3rd argument when you draw a detail panel yourself (renderer). It
+ * carries the just-expanded row's info plus actions to collapse or re-measure the panel, so your
+ * custom panel can reach back into the grid.
+ */
 export interface DetailRenderApi<T = any> {
+  /** 이 패널을 소유한 그리드 인스턴스. / The grid instance owning this panel. */
   grid: OpenGridInstance<T>;
+  /** 펼쳐진 행의 안정적 id. / Stable id of the expanded row. */
   rowId: string;
-  /** 현재 그리드의 중첩 깊이(CON-4). 0 = 최상위. / Nesting depth of this grid (CON-4). 0 = top level. */
-  depth: number;
-  /** 이 패널을 접는다. / Collapse this panel. */
+  /** 이 그리드가 몇 겹째 중첩인지. 0 = 최상위. / How deeply nested this grid is. 0 = top level. */
+  depth: number; // CON-4
+  /** 이 패널을 접습니다. / Collapse this panel. */
   collapse: () => void;
-  /** 패널 재측정(Phase2 auto 대비 자리 — MVP 는 no-op 에 가까움). / Re-measure the panel (placeholder for Phase 2 auto; near no-op in MVP). */
-  refresh: () => void;
+  /** 패널 크기를 다시 잽니다. / Re-measure the panel. */
+  refresh: () => void; // Phase2 auto 대비 자리 — MVP 는 no-op 에 가까움
 }
 
-/** F2 마스터/디테일 옵션(C5.1 단일 중첩 — 구 flat `detail*`/`masterDetail:boolean` 은 이 안으로 접힘). / F2 master/detail options (C5.1 single nesting — legacy flat `detail*`/`masterDetail:boolean` folded in here). */
+/**
+ * 각 행을 펼치면 그 아래에 딸린 상세 패널이 열리는 마스터/디테일 기능의 설정입니다. 주문 목록에서 한 줄을
+ * 열면 주문 상세가, 부서 목록에서 한 줄을 열면 소속 직원 표가 펼쳐지는 식입니다. 패널 내용은 두 가지 방법으로
+ * 채웁니다 — 직접 HTML 을 그리는 renderer 를 주거나, 자식 그리드를 자동 생성하는 subgridOptions 를 줍니다.
+ * / Master/detail: expanding a row opens an attached detail panel beneath it — open an order to see
+ * its lines, open a department to see its staff. Fill the panel either by drawing HTML yourself
+ * (renderer) or by auto-creating a child grid (subgridOptions).
+ */
+// C5.1 단일 중첩 — 구 flat `detail*`/`masterDetail:boolean` 은 이 안으로 접힘.
 export interface MasterDetailOptions<T = any> {
-  /** 기능 on/off. 기본 false. / Feature on/off. Default false. */
+  /** 기능 켜기/끄기. 기본 false(꺼짐). / Turn the feature on/off. Default false (off). */
   enabled?: boolean;
-  /** 임의 HTML/컴포넌트를 host 에 주입(§5). subgridOptions 와 동시 지정 시 이 쪽이 우선. / Inject arbitrary HTML/components into the host (§5). Takes precedence over subgridOptions. */
+  /** 패널 안을 직접 그리는 함수(host 요소에 HTML/컴포넌트 주입). subgridOptions 와 같이 주면 이쪽이 우선. / A function that draws the panel yourself (inject HTML/components into host). Wins over subgridOptions if both given. */
   renderer?: (row: T, host: HTMLElement, api: DetailRenderApi<T>) => void | HTMLElement;
-  /** 패널 높이(px). 기본 200. MVP 는 rowHeight 배수로 양자화(EC-10). / Panel height (px). Default 200. Quantized to rowHeight multiples in MVP (EC-10). */
-  height?: number;
+  /** 패널의 세로 높이(px). 기본 200. 현재는 행 높이의 배수로 맞춰집니다. / Panel height (px). Default 200. Currently snapped to a multiple of the row height. */
+  height?: number; // MVP: rowHeight 배수로 양자화(EC-10)
   /**
-   * 'fixed'(기본)만 MVP 에서 동작. 'auto' 는 Spike-B(C12.2) 통과 전 미공개 — 지정해도
-   * DetailManager 가 'fixed' 로 무시 처리하고 1회 console.warn 한다.
-   * / Only 'fixed' (default) works in MVP. 'auto' is unreleased until Spike-B (C12.2) passes —
-   * if specified, DetailManager treats it as 'fixed' and warns once.
+   * 패널 높이를 어떻게 정할지. 'fixed'(기본)만 지금 동작합니다. 'auto'(내용에 맞춰 자동)는 아직 미공개라,
+   * 지정해도 'fixed' 로 처리되고 한 번 경고를 남깁니다.
+   * / How the panel height is decided. Only 'fixed' (default) works today. 'auto' (fit-to-content) is
+   * not released yet — if set, it's treated as 'fixed' and warns once.
    */
-  heightMode?: 'fixed' | 'auto';
-  /** 기본 true. false = 아코디언(펼침 1개만 허용). / Default true. false = accordion (only one panel open). */
+  heightMode?: 'fixed' | 'auto'; // 'auto' 는 Spike-B(C12.2) 통과 전 미공개
+  /** 여러 행을 동시에 펼쳐 둘지. 기본 true. false 로 하면 아코디언처럼 한 번에 하나만 열립니다. / Whether several rows can stay open at once. Default true; false = accordion (one open at a time). */
   expandMultiple?: boolean;
-  /** 기본 false. true 면 collapse 해도 host/instance 캐시를 유지(재펼침 시 재생성 생략). / Default false. true keeps host/instance cache across collapse (skips re-creation on re-expand). */
+  /** true 면 접어도 패널 내용을 캐시로 남겨 다시 펼칠 때 재생성을 건너뜁니다. 기본 false. / true keeps the panel cached when collapsed, skipping rebuild on re-expand. Default false. */
   cache?: boolean;
-  /** 어포던스 위치. 기본 'expander-col'(전용 컬럼). / Toggle affordance position. Default 'expander-col' (dedicated column). */
+  /** 펼침/접힘 버튼을 어디에 둘지. 기본 'expander-col'(전용 컬럼). 'first-cell'=첫 셀 안. / Where the expand toggle sits. Default 'expander-col' (a dedicated column); 'first-cell' = inside the first cell. */
   toggle?: 'expander-col' | 'first-cell';
-  /** 패널 role=region 의 aria-label. 기본 '상세 내용'. / aria-label of the panel region. Default '상세 내용'. */
+  /** 스크린리더가 읽을 패널 영역 이름. 기본 '상세 내용'. / The panel region's screen-reader label. Default '상세 내용' (Details). */
   ariaLabel?: string;
-  /** 중첩 깊이 한계(CON-4/FR-10). 기본 2. / Nesting depth limit (CON-4/FR-10). Default 2. */
-  maxDepth?: number;
-  /** 지정 시 height 대신 이 값을 슬롯수(정수, 최소 1)로 직접 사용. / When set, used directly as slot count (integer, min 1) instead of height. */
+  /** 패널 안에 또 패널을 열 수 있는 최대 겹수. 기본 2. / How many levels of nested panels are allowed. Default 2. */
+  maxDepth?: number; // CON-4/FR-10
+  /** 지정하면 height(px) 대신 "행 몇 개 높이"(정수, 최소 1)로 패널 높이를 정합니다. / When set, sizes the panel by row-count (integer, min 1) instead of height(px). */
   detailRowCount?: number;
-  /** renderer 미지정 시: 자식 OpenGrid 를 이 옵션으로 자동 생성(§5 ②). / When renderer is absent: auto-create a child OpenGrid with these options (§5 ②). */
+  /** renderer 를 안 줬을 때, 이 옵션으로 자식 그리드를 자동 생성해 패널을 채웁니다. / When no renderer is given, auto-create a child grid from these options to fill the panel. */
   subgridOptions?: GridOptions<any>;
 }
 
-/** rowExpand/rowCollapse 페이로드(C5.2, §6.3). / rowExpand/rowCollapse payload (C5.2, §6.3). */
+/**
+ * 행 상세 패널이 펼쳐지거나(rowExpand) 접힐 때(rowCollapse) 핸들러로 오는 정보입니다.
+ * 어느 행인지와, 그 상세 패널이 붙은 DOM 요소(host)를 함께 줍니다.
+ * / Delivered when a row's detail panel expands (rowExpand) or collapses (rowCollapse). It tells you
+ * which row it was and the DOM element (host) the detail panel is attached to.
+ */
 export interface RowExpandEvent<T = any> {
-  /** flat/visual index(C0.2). */
+  /** 대상 행의 화면 표시 순서 인덱스. / Screen-order index of the target row. */
   rowIndex: number;
+  /** 대상 행의 안정적 id. / Stable id of the target row. */
   rowId: string;
+  /** 그 행의 데이터 객체. / The row-data object. */
   row: T;
+  /** 상세 패널이 붙은 DOM 요소(접힘 이벤트에서는 null 일 수 있음). / The DOM element the detail panel is attached to (may be null on collapse). */
   host: HTMLElement | null;
 }
 
 // ─── 컬럼 정의 / column definition ────────────────────────────────────────────
-/** 셀 렌더러 상세 지정(type + 렌더러별 부가 옵션). / Detailed cell renderer spec (type + renderer-specific extras). */
+/**
+ * 셀을 어떻게 그릴지 자세히 지정합니다. 렌더러 타입 이름만으로 부족해 부가 설정까지 주고 싶을 때
+ * 씁니다(`column.renderer` 에 문자열 대신 이 객체를 넘김). `type` 이외의 키는 렌더러마다 다르게 해석됩니다.
+ * / Detailed spec for how a cell is drawn. Use it (instead of a bare renderer-type string in
+ * `column.renderer`) when the renderer needs extra settings. Keys beyond `type` are
+ * renderer-specific.
+ */
 export interface RendererDef {
+  /** 사용할 내장 렌더러 이름. / Which built-in renderer to use. */
   type: RendererType;
-  [key: string]: any;
-}
-
-/** 셀 에디터 상세 지정(type + 에디터별 부가 옵션). / Detailed cell editor spec (type + editor-specific extras). */
-export interface EditorDef {
-  type: EditorType;
-  options?: Array<string | { label: string; value: any }>;
-  multiple?: boolean;
-  min?: number;
-  max?: number;
-  step?: number;
-  format?: string;
-  placeholder?: string;
+  /** 렌더러별 추가 옵션(자유 키). / Renderer-specific extra options (free-form keys). */
   [key: string]: any;
 }
 
 /**
- * 컬럼 정의. / Column definition.
+ * 편집기를 어떻게 열지 자세히 지정합니다. 예를 들어 `select` 편집기에 선택지 목록을,
+ * `number` 편집기에 최소·최대·증가폭을 함께 줄 때 씁니다(`column.editor` 에 이 객체를 넘김).
+ * / Detailed spec for how the editor opens — e.g. a `select` editor's choices, or a `number`
+ * editor's min/max/step (passed to `column.editor`).
+ */
+export interface EditorDef {
+  /** 사용할 내장 편집기 이름. / Which built-in editor to use. */
+  type: EditorType;
+  /** select 편집기의 선택지(문자열 또는 {label,value}). / Choices for a select editor. */
+  options?: Array<string | { label: string; value: any }>;
+  /** select 에서 다중 선택 허용. / Allow multiple selection in select. */
+  multiple?: boolean;
+  /** number 편집기의 최솟값. / Minimum for a number editor. */
+  min?: number;
+  /** number 편집기의 최댓값. / Maximum for a number editor. */
+  max?: number;
+  /** number 편집기의 증가 단위. / Step increment for a number editor. */
+  step?: number;
+  /** 입력값 포맷 문자열. / Format string for the input value. */
+  format?: string;
+  /** 빈 편집기에 보일 안내 문구. / Placeholder shown in an empty editor. */
+  placeholder?: string;
+  /** 편집기별 추가 옵션(자유 키). / Editor-specific extra options (free-form keys). */
+  [key: string]: any;
+}
+
+/**
+ * 컬럼 한 개를 어떻게 보이고 동작하게 할지 담는 설정 뭉치입니다. 그리드는 `columns` 배열에 담긴 이
+ * 정의들을 왼쪽부터 순서대로 그립니다. 최소한 `field`(어떤 데이터를 보여줄지)와 `header`(머리글 글자)만
+ * 있으면 되고, 나머지는 필요할 때만 켜는 선택 항목입니다.
+ * / The settings bundle for a single column — what it shows and how it behaves. The grid draws the
+ * definitions in the `columns` array left to right. Only `field` (which data to show) and `header`
+ * (the caption) are required; everything else is opt-in.
  *
  * @typeParam T - 행 데이터 타입 / Row data type
  * @example
  * const col: ColumnDef = { field: 'price', header: '가격', type: 'number', format: '#,##0' };
  */
 export interface ColumnDef<T = any> {
-  /** 행 객체의 속성 키(고유). / Property key on the row object (unique). */
+  /** 이 컬럼이 읽어 올 행 객체의 속성 이름(예: 행이 `{price: 1000}` 이면 `'price'`). 컬럼마다 고유. / The row-object property this column reads (e.g. `'price'` for a row `{price: 1000}`). Unique per column. */
   field: string;
-  /** 헤더 표시 텍스트('\n' 은 줄바꿈). / Header caption ('\n' breaks lines). */
+  /** 머리글에 보일 글자. 문자열 안의 '\n' 은 두 줄로 나뉩니다. / The caption shown in the header. A '\n' inside splits into two lines. */
   header: string;
-  /** 고정 폭(px). / Fixed width (px). */
+  /** 이 폭(px)으로 고정. 지정하면 flex 를 무시하고 정확히 이 값이 됩니다. / Pin this width (px). When set it overrides flex and stays exactly this. */
   width?: number;
-  /** 최소 폭(px). / Minimum width (px). */
+  /** 줄어들 때 넘지 않을 최소 폭(px). / Lower bound (px) the column won't shrink past. */
   minWidth?: number;
-  /** 최대 폭(px). / Maximum width (px). */
+  /** 늘어날 때 넘지 않을 최대 폭(px). / Upper bound (px) the column won't grow past. */
   maxWidth?: number;
-  /** 잔여 폭 배분 가중치. / Flex weight for remaining width distribution. */
+  /** 남는 가로 공간을 컬럼끼리 나눌 때의 비율. 값이 클수록 더 많이 차지합니다(width 미지정 컬럼끼리). / Weight for sharing leftover horizontal space — higher takes more (among columns without width). */
   flex?: number;
 
-  /** 데이터 타입(정렬·기본 렌더러 결정). / Data type (drives sorting & default renderer). */
+  /**
+   * 이 컬럼 값의 종류. 이걸 정하면 그에 맞는 정렬 방식과 기본 렌더러가 자동으로 붙습니다
+   * (예: 'number' 는 오른쪽 정렬 + 숫자 비교). 지정하지 않으면 문자열처럼 다룹니다.
+   * / The kind of value here. Setting it auto-wires the matching sort behavior and default renderer
+   * (e.g. 'number' → right-aligned + numeric compare). Unset behaves like a string.
+   */
   type?: DataType;
   /**
    * 숫자/날짜 포맷 문자열. 숫자는 통화 기호 접두·접미와 음수 패턴 지원:
@@ -387,14 +555,19 @@ export interface ColumnDef<T = any> {
   format?: string;
   /** ISO 통화코드('KRW'|'USD'|'EUR'…). 지정 시 Intl.NumberFormat 로케일 통화 포맷 (format 보다 우선) / ISO currency code; uses Intl.NumberFormat locale currency formatting (takes precedence over format) */
   currency?: string;
-  /** 값 → 표시 텍스트 매핑. / Raw value → display text map. */
+  /** 저장된 코드값을 사람이 읽는 말로 바꿔 보여줄 때(예: `{ 'M': '남', 'F': '여' }`). / Show human-readable text for stored codes (e.g. `{ 'M':'Male', 'F':'Female' }`). */
   valueMap?: Record<string, string>;
 
-  /** 셀 렌더러(내장 타입명 또는 상세 정의). / Cell renderer (built-in type name or detailed def). */
+  /** 셀을 그리는 방식. 내장 렌더러 이름 한 줄로 주거나, 부가 옵션이 필요하면 RendererDef 객체로 줍니다. / How the cell is drawn — a built-in renderer name, or a RendererDef object when extras are needed. */
   renderer?: RendererType | RendererDef;
-  /** 편집 가능 여부(불리언 또는 행별 함수). / Editable flag (boolean or per-row function). */
+  /**
+   * 이 컬럼을 편집할 수 있는지. true 면 항상 편집 가능, 함수로 주면 행마다 다르게 결정합니다
+   * (예: 상태가 '확정'인 행만 잠그기). GridOptions.editable 과 둘 다 참일 때만 실제로 열립니다.
+   * / Whether this column is editable. true = always; a function decides per row (e.g. lock only
+   * 'finalized' rows). Editing opens only when this AND GridOptions.editable are true.
+   */
   editable?: boolean | ((row: T, rowIndex: number) => boolean);
-  /** 셀 에디터(내장 타입명 또는 상세 정의). / Cell editor (built-in type name or detailed def). */
+  /** 편집기 종류. 내장 편집기 이름 한 줄로 주거나, 선택지·최소/최대 등이 필요하면 EditorDef 객체로 줍니다. / The editor — a built-in editor name, or an EditorDef object for choices/min/max, etc. */
   editor?: EditorType | EditorDef;
 
   /** 셀 정렬. / Cell text alignment. */
@@ -406,15 +579,15 @@ export interface ColumnDef<T = any> {
   /** 헤더 인라인 스타일. / Header inline style. */
   headerStyle?: CSSProperties;
 
-  /** 헤더 클릭 정렬 허용. / Allow sort on header click. */
+  /** 이 컬럼 머리글을 클릭하면 정렬되게 할지. 특정 컬럼만 정렬을 막거나 허용할 때 씁니다. / Whether clicking this header sorts. Use it to allow/deny sorting per column. */
   sortable?: boolean;
-  /** 필터 아이콘/패널 허용. / Allow the filter icon/panel. */
+  /** 이 컬럼에 필터 아이콘·패널을 띄울지. / Whether to show the filter icon/panel on this column. */
   filterable?: boolean;
-  /** 헤더 드래그 폭 조절 허용. / Allow header drag resize. */
+  /** 머리글 경계를 드래그해 폭을 조절하게 할지. / Whether the user can drag the header edge to resize. */
   resizable?: boolean;
-  /** 컬럼 숨김. / Hide the column. */
+  /** true 면 이 컬럼을 화면에서 감춥니다(데이터는 남고 showColumn 으로 다시 보임). / true hides the column (data stays; showColumn brings it back). */
   hidden?: boolean;
-  /** 왼쪽 고정(frozen) 여부. / Freeze the column to the left. */
+  /** true 면 가로 스크롤과 무관하게 왼쪽에 붙박아 둡니다(핵심 식별 컬럼 고정용). / true pins the column to the left regardless of horizontal scroll (for key identifier columns). */
   frozen?: boolean;
   /** 셀 줄바꿈: true 면 nowrap+ellipsis 대신 여러 줄로 표시(rowHeight 확대와 함께 사용) / Cell wrapping: true renders multiple lines instead of nowrap+ellipsis (use with a larger rowHeight) */
   wrap?: boolean;
@@ -456,19 +629,21 @@ export interface ColumnDef<T = any> {
   /** barcode — 바코드 높이(px), 기본 28 / barcode — bar height in px, default 28 */
   barcodeHeight?: number;
 
-  /** F4: 표시 소수점 자리수 (display + kahanSum) / F4: display decimal places (display + kahanSum) */
-  precision?: number;
+  /** 표시할 때 반올림해서 보여줄 소수점 자리수(합계 계산에도 반영). / Decimal places to show (also applied to summing). */
+  precision?: number; // F4: display + kahanSum
 
-  // F4: 임의정밀도 수식 (OGDecimal 기반) / F4: arbitrary-precision column formula (OGDecimal-based)
-  // 함수식: (row, D) => D.from(row.price).mul('0.035')
-  // 문자열식: '[revenue] * [rate] / 100'
-  /** 컬럼 수식(함수식 또는 '[field]' 문자열식). / Column formula (function form or '[field]' string form). */
+  // 임의정밀도 컬럼 수식(OGDecimal 기반) — 다른 컬럼 값으로 이 컬럼 값을 계산.
+  // / Arbitrary-precision column formula (OGDecimal-based) — compute this column from others.
+  // 함수식 / function form: (row, D) => D.from(row.price).mul('0.035')
+  // 문자열식 / string form: '[revenue] * [rate] / 100'
+  /** 이 컬럼 값을 다른 컬럼으로 자동 계산. 함수식 또는 '[field]' 를 쓰는 문자열식. / Auto-compute this column from others — a function, or a string using '[field]' refs. */
   formula?: string | ((row: T, D: any) => any);
-  /** 나눗셈 소수점 자리수 (기본 30) / Division decimal precision (default 30) */
+  /** 수식 나눗셈의 소수점 자리수. 기본 30. / Decimal precision for division inside the formula. Default 30. */
   formulaPrecision?: number;
 
-  // F5: 컬럼 마스킹 / F5: column masking
-  /** 마스킹 타입 또는 상세 정의. / Mask type or detailed mask definition. */
+  // 컬럼 마스킹 — 민감 값(주민번호·카드번호 등)을 가려 표시.
+  // / Column masking — hide sensitive values (IDs, card numbers …).
+  /** 이 컬럼 값을 가려 표시할 마스킹 타입 또는 상세 정의. / Mask type or detailed definition to obscure this column's values. */
   mask?: import('./MaskingEngine.js').MaskType | import('./MaskingEngine.js').MaskDef;
 
   // 트리 노드 아이콘 커스터마이징 (첫 번째 컬럼에만 적용)
@@ -504,17 +679,33 @@ export interface TreeNodeIconDef {
 type CSSProperties = Partial<Record<keyof CSSStyleDeclaration, string>>;
 
 // ─── 정렬/필터 / sort & filter ────────────────────────────────────────────
-/** 정렬 항목(멀티정렬 배열 원소). / Sort entry (element of a multi-sort list). */
+/**
+ * "이 컬럼을 이 방향으로 정렬" 한 건을 나타냅니다. 여러 개를 배열로 넘기면 앞에 있는 것이 1차 기준,
+ * 그 값이 같을 때 다음 것이 2차 기준이 되는 다중 정렬이 됩니다(예: 부서 오름차순 → 급여 내림차순).
+ * / One "sort this column this way" entry. Passed as an array, the first is the primary key and later
+ * entries break ties — i.e. multi-column sort (e.g. dept asc, then salary desc).
+ */
 export interface SortItem {
+  /** 정렬 기준 컬럼의 field. / field of the column to sort by. */
   field: string;
+  /** 정렬 방향. / Sort direction. */
   dir: SortDir;
 }
 
-/** 필터 조건 1건. / A single filter condition. */
+/**
+ * 필터 한 줄 = "연산자 + 비교값". 예: `{ operator: '>=', value: 1000 }` 는 값이 1000 이상인 행만 남깁니다.
+ * 한 컬럼에 여러 조건을 배열로 걸 수 있습니다(모두 만족하는 행만 통과).
+ * / One filter clause = "operator + value". e.g. `{ operator: '>=', value: 1000 }` keeps rows whose
+ * value is at least 1000. Multiple clauses per column combine (a row must satisfy all).
+ */
 export interface FilterItem {
-  /** 비교 연산자. / Comparison operator. */
+  /**
+   * 비교 방식. `'='`·`'!='`·`'>'`·`'>='`·`'<'`·`'<='` 는 값 비교, `'contains'`·`'startsWith'`·`'endsWith'`
+   * 는 텍스트 부분 일치입니다. / How to compare — the six symbols are value comparisons; the three
+   * word operators are text substring matches.
+   */
   operator: '=' | '!=' | '>' | '>=' | '<' | '<=' | 'contains' | 'startsWith' | 'endsWith';
-  /** 비교 값. / Comparison value. */
+  /** 비교 기준 값. / The value to compare against. */
   value: any;
 }
 
@@ -529,15 +720,20 @@ export interface SummaryFieldDef {
   label?: string;
 }
 
-/** 그룹 소계/합계 행 옵션. / Group summary row options. */
+/**
+ * 그룹마다 소계/합계 행을 자동으로 끼워 넣는 설정입니다. groupBy 로 묶은 각 그룹의 지정 필드를
+ * 합·평균 등으로 집계해 그룹 위나 아래에 요약 행으로 보여 줍니다.
+ * / Auto-inserts a subtotal/summary row per group. For each group made by groupBy it aggregates the
+ * chosen fields (sum, average …) and shows the result as a summary row above or below the group.
+ */
 export interface SummaryOptions {
-  /** 집계 대상 필드. / Fields to aggregate. */
+  /** 집계할 컬럼들의 field 목록. / field names of the columns to aggregate. */
   fields: string[];
-  /** 적용 연산(단일 또는 배열). / Operator(s) to apply. */
+  /** 어떤 집계를 적용할지(하나 또는 여러 개). 생략 시 기본 동작. / Which aggregate(s) to apply (one or several). */
   ops?: SummaryOp | SummaryOp[];
-  /** 소계 행 위치. / Summary row position. */
+  /** 요약 행을 그룹 위('top')에 둘지 아래('bottom')에 둘지. / Put the summary row above ('top') or below ('bottom') the group. */
   position?: 'top' | 'bottom';
-  /** 다중 소계 행 정의(커스텀 함수 지원). / Multiple summary rows (custom function supported). */
+  /** 한 그룹에 요약 행을 여러 줄 만들 때(예: 합계 줄 + 평균 줄). customFn 으로 직접 집계도 가능. / Multiple summary rows per group (e.g. a sum row + an average row); customFn allows your own aggregation. */
   rows?: Array<{
     op: SummaryOp;
     label?: string;
@@ -546,13 +742,18 @@ export interface SummaryOptions {
 }
 
 // ─── 푸터 / footer ─────────────────────────────────────────────────
-/** 푸터 셀 정의. / Footer cell definition. */
+/**
+ * 그리드 맨 아래(또는 위) 고정 푸터의 셀 한 칸을 정의합니다. 스크롤과 무관하게 늘 보이는 합계 줄을
+ * 만들 때 씁니다. `field`+`op` 를 주면 그 컬럼을 집계해 표시하고, `label` 만 주면 고정 문구를 표시합니다.
+ * / Defines one cell of the pinned footer (bottom or top) — an always-visible totals row that stays
+ * put while the body scrolls. Give `field`+`op` to aggregate a column, or `label` for fixed text.
+ */
 export interface FooterDef {
-  /** 집계 대상 필드. / Field to aggregate. */
+  /** 집계할 컬럼의 field(집계 셀일 때). / field of the column to aggregate (for an aggregate cell). */
   field?: string;
-  /** 집계 연산. / Aggregate operator. */
+  /** 어떤 집계를 낼지(SUM/AVG/…). / Which aggregate to compute (SUM/AVG/…). */
   op?: SummaryOp;
-  /** 라벨 텍스트(집계 대신 표시). / Label text (shown instead of an aggregate). */
+  /** 집계 대신 그대로 보여줄 고정 문구(예: '합계'). / Fixed text shown instead of an aggregate (e.g. 'Total'). */
   label?: string;
   /**
    * 숫자 포맷 문자열
@@ -581,27 +782,33 @@ export interface PrintOptions {
 /** 내보내기 스타일 모드. / Export style mode. */
 export type ExportStyleMode = 'theme' | 'none' | 'custom';
 
-/** Excel/CSV/JSON 내보내기 옵션. / Excel/CSV/JSON export options. */
+/**
+ * 그리드 내용을 Excel·CSV·JSON 파일로 내보낼 때의 세부 설정입니다. 아무것도 안 주면 기본값으로 곧장
+ * 내보내지고, 파일명·시트명·제외 컬럼·제목 행 등을 필요할 때만 얹습니다. 문자열 하나만 넘기면 파일명으로 해석됩니다.
+ * / Settings for exporting the grid to Excel/CSV/JSON. With nothing set it exports with defaults;
+ * add filename, sheet name, excluded columns, title rows, etc. only as needed. A lone string is
+ * treated as the filename.
+ */
 export interface ExportOptions {
-  /** 저장 파일명. / Output filename. */
+  /** 저장될 파일 이름. / The saved file's name. */
   filename?: string;
-  /** 엑셀 시트명. / Excel sheet name. */
+  /** 엑셀 시트 탭 이름. / Excel sheet tab name. */
   sheetName?: string;
-  /** 헤더 행 포함(기본 true). / Include the header row (default true). */
+  /** 머리글 행을 포함할지. 기본 true. / Whether to include the header row. Default true. */
   includeHeader?: boolean;
-  /** 제외할 필드 목록. / Fields to exclude. */
+  /** 내보내기에서 뺄 컬럼들의 field. / field names of columns to leave out. */
   exceptFields?: string[];
-  /** 데이터 위에 추가할 제목 행들. / Extra title rows above the data. */
+  /** 데이터 위에 얹을 제목 행들(보고서 머리말 등). / Extra title rows placed above the data (report headings, etc.). */
   headers?: ExportHeaderRow[];
-  /** 데이터 아래에 추가할 행들. / Extra rows below the data. */
+  /** 데이터 아래에 붙일 행들(비고·서명란 등). / Extra rows appended below the data (notes, sign-off …). */
   footers?: ExportHeaderRow[];
-  /** F1: CSS 테마 적용 방식 (기본: 'theme') / F1: theme styling mode (default 'theme') */
+  /** 내보낸 파일에 그리드 테마 색을 입힐지 방식. 기본 'theme'(현재 테마 반영). / How to style the exported file — default 'theme' (carry the current theme). */
   styleMode?: ExportStyleMode;
-  /** true 시 마스킹 활성 컬럼의 값을 마스킹된 형태로 내보냄 (기본: false = 원본 값) / true exports masked values for masked columns (default false = raw values) */
+  /** true 면 마스킹된 컬럼을 가려진 상태 그대로 내보냅니다. 기본 false = 원본 값 내보냄. / true exports masked columns still obscured. Default false = raw values. */
   maskOnExport?: boolean;
-  /** 내보내기 직전 훅. / Hook just before export. */
+  /** 내보내기 시작 직전에 부를 훅(로딩 표시 등). / A hook called just before export starts (show a spinner …). */
   onBefore?: () => void | Promise<void>;
-  /** 내보내기 완료 훅(blob 수신). / Hook after export (receives the blob). */
+  /** 내보내기 완료 후 부를 훅. 만들어진 파일 blob 을 받습니다. / A hook called after export, receiving the produced file blob. */
   onAfter?: (blob: Blob) => void;
 }
 
@@ -638,27 +845,37 @@ export interface GridOptions<T = any> {
   columns: ColumnDef<T>[];
 
   // 레이아웃 / layout
-  /** 그리드 높이(px 숫자 또는 CSS 문자열). / Grid height (px number or CSS string). */
+  /**
+   * 그리드의 세로 크기. 숫자면 px, 문자열이면 CSS 값('60vh' 등)입니다. 가상 스크롤이 제대로 돌려면
+   * 확정된 높이가 필요하므로, 큰 데이터에서는 이 값(또는 조상 요소의 높이)을 꼭 주는 걸 권합니다.
+   * / The grid's vertical size — a number is px, a string is a CSS value ('60vh' …). Virtual scroll
+   * needs a definite height, so on large data set this (or an ancestor's height).
+   */
   height?: number | string;
-  /** 그리드 폭(px 숫자 또는 CSS 문자열). / Grid width (px number or CSS string). */
+  /** 그리드의 가로 크기. 숫자면 px, 문자열이면 CSS 값. 생략 시 부모 폭을 채웁니다. / The grid's horizontal size — number = px, string = CSS. Unset fills the parent width. */
   width?: number | string;
-  /** 행 높이(px). / Row height (px). */
+  /**
+   * 데이터 행 한 줄의 세로 픽셀 높이. 촘촘하게 많이 보이려면 줄이고, 터치·가독성 위주면 키웁니다.
+   * 가상 스크롤이 이 값으로 "화면에 몇 행이 들어갈지"를 계산합니다. 기본 32.
+   * / Height in px of one data row. Lower it to pack more rows in; raise it for touch/readability.
+   * Virtual scroll uses this to compute how many rows fit on screen. Default 32.
+   */
   rowHeight?: number;
-  /** 헤더 행 높이(px). / Header row height (px). */
+  /** 머리글(헤더) 행의 높이(px). 여러 줄 헤더면 자동으로 늘어나므로 보통은 생략. / Header row height (px). Grows automatically for multi-line headers, so usually omitted. */
   headerHeight?: number;
-  /** 푸터 행 높이(px). / Footer row height (px). */
+  /** 푸터(합계) 행의 높이(px). / Footer (totals) row height (px). */
   footerHeight?: number;
-  /** 행 내용에 맞춰 행 높이 자동 확장(wrap 컬럼과 사용). / Auto-grow row height to content (use with wrap columns). */
+  /** 셀 내용이 길어 줄바꿈될 때 행 높이를 내용에 맞춰 자동으로 늘립니다. 컬럼의 wrap 과 함께 씁니다. / Auto-grow a row's height to fit wrapped content. Use together with a column's wrap. */
   autoHeight?: boolean;
-  /** 컬럼 폭 합을 컨테이너 폭에 맞춤. / Stretch column widths to fill the container. */
+  /** 컬럼 폭의 합이 컨테이너를 꽉 채우도록 늘립니다. 오른쪽에 빈 공간을 남기고 싶지 않을 때. / Stretch column widths so their sum fills the container — when you don't want empty space on the right. */
   fillWidth?: boolean;
-  /** width/flex 미지정 컬럼의 기본 폭(px). / Default width (px) for columns without width/flex. */
+  /** width 도 flex 도 안 준 컬럼에 적용할 기본 폭(px). / Fallback width (px) for columns given neither width nor flex. */
   defaultColumnWidth?: number;
   /**
    * 뷰포트 안전장치(옵트인, 기본 undefined = OFF = 기존 동작 완전 불변).
    * / Viewport safety net (opt-in; default undefined = OFF = behavior fully unchanged).
    * 호스트가 그리드 컨테이너 조상 체인에 확정 높이(definite height)를 주지 않으면
-   * 내부 스페이서(totalRows×rowHeight)가 컨테이너를 전체 콘텐츠 크기로 부풀리고,
+   * 내부 스페이서(totalRows×rowHeight)가 컨테이너를 전체 콘텐츠 크기로 늘리고,
    * ResizeObserver 되먹임으로 windowing 이 무력화되어 전 행이 DOM 렌더되는 폭주가 발생한다
    * (대량 데이터일수록 재앙적). 이 값을 지정하면, 컨테이너가 전 콘텐츠를 다 담는 "언바운드"
    * 상태로 감지될 때에 한해 윈도잉 뷰포트 높이를 이 값(px)으로 클램프해 폭주를 차단한다.
@@ -674,55 +891,59 @@ export interface GridOptions<T = any> {
   fallbackViewportHeight?: number;
 
   // 편집 / editing
-  /** 전역 편집 허용(컬럼별 editable 과 AND). / Global edit switch (ANDed with per-column editable). */
+  /** 그리드 전체의 편집 스위치. 켜져 있고 컬럼의 editable 도 참일 때만 실제로 편집이 열립니다(둘 다 참 조건). / The grid-wide edit switch. Editing opens only when this AND a column's editable are true. */
   editable?: boolean;
-  /** 편집 진입 방식. / How editing is entered. */
+  /** 편집을 어떻게 시작할지. 'click'=한 번 클릭, 'dblclick'=더블클릭, 'none'=마우스로는 진입 불가(API 로만). / How editing starts — 'click' single click, 'dblclick' double click, 'none' no mouse entry (API only). */
   editMode?: 'click' | 'dblclick' | 'none';
-  /** (예약) 편집 히스토리. / (Reserved) edit history. */
+  /** (예약) 편집 실행취소 히스토리 — 아직 미구현. / (Reserved) undo history for edits — not implemented yet. */
   history?: boolean;
-  /** (예약) 히스토리 크기. / (Reserved) history size. */
+  /** (예약) 히스토리에 담을 최대 단계 수 — 아직 미구현. / (Reserved) max steps kept in history — not implemented yet. */
   historySize?: number;
 
   // 선택 / selection
-  /** 선택 모드('cells' = F1 범위 선택). / Selection mode ('cells' = F1 range selection). */
+  /** 사용자가 무엇을 선택할 수 있는지. 'cells' 로 하면 스프레드시트식 범위 선택이 됩니다. / What the user can select. 'cells' enables spreadsheet-style range selection. */
   selection?: SelectionMode;
-  /** 클립보드 복사/붙여넣기 허용. / Enable clipboard copy/paste. */
+  /** Ctrl+C / Ctrl+V 로 셀 값을 복사·붙여넣기하게 할지. / Whether Ctrl+C / Ctrl+V copy-paste of cell values is enabled. */
   clipboard?: boolean;
-  /** F1: 범위 선택 + 채우기 핸들(C5.1 단일 중첩 — 최상위 flat 키 금지). / F1: range selection + fill handle (C5.1 single nesting — no top-level flat keys). */
-  rangeSelection?: RangeSelectionOptions;
-  /** F3: 셀 수식(C5.1 단일 중첩). / F3: cell formulas (C5.1 single nesting). */
-  formula?: FormulaOptions;
-  /** F2: 마스터/디테일(C5.1 단일 중첩). / F2: master/detail (C5.1 single nesting). */
-  masterDetail?: MasterDetailOptions<T>;
-  /** F4: 그리드 데이터 통합 차트(C5.1 단일 중첩). 타입은 chart/types 순환-안전 type-only import. / F4: grid-data integrated chart (C5.1 single nesting). Type is a cycle-safe type-only import from chart/types. */
-  chart?: import('./chart/types.js').ChartGlobalOptions;
-  /** DD-05: 조건부서식(CF) 규칙(opt-in, 기본 undefined=byte-identical). 지정 시 _mount 가 setConditionalFormat 로 배선(동적 import). 타입은 cf 순환-안전 type-only import. / DD-05: conditional-format rules (opt-in; default undefined = byte-identical). Type is a cycle-safe type-only import from cf. */
-  conditionalFormat?: import('./cf/CFRule.js').CFRule[];
+  /** 범위 선택 + 채우기 핸들(엑셀식 드래그 채우기) 세부 설정. / Range selection + fill handle (Excel-style drag-fill) detailed options. */
+  rangeSelection?: RangeSelectionOptions; // C5.1 단일 중첩
+  /** 셀 수식('=A1+B2' 같은 식) 기능 세부 설정. / Cell-formula ('=A1+B2'-style) detailed options. */
+  formula?: FormulaOptions; // C5.1 단일 중첩
+  /** 마스터/디테일(행을 펼쳐 상세 패널 표시) 세부 설정. / Master/detail (expand a row into a detail panel) detailed options. */
+  masterDetail?: MasterDetailOptions<T>; // C5.1 단일 중첩
+  /** 그리드 데이터를 그대로 쓰는 통합 차트 세부 설정. / Detailed options for the chart integrated on the grid's own data. */
+  chart?: import('./chart/types.js').ChartGlobalOptions; // C5.1 단일 중첩. 타입은 chart/types 순환-안전 type-only import.
+  /**
+   * 조건부 서식 규칙 목록(값에 따라 셀을 데이터바·색조·아이콘으로 강조). 지정하지 않으면 아무 것도 바뀌지 않습니다.
+   * / Conditional-format rules — highlight cells by value with data-bars, color scales, or icon sets.
+   * Unset changes nothing.
+   */
+  conditionalFormat?: import('./cf/CFRule.js').CFRule[]; // DD-05: opt-in, 기본 undefined=byte-identical. 타입은 cf 순환-안전 type-only import.
 
   // 정렬/필터 / sort & filter
-  /** 전역 정렬 허용. / Global sort switch. */
+  /** 머리글 클릭 정렬을 그리드 전체에서 켤지. 컬럼별 sortable 로 예외를 둘 수 있습니다. / Turn header-click sorting on grid-wide. Per-column sortable can override. */
   sortable?: boolean;
-  /** Shift+클릭 멀티정렬 허용. / Allow Shift+click multi-sort. */
+  /** Shift+클릭으로 여러 컬럼을 겹쳐 정렬(2차·3차 기준)하게 할지. / Whether Shift+click stacks multiple sort keys (secondary, tertiary …). */
   multiSort?: boolean;
-  /** 전역 필터 허용. / Global filter switch. */
+  /** 필터 기능을 그리드 전체에서 켤지. 컬럼별 filterable 로 예외를 둘 수 있습니다. / Turn filtering on grid-wide. Per-column filterable can override. */
   filterable?: boolean;
-  /** 초기 정렬 상태. / Initial sort state. */
+  /** 처음 로드될 때 미리 적용해 둘 정렬 상태. / The sort state to apply up front on first load. */
   defaultSort?: SortItem[];
 
   // 고정 / freezing
-  /** 왼쪽 고정 컬럼 수. / Number of left-frozen columns. */
+  /** 왼쪽부터 몇 개 컬럼을 가로 스크롤과 무관하게 고정할지. / How many leftmost columns stay pinned while scrolling horizontally. */
   frozenColumns?: number;
-  /** (예약) 고정 행 수 — 미구현. / (Reserved) frozen row count — not implemented. */
+  /** (예약) 위쪽 고정 행 수 — 아직 미구현. / (Reserved) number of top-frozen rows — not implemented yet. */
   frozenRows?: number;
 
   // 엑스트라 컬럼 / extra columns
-  /** 행 번호 컬럼 표시. / Show the row-number column. */
+  /** 맨 왼쪽에 1,2,3… 행 번호 컬럼을 붙일지. / Whether to add a leftmost 1,2,3… row-number column. */
   rowNumber?: boolean;
-  /** 행 상태(추가/수정) 컬럼 표시. / Show the row-state (added/edited) column. */
+  /** 각 행이 추가/수정/삭제 중 어떤 상태인지 표시하는 컬럼을 붙일지(편집 추적용). / Whether to add a column showing each row's added/edited/removed state (for change tracking). */
   stateColumn?: boolean;
-  /** 체크박스 컬럼 표시. / Show the checkbox column. */
+  /** 행 선택용 체크박스 컬럼을 붙일지. / Whether to add a checkbox column for selecting rows. */
   checkColumn?: boolean;
-  /** 행 드래그 이동 허용. / Enable row drag & drop. */
+  /** 행을 드래그해 순서를 바꾸게 할지. / Whether rows can be dragged to reorder. */
   draggable?: boolean;
   /** 그리드↔그리드 행 드래그 이동 허용 (draggable:true 와 함께 사용, 양쪽 그리드 모두 true 여야 이동) / Enable grid-to-grid row drag (use with draggable:true; both grids must be true) */
   crossGrid?: boolean;
@@ -739,34 +960,39 @@ export interface GridOptions<T = any> {
   mergeCells?: boolean;
 
   // 그룹핑 / grouping
-  /** 초기 그룹핑 필드. / Initial grouping fields. */
+  /** 처음부터 이 필드들로 행을 묶어 보여 줄지. 여러 개면 다단계 그룹이 됩니다(예: 지역 → 부서). / Which fields to group rows by from the start. Several means nested groups (e.g. region → dept). */
   groupBy?: string[];
-  /** 그룹 소계/합계 옵션. / Group summary options. */
+  /** 각 그룹에 소계/합계 요약 행을 붙이는 설정. / Options for attaching subtotal/summary rows to each group. */
   summary?: SummaryOptions;
 
   // 트리 / tree
-  /** 트리 구성 방식('auto' = children 중첩, 'flat' = id/parentId 평면). / Tree build mode ('auto' = nested children, 'flat' = id/parentId pairs). */
+  /**
+   * 트리(계층) 데이터를 어떤 모양으로 받을지. 'auto'=각 행이 children 배열로 자식을 품은 중첩 구조,
+   * 'flat'=모든 행이 한 줄이고 id/부모id 로 관계를 표현하는 평면 구조.
+   * / How hierarchical data is shaped. 'auto' = each row nests its children in a children array;
+   * 'flat' = every row is a flat entry linked by id / parent-id.
+   */
   treeMode?: 'auto' | 'flat';
-  /** flat 트리의 id 필드명. / id field name for flat tree mode. */
+  /** flat 트리에서 각 행의 고유 id 가 담긴 필드 이름. / In flat tree mode, the field holding each row's unique id. */
   treeId?: string;
-  /** flat 트리의 부모 id 필드명. / parent-id field name for flat tree mode. */
+  /** flat 트리에서 부모 행의 id 가 담긴 필드 이름. / In flat tree mode, the field holding the parent row's id. */
   treeParentId?: string;
-  /** 로드 시 전체 펼침. / Expand all nodes on load. */
+  /** 로드하자마자 모든 노드를 펼쳐 둘지. / Whether to expand every node right after loading. */
   expandOnLoad?: boolean;
 
   // 페이징 / pagination
-  /** 페이징 바 사용. / Enable the pagination bar. */
+  /** 아래쪽 페이지 이동 바를 띄울지. / Whether to show the pagination bar at the bottom. */
   pagination?: boolean;
-  /** 페이지당 행 수. / Rows per page. */
+  /** 한 페이지에 몇 행을 보일지. / How many rows show per page. */
   pageSize?: number;
 
   // 푸터 / footer
-  /** 푸터 셀 정의 배열. / Footer cell definitions. */
+  /** 아래(또는 위) 고정 푸터에 넣을 셀 정의들(합계 줄 등). / Cell definitions for the pinned footer (e.g. a totals row). */
   footer?: FooterDef[];
-  /** 푸터 위치. / Footer position. */
+  /** 푸터를 아래('bottom')에 둘지 위('top')에 둘지. / Put the footer at the bottom ('bottom') or top ('top'). */
   footerPosition?: 'top' | 'bottom';
 
-  /** 툴팁: true 면 모든 셀에 native title(값) 자동 노출. 컬럼별 col.tooltip 이 우선. / true auto-exposes native title (cell value) on every cell; per-column col.tooltip wins. */
+  /** true 면 모든 셀에 마우스를 올렸을 때 그 값이 브라우저 기본 툴팁으로 뜹니다. 컬럼의 tooltip 설정이 있으면 그쪽이 우선. / true shows every cell's value as a native browser tooltip on hover; a column's own tooltip wins. */
   tooltips?: boolean;
 
   // 접근성 / accessibility
@@ -778,10 +1004,10 @@ export interface GridOptions<T = any> {
   theme?: string;
   /** 스킨 (FORM 축, R12b) — data-og-skin. 미지정 시 'default'(오늘과 byte-identical). / Skin (FORM axis, R12b) — data-og-skin. Default 'default' (byte-identical to stock look). */
   skin?: string;
-  /** DD-11: 밀도 (DENSITY 축) — data-og-density. 미지정 시 미적용(byte-identical). / Density (DENSITY axis, DD-11) — data-og-density. Unset = not applied (byte-identical). */
-  density?: string;
-  /** DD-11: 질감 (TEXTURE 축) — data-og-texture. 미지정 시 미적용(byte-identical). / Texture (TEXTURE axis, DD-11) — data-og-texture. Unset = not applied (byte-identical). */
-  texture?: string;
+  /** 행 간격(밀도) 이름. 촘촘·보통·여유처럼 행 높이와 여백을 통째로 바꿉니다. 지정하지 않으면 아무 것도 바뀌지 않습니다. / The row-spacing (density) name — compact/normal/roomy row heights and paddings. Unset changes nothing. */
+  density?: string; // DENSITY 축 — data-og-density
+  /** 배경 질감(패턴) 이름. 셀 배경에 무늬만 입힙니다. 지정하지 않으면 아무 것도 바뀌지 않습니다. / The background texture (pattern) name — paints a pattern on cell backgrounds. Unset changes nothing. */
+  texture?: string; // TEXTURE 축 — data-og-texture
   /** 컨테이너에 주입할 CSS 변수 맵. / CSS custom properties injected on the container. */
   cssVars?: Record<string, string>;
 
@@ -798,19 +1024,24 @@ export interface GridOptions<T = any> {
    */
   messages?: PartialLocaleMessages;
 
-  /** F3: 우클릭 컨텍스트 메뉴(false=끔, 배열=커스텀 항목). / F3: right-click context menu (false = off, array = custom items). */
+  /** 우클릭 컨텍스트 메뉴. true=기본 메뉴, false=끔, 배열=직접 정한 항목들. / Right-click context menu — true = default menu, false = off, array = your own items. */
   contextMenu?: boolean | ContextMenuItem[];
 
-  /** F2: 워크시트(다중시트). / F2: worksheets (multi-sheet tabs). */
+  /** 엑셀처럼 하단 탭으로 여러 시트를 전환하는 워크시트 정의들. / Worksheet definitions — Excel-like bottom tabs switching between multiple sheets. */
   worksheets?: WorksheetDef[];
 
-  /** F4: 전체 기본 소수점 정밀도 (기본 10) / F4: global default decimal precision (default 10) */
+  /** 수식·집계 계산에 쓸 기본 소수점 정밀도. 기본 10. / Default decimal precision for formulas/aggregation. Default 10. */
   calcPrecision?: number;
 
-  /** 컬럼 드래그 리오더 허용. / Enable column drag reorder. */
+  /** 머리글을 드래그해 컬럼 순서를 바꾸게 할지. / Whether headers can be dragged to reorder columns. */
   columnReorder?: boolean;
 
-  /** override 커널: 레이어 예외를 기본 전파(strict). false → fallback 옵트인 동작 허용 / Override kernel: propagate layer exceptions by default (strict). false allows the fallback opt-in behavior. */
+  /**
+   * override 로 감싼 함수에서 예외가 나면 어떻게 할지. 기본(true, strict)은 예외를 그대로 전파합니다.
+   * false 로 하면 경고 후 원본 함수를 실행하는 완화(fallback) 동작을 허용합니다.
+   * / What happens when an overridden layer throws. Default (true, strict) propagates the error;
+   * false permits the softer fallback that warns then runs the original.
+   */
   overrideStrict?: boolean;
 
   // 이벤트 / events
@@ -823,14 +1054,15 @@ export interface GridOptions<T = any> {
   onEditBefore?: (e: EditEvent<T>) => boolean;
   onRowClick?: (e: RowEvent<T>) => void;
   onSelectionChange?: (e: SelectionEvent<T>) => void;
-  /** F1: 범위 rects 변경 시(C4, F4 라이브 소비) / F1: fired when range rects change (C4; consumed live by F4) */
+  /** 선택된 셀 범위가 바뀔 때마다 호출(차트가 이걸 실시간으로 구독하기도 함). / Fired whenever the selected cell range changes (the chart can subscribe to it live). */
   onRangeChange?: (e: RangeChangeEvent) => void;
-  /** F1: 채우기 커밋 결과(§6.3) / F1: fill commit result (§6.3) */
+  /** 채우기 핸들로 값 채우기가 확정된 뒤, 무엇이 어떻게 채워졌는지 결과를 전달. / After a fill-handle fill commits, delivers what was filled and how. */
   onRangeFill?: (e: RangeFillEvent) => void;
-  /** F1: 범위 복사 시(§6.3) / F1: fired on range copy (§6.3) */
+  /** 선택 범위를 복사(Ctrl+C)했을 때 호출. / Fired when the selected range is copied (Ctrl+C). */
   onRangeCopy?: (e: RangeCopyEvent) => void;
-  /** F2: 행 상세 패널 펼침/접힘 시(C5.1 on* 버킷). / F2: fired when a detail panel expands/collapses (C5.1 on* bucket). */
+  /** 행 상세 패널이 펼쳐질 때 호출. / Fired when a row's detail panel expands. */
   onRowExpand?: (e: RowExpandEvent<T>) => void;
+  /** 행 상세 패널이 접힐 때 호출. / Fired when a row's detail panel collapses. */
   onRowCollapse?: (e: RowExpandEvent<T>) => void;
   onSortChange?: (e: SortEvent) => void;
   onFilterChange?: (e: FilterEvent) => void;
@@ -897,10 +1129,12 @@ export type StrategySlot =
 
 // ─── R12b: 스킨(FORM) 축 타입 계약 (item3 §1.2 / §6.2, item2 C14) ───
 /**
- * SKIN 토큰 이름 집합 — **형태(FORM)만** 소유(색 0). COLOR 토큰과 disjoint name set 이라
- * 색⊥형태 직교성이 이름 충돌 부재로 물리적으로 보장된다(item3 §1.1~1.2, HANMS §4).
- * / SKIN token name set — owns **FORM only** (zero colors). Being name-disjoint from COLOR
- * tokens physically guarantees color⊥form orthogonality.
+ * 스킨이 조절할 수 있는 CSS 변수 이름들의 목록입니다. 여기 담긴 것은 모두 "형태"에 관한 값(모서리 둥글기,
+ * 테두리 두께, 그림자, 여백, 질감 등)뿐이고 색은 하나도 없습니다. 색은 별도의 테마(COLOR) 축이 맡습니다.
+ * 이렇게 이름 자체를 색과 겹치지 않게 나눠 두어, 스킨을 바꿔도 색은 영향받지 않도록 보장합니다.
+ * / The set of CSS-variable names a skin may adjust. Every one of these is about *form* (corner
+ * radius, border width, elevation, spacing, texture …) and none are colors — color is owned by the
+ * separate theme (COLOR) axis. Keeping the names disjoint guarantees a skin change never touches color.
  */
 export type SkinTokenName =
   // radius
@@ -927,7 +1161,13 @@ export type SkinTokenName =
   // accent
   | '--og-row-accent-width';
 
-/** FORM-only 스킨 델타. 값에 색 리터럴이 있으면 SkinRegistry 가 런타임 거부(Rule 2, 직교성). / FORM-only skin delta. Color literals in values are rejected at runtime by SkinRegistry (Rule 2, orthogonality). */
+/**
+ * 스킨 하나가 바꾸는 "형태 변수 → 값" 묶음입니다(바꾸고 싶은 것만 골라 담는 부분 지정). 형태 전용이라,
+ * 값에 색(예: '#fff')을 넣으면 등록 시점에 거부됩니다 — 색은 테마 축의 몫이기 때문입니다.
+ * / A skin's bundle of "form variable → value" overrides (partial — include only what you change).
+ * It is form-only: putting a color literal (e.g. '#fff') in a value is rejected at registration,
+ * because color belongs to the theme axis.
+ */
 export type SkinTokenDelta = Partial<Record<SkinTokenName, string>>;
 
 /** 단일키 정렬 비교자. dir 부호는 호출자(DataLayer)가 적용 — 슬롯은 비교만 반환. / Single-key sort comparator. The dir sign is applied by the caller (DataLayer) — the slot only compares. */
@@ -942,15 +1182,15 @@ export type CellSerializerFn = (value: any, col: any, row: any) => any;
 export type GroupKeyFn = (row: any, remainingFields: string[]) => any;
 /** 집계 연산. null 반환 시 기본 SUM/AVG/COUNT/MAX/MIN 분기로 폴백. / Aggregate operator. Returning null falls back to the built-in SUM/AVG/COUNT/MAX/MIN branch. */
 export type SummaryOpFn = (op: string, nums: any[], field: string) => number | null;
-/** R11(§4.2): 셀 클래스 렌더훅 리졸버. 렌더층이 셀 element 에 추가할 className(null=미참여). / R11 (§4.2): cell-class render-hook resolver. className the render layer adds to the cell element (null = not participating). */
+/** 셀마다 CSS 클래스 이름을 붙여 주는 함수 슬롯. 값·행에 따라 셀에 추가할 className 을 돌려줍니다(null 이면 아무 것도 안 붙임). / A slot that assigns a CSS class per cell — return the className to add based on value/row (null adds nothing). */
 export type CellClassResolverFn = (value: any, field: string, row: any) => string | null;
-/** R11(§4.2): 셀 aria-label 렌더훅 리졸버. 렌더층이 셀 aria-label 을 대체(null=기본 유지). / R11 (§4.2): cell aria-label render-hook resolver. Replaces the cell aria-label (null = keep default). */
+/** 셀의 스크린리더용 라벨(aria-label)을 바꿔 주는 함수 슬롯. 대체 라벨을 돌려줍니다(null 이면 기본값 유지). / A slot that overrides a cell's screen-reader label (aria-label) — return a replacement (null keeps the default). */
 export type AriaLabelResolverFn = (value: any, field: string, row: any) => string | null;
 /**
- * F1 채우기 시리즈 커스텀 리졸버 슬롯(C5.3, 예약). 사용자가 날짜/커스텀 시리즈를 주입할 수 있다.
- * ⚠️ 슬롯 등록 경로만 확보되어 있으며, RangeSelectionManager/FillEngine 소비 배선은 F1-b(Full) 대상.
- * / F1 custom fill-series resolver slot (C5.3, reserved). Lets users inject date/custom series.
- * ⚠️ Only the registration path exists; consumption wiring is scheduled for F1-b (Full).
+ * 채우기 핸들의 "이어 채우기" 규칙을 직접 정의하는 함수 슬롯입니다(예: 날짜·요일·사용자 정의 수열).
+ * ⚠️ 지금은 등록 통로만 열려 있고 실제 채우기에 연결되는 배선은 향후 버전에서 제공됩니다.
+ * / A slot to define your own fill-series rule for the fill handle (dates, weekdays, custom sequences).
+ * ⚠️ Only the registration path exists today; the wiring that actually consumes it ships in a later version.
  */
 export type FillSeriesResolverFn = (sourceLine: any[], k: number, axisSign: 1 | -1) => any;
 
@@ -969,61 +1209,69 @@ export interface StrategyMap {
 }
 
 /**
- * R12b(item3 §6.1): 스킨 FORM 해석 인터셉트 슬롯. AppearanceResolver 가 fallback 과 함께 읽어(제로코스트)
- * 오버라이드가 form 토큰 델타를 통째로 가로챌 수 있다. 미설정 시 내장 스킨 카탈로그가 그대로 적용.
- * / R12b (item3 §6.1): skin FORM resolution intercept slot. AppearanceResolver reads it with a
- * fallback (zero-cost) so an override can hijack the whole form-token delta. When unset, the
- * built-in skin catalog applies as-is.
+ * 스킨 이름을 받아 그 스킨의 형태 변수 묶음을 직접 만들어 돌려주는 함수 슬롯입니다. 내장 스킨 대신 나만의
+ * 스킨 해석 규칙을 통째로 끼워 넣을 때 씁니다(null 을 돌려주면 내장 스킨 카탈로그를 그대로 사용).
+ * / A slot that takes a skin name and returns that skin's form-variable bundle — plug in your own
+ * skin-resolution rule in place of the built-ins (return null to fall back to the built-in catalog).
  */
 export type SkinResolverFn = (skinId: string) => SkinTokenDelta | null;
 
 /**
- * R11(§4.3, T-ζ): SemVer 보증되는 **타입드 override 카탈로그**(좁은 "지원됨" 문).
- * `override("anyMethod", fn)` 문자열 탈출구(UC-11, best-effort)는 그대로 열려 있고 —
- * 이 인터페이스는 축복된(blessed) 확장점 이름을 IDE 발견가능하게 좁게 표시할 뿐, 넓은 문을 닫지 않는다.
- * 각 항목은 소비 테스트를 동반한다(유령 확장점 금지, DeMarco M9b).
- * / R11 (§4.3, T-ζ): SemVer-guaranteed **typed override catalog** (the narrow "supported"
- * statement). The `override("anyMethod", fn)` string escape hatch (UC-11, best-effort) stays
- * open — this interface only surfaces blessed extension-point names for IDE discovery.
+ * override 로 감싸는 것이 **공식적으로 보장되는** 확장점 이름들의 목록입니다. 이 이름들은 버전이 올라가도
+ * 유지되며 IDE 자동완성에 뜹니다. 목록에 없는 임의 메서드 이름도 override("이름", fn) 문자열 방식으로 감쌀 수
+ * 있지만(최선 노력), 그건 보장 밖입니다.
+ * / The list of extension points whose override is **officially guaranteed** — these names survive
+ * version bumps and show up in IDE autocomplete. Any other method name can still be wrapped via the
+ * string form override("name", fn) on a best-effort basis, but without that guarantee.
  */
 export interface OverridePoints<T = any> {
-  /** 셀 표시 텍스트 해석(렌더훅 displayText 의 근원). / Cell display-text resolution (source of the displayText render hook). */
+  /** 셀에 실제로 보이는 텍스트를 계산하는 지점. / Where a cell's visible display text is computed. */
   getDisplayValue(rowIndex: number, field: string): string;
-  /** 원시 셀 값 접근. / Raw cell value access. */
+  /** 셀의 원시 값을 읽는 지점. / Where a cell's raw value is read. */
   readCell(rowIndex: number, field: string): any;
 }
 
-/** 호출가능 + .strategy 멤버를 가진 하이브리드 override API. / Hybrid override API: callable plus a .strategy member. */
+/**
+ * grid.override 의 두 얼굴입니다 — 그 자체를 함수처럼 불러 메서드를 감쌀 수도 있고(override(...)),
+ * .strategy(...) 로 정렬·포맷 같은 알고리즘 슬롯을 갈아 끼울 수도 있습니다. 모든 호출은 체이닝을 위해
+ * 그리드 인스턴스를 다시 돌려줍니다.
+ * / The two faces of grid.override — call it like a function to wrap a method (override(...)), or use
+ * .strategy(...) to swap an algorithm slot like sorting/formatting. Every call returns the grid
+ * instance for chaining.
+ */
 export interface OverrideApi<T = any> {
-  /** R11(§4.3): 타입드 오버로드 — 축복된 확장점 이름(IDE 발견). SemVer 보증 카탈로그. / R11 (§4.3): typed overload — blessed extension-point names (IDE discovery). SemVer-guaranteed catalog. */
+  /** 보장된 확장점 이름을 감싸는 타입드 오버로드(IDE 자동완성). / Typed overload for the guaranteed extension-point names (IDE autocomplete). */
   <K extends keyof OverridePoints<T>>(name: K, fn: OverrideLayerFn, opts?: OverrideCallOptions): OpenGridInstance<T>;
-  /** 메서드 본문 무수정 런타임 래핑(C1-clean, 탈출구 UC-11). 체이닝 위해 grid 인스턴스 반환. / Runtime wrapping without touching method bodies (C1-clean, escape hatch UC-11). Returns the grid instance for chaining. */
+  /** 임의 메서드를 본문 수정 없이 런타임에 감쌉니다(문자열 이름 방식). 체이닝을 위해 그리드를 반환. / Wrap any method at runtime without touching its body (string-name form). Returns the grid for chaining. */
   (name: string, fn: OverrideLayerFn, opts?: OverrideCallOptions): OpenGridInstance<T>;
-  /** 알고리즘 슬롯 등록(Phase 2 매니저 훅포인트). 체이닝 위해 grid 인스턴스 반환. / Register an algorithm slot (Phase 2 manager hook point). Returns the grid instance for chaining. */
+  /** 알고리즘 슬롯 하나를 내 함수로 등록합니다. 체이닝을 위해 그리드를 반환. / Register one algorithm slot with your function. Returns the grid for chaining. */
   strategy<K extends StrategySlot>(slot: K, fn: StrategyMap[K]): OpenGridInstance<T>;
   strategy(slot: string, fn: Function): OpenGridInstance<T>;
 }
 
 /**
- * 그리드 공개 인스턴스 계약(OpenGrid 가 구현). 세부 문서는 OpenGrid 클래스 참조.
- * / Public grid instance contract (implemented by OpenGrid). See the OpenGrid class for
- * per-method documentation.
+ * `new OpenGrid(...)` 로 만든 그리드가 밖에 내어 주는 조작 창구(메서드 모음)입니다. 데이터 넣기·읽기,
+ * 행·컬럼 편집, 정렬·필터, 선택, 내보내기, 테마 전환 등 그리드에게 시킬 수 있는 모든 일이 여기 모여 있습니다.
+ * 각 메서드의 자세한 설명은 이 계약을 구현하는 OpenGrid 클래스 쪽에 있습니다.
+ * / The set of methods a grid built with `new OpenGrid(...)` exposes — everything you can ask the
+ * grid to do: load/read data, edit rows & columns, sort/filter, select, export, switch themes, and
+ * more. Per-method detail lives on the OpenGrid class that implements this contract.
  *
  * @typeParam T - 행 데이터 타입 / Row data type
  */
 export interface OpenGridInstance<T = any> {
   // ── grid.override() 확장 ──────────────────────────────
-  /** 공개 메서드를 런타임 래핑하거나(.override) 알고리즘 슬롯을 등록(.strategy). */
+  /** 공개 메서드를 런타임에 감싸 동작을 바꾸거나(.override), 정렬·포맷 같은 알고리즘 슬롯을 갈아 끼웁니다(.strategy). / Wrap a public method at runtime to change its behavior (.override), or swap an algorithm slot like sorting/formatting (.strategy). */
   override: OverrideApi<T>;
-  /** 단일 메서드 원본 복구. */
+  /** 이름을 지정한 메서드 하나를 원래 동작으로 되돌립니다. / Restore one named method to its original behavior. */
   restore(name: string): OpenGridInstance<T>;
-  /** 전체 override + strategy 복구(destroy 시 자동). */
+  /** 걸어 둔 모든 override 와 strategy 를 한 번에 되돌립니다(그리드 파기 시 자동 호출). / Undo all overrides and strategies at once (called automatically on destroy). */
   restoreAll(): OpenGridInstance<T>;
-  /** 해당 메서드가 override 되어 있는지. */
+  /** 그 메서드가 지금 override 로 감싸져 있는지 확인합니다. / Check whether that method is currently overridden. */
   hasOverride(name: string): boolean;
-  /** override 등록된 메서드 이름 목록. */
+  /** override 로 감싼 메서드 이름들의 목록을 돌려줍니다. / Return the list of overridden method names. */
   getOverrideNames(): string[];
-  /** strategy 슬롯 조회(미등록 시 fallback 반환). 매니저 read API. */
+  /** 등록된 알고리즘 슬롯 함수를 가져옵니다(없으면 넘긴 fallback 을 그대로 반환). / Fetch a registered algorithm-slot function (returns the given fallback if none). */
   getStrategy<F extends Function>(slot: string, fallback: F): F;
 
   // 데이터
@@ -1034,10 +1282,11 @@ export interface OpenGridInstance<T = any> {
   prefixData(data: T[]): void;
   clearData(): void;
   /**
-   * DD-05: 조건부서식(CF) 규칙 설정 — 데이터바·히트맵·아이콘셋을 렌더 경로에 배선(opt-in, 동적 import).
-   * 규칙이 걸린 컬럼 통계를 캐시 계산 후 재렌더한다. 빈 배열이면 CF 해제(잔재 제거).
-   * / DD-05: set conditional-format rules — wires data-bars/heatmaps/icon-sets into the render path
-   * (opt-in, dynamic import). Caches rule-bearing column stats, then re-renders. Empty array clears CF.
+   * 조건부 서식 규칙을 지정합니다 — 값에 따라 셀에 데이터바·색조(히트맵)·아이콘셋을 입혀 강조합니다.
+   * 규칙이 걸린 컬럼의 통계(최소·최대 등)를 미리 계산해 두고 다시 그립니다. 빈 배열을 주면 조건부 서식을 모두 해제합니다.
+   * / Set conditional-format rules — highlight cells by value with data-bars, color scales (heatmaps),
+   * or icon sets. It precomputes the rule-bearing columns' stats (min/max …) and re-renders. Pass an
+   * empty array to clear all conditional formatting.
    */
   setConditionalFormat(rules: import('./cf/CFRule.js').CFRule[]): Promise<void>;
 
@@ -1055,18 +1304,20 @@ export interface OpenGridInstance<T = any> {
   writeCell(rowIndex: number, field: string, value: any): void;
   getRowAt(rowIndex: number): T;
 
-  // ── Phase 0 인프라(C0.3/C2.1) ────────────────────────────
-  /** flat/visual index ↔ data 리졸버. F1/F3/F4 는 이 모델을 경유해 대상을 해소한다. */
-  getFlatRowModel(): import('./FlatRowModel.js').FlatRowModel;
-  /** 배치 쓰기 시작 — 이후 writeCell 들의 render/dataChange 를 지연·coalesce(reentrant). */
+  // ── 배치 쓰기 인프라 / batch-write infrastructure ────────────────────────────
+  /** 화면에 보이는 행 순서와 실제 데이터를 이어 주는 내부 모델을 돌려줍니다(고급 배선용). / Return the internal model mapping on-screen row order to actual data (for advanced wiring). */
+  getFlatRowModel(): import('./FlatRowModel.js').FlatRowModel; // C0.3/C2.1
+  /** 여러 셀을 한꺼번에 쓸 때, 이 호출 이후의 writeCell 들이 즉시 다시 그리지 않도록 렌더를 잠시 미룹니다. / Start a batch — subsequent writeCell calls defer their render/change events instead of firing each time. */
   beginBatch(): void;
-  /** 배치 종료 — 배치 중 쓰기가 있었으면 1회 render + 1회 coalesced dataChange. */
+  /** 배치를 끝내고, 그 사이 변경이 있었으면 단 한 번만 다시 그리고 변경 이벤트도 한 번만 냅니다. / End the batch — if anything changed, render once and emit one coalesced change event. */
   endBatch(): void;
   /**
-   * beginBatch+루프+endBatch 래퍼. rowIndex 는 flat index — kind!=='data' 대상(group/tree/
-   * detail 의사행)은 쓰기 전에 skip 한다(C0.3 쓰기 안전). 반환값 = 건너뛴 셀 수.
+   * 여러 셀 쓰기를 한 번에 처리하는 간편 래퍼(beginBatch → 반복 쓰기 → endBatch). rowIndex 는 화면
+   * 표시 순서이며, 그룹·트리·상세 같은 실제 데이터가 아닌 가상 행은 안전하게 건너뜁니다. 반환값은 건너뛴 셀 수입니다.
+   * / A convenience wrapper that writes many cells at once (beginBatch → loop → endBatch). rowIndex is
+   * screen-order; non-data pseudo-rows (group/tree/detail) are safely skipped. Returns how many were skipped.
    */
-  writeCells(patches: Array<{ rowIndex: number; field: string; value: any }>): number;
+  writeCells(patches: Array<{ rowIndex: number; field: string; value: any }>): number; // C0.3 쓰기 안전
 
   // 변경 추적
   getChanges(): { added: T[]; edited: T[]; removed: T[] };
@@ -1103,55 +1354,67 @@ export interface OpenGridInstance<T = any> {
   activate(index: number): void;
   deselect(): void;
 
-  // ── F1: 범위 선택 + 채우기 핸들(11_design_F1_v2.md §6.2, C4) ────────────
-  /** 정규화 rects(없으면 []). MVP 는 길이 ≤1. */
-  getRangeSelection(): CellRange[];
-  /** = getRangeSelection()[0] ?? null(C4, F4 소비). */
-  getActiveRange(): CellRange | null;
+  // ── 범위 선택 + 채우기 핸들 / range selection + fill handle ────────────
+  /** 현재 선택된 셀 범위들(없으면 빈 배열). 지금은 한 번에 하나까지 담깁니다. / Currently selected cell ranges (empty if none). At most one for now. */
+  getRangeSelection(): CellRange[]; // C4
+  /** 지금 활성인 범위 하나(없으면 null). 차트가 이 값을 읽어 씁니다. / The single active range (null if none). The chart reads this. */
+  getActiveRange(): CellRange | null; // C4
+  /** 셀 범위를 프로그램에서 직접 선택합니다. / Select a cell range programmatically. */
   setRangeSelection(range: CellRange | CellRange[]): void;
+  /** 현재 범위 선택을 모두 해제합니다. / Clear the current range selection. */
   clearRangeSelection(): void;
-  /** 현재 활성 범위의 값 2D 배열(FR-6, F4 필수 계약). */
-  getRangeValues(): any[][];
-  /** 현재 활성 범위 숫자 셀의 OGDecimal 기반 통계(FR-6, F4 필수 계약). */
-  getRangeStats(): _RangeStats | null;
-  /** source→target 채우기(배치 경유, C2). axis 는 두 rect 상대 위치로 추론. */
-  fillRange(source: CellRange, target: CellRange, mode?: 'copy' | 'series'): void;
+  /** 현재 활성 범위 안 셀 값들을 행×열 2차원 배열로 돌려줍니다(차트가 소비). / Return the active range's cell values as a 2-D (rows×cols) array (consumed by the chart). */
+  getRangeValues(): any[][]; // FR-6
+  /** 현재 활성 범위의 숫자 셀 통계(합·평균·최소·최대 등, 고정밀 계산). 숫자가 없으면 null. / High-precision stats (sum/avg/min/max …) over the active range's numeric cells; null if none. */
+  getRangeStats(): _RangeStats | null; // FR-6
+  /** 원본 범위의 값을 대상 범위로 채웁니다. 'copy'=그대로 복사, 'series'=규칙 감지해 이어 채우기. / Fill the target range from the source — 'copy' duplicates, 'series' detects a pattern and extends. */
+  fillRange(source: CellRange, target: CellRange, mode?: 'copy' | 'series'): void; // C2, 배치 경유
 
-  // ── F4: 그리드 데이터 통합 차트(11_design_F4_v2.md §6, C5) ────────────
+  // ── 통합 차트 / integrated chart ────────────
+  /** 그리드 데이터로 차트를 만들어 인스턴스를 돌려줍니다. / Create a chart from grid data and return its instance. */
   createChart(config: import('./chart/types.js').ChartConfig): import('./chart/types.js').ChartInstance;
+  /** 이 그리드에 붙어 있는 차트 인스턴스들. / The chart instances attached to this grid. */
   getCharts(): import('./chart/types.js').ChartInstance[];
+  /** 이 그리드의 차트를 모두 정리(해제)합니다. / Dispose all charts on this grid. */
   destroyCharts(): void;
 
-  // ── F3: 셀 수식(11_design_F3_v2.md §8.2, C0/C2/C3) ────────────────────
-  /** "=A1+B2" 형태. rowIndex 는 flat(C0), 내부 즉시 stable rowId 로 정규화. */
-  setCellFormula(rowIndex: number, field: string, formula: string): void;
+  // ── 셀 수식 / cell formulas ────────────────────
+  /** 셀에 수식을 넣습니다(예: "=A1+B2"). rowIndex 는 화면 순서로 주면 내부에서 안정적 참조로 바꿉니다. / Set a cell's formula (e.g. "=A1+B2"). Pass rowIndex in screen order; it's normalized to a stable ref inside. */
+  setCellFormula(rowIndex: number, field: string, formula: string): void; // C0: flat→stable rowId
+  /** 그 셀의 수식 원문(없으면 null). / The cell's formula text (null if none). */
   getCellFormula(rowIndex: number, field: string): string | null;
+  /** 그 셀에 수식이 들어 있는지. / Whether that cell holds a formula. */
   hasCellFormula(rowIndex: number, field: string): boolean;
-  /** 수식 제거(값은 유지). */
+  /** 셀의 수식만 지웁니다(마지막 계산 값은 남습니다). / Remove the cell's formula (keeps the last computed value). */
   clearCellFormula(rowIndex: number, field: string): void;
+  /** 그 셀의 수식 오류 코드(오류가 없으면 null). / The cell's formula error code (null if none). */
   getCellError(rowIndex: number, field: string): FormulaErrorCode | null;
-  /** 디버깅용 — 이 셀을 참조하는(종속) 셀들. */
+  /** 디버깅용 — 이 셀을 참조하는(이 셀이 바뀌면 다시 계산되는) 셀들. / Debug — cells that reference this one (recomputed when it changes). */
   getDependents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }>;
-  /** 디버깅용 — 이 셀이 참조하는(선행) 셀들. */
+  /** 디버깅용 — 이 셀의 수식이 참조하는(이 셀보다 먼저 계산돼야 하는) 셀들. / Debug — cells this one's formula references (computed before it). */
   getPrecedents(rowIndex: number, field: string): Array<{ rowIndex: number; field: string }>;
-  /** 전체 수식 위상 재계산(setData/컬럼 변경 등). */
+  /** 모든 수식을 처음부터 다시 계산합니다(데이터 교체·컬럼 변경 후 등). / Recompute every formula from scratch (after replacing data, changing columns, …). */
   recalculate(): void;
-  /** 단일 셀 + 종속 폐포만 재계산. */
+  /** 이 셀과, 이 셀에 딸린(종속) 셀들만 다시 계산합니다. / Recompute only this cell and the cells depending on it. */
   recalculateCell(rowIndex: number, field: string): void;
-  /** C3(F1 fill 전용): srcRowId/srcField 수식의 상대축만 dRow/dCol 오프셋한 새 수식 원문. */
-  offsetFormula(srcRowId: string, srcField: string, dRow: number, dCol: number): string;
+  /** 채우기 기능 전용 — 어떤 셀의 수식을 dRow/dCol 만큼 이동한 자리에 맞게 참조를 옮긴 새 수식 원문을 돌려줍니다. / Fill-only — return a copy of a cell's formula with its relative refs shifted by dRow/dCol. */
+  offsetFormula(srcRowId: string, srcField: string, dRow: number, dCol: number): string; // C3
 
-  // ── F2: 마스터/디테일(11_design_F2_v2.md §6.2, C5.4) ──────────────────
-  /** rowRef 는 flat/visual index(C0.2) 또는 stable id. maxDepth 초과 시 거부(announce, FR-10). */
-  expandRow(rowRef: number | { id: string }): void;
+  // ── 마스터/디테일 / master-detail ──────────────────
+  /** 행을 펼쳐 상세 패널을 엽니다. rowRef 는 화면 순서 인덱스 또는 안정적 id. 허용 겹수를 넘으면 거부됩니다. / Expand a row's detail panel. rowRef is a screen-order index or a stable id; rejected past the nesting limit. */
+  expandRow(rowRef: number | { id: string }): void; // C0.2, FR-10
+  /** 열려 있는 상세 패널을 접습니다. / Collapse an open detail panel. */
   collapseRow(rowRef: number | { id: string }): void;
+  /** 상세 패널을 펼쳐져 있으면 접고, 접혀 있으면 폅니다. / Toggle a detail panel open/closed. */
   toggleRow(rowRef: number | { id: string }): void;
+  /** 그 행의 상세 패널이 지금 펼쳐져 있는지. / Whether that row's detail panel is currently expanded. */
   isRowExpanded(rowRef: number | { id: string }): boolean;
+  /** 열려 있는 모든 상세 패널을 한 번에 접습니다. / Collapse every open detail panel at once. */
   collapseAllDetails(): void;
-  /** 펼쳐진 적 없으면 undefined. renderer 반환값 또는 자동 생성 서브그리드 인스턴스. */
+  /** 그 행의 상세 패널 내용물(직접 그린 결과 또는 자동 생성된 자식 그리드). 한 번도 펼치지 않았으면 undefined. / The row's detail content (your rendered result or the auto-created child grid); undefined if never expanded. */
   getDetailInstance<D = any>(rowRef: number | { id: string }): D | undefined;
-  /** FR-11: 컬럼/호스트 리사이즈 후 열린 패널 폭을 강제 재동기(보통은 재렌더가 자동 처리). */
-  resyncPanelWidths(): void;
+  /** 컬럼·컨테이너 크기를 바꾼 뒤 열린 패널의 폭을 다시 맞춥니다(보통은 재렌더가 알아서 처리). / Re-sync open panel widths after a column/container resize (usually the re-render handles it). */
+  resyncPanelWidths(): void; // FR-11
 
   // 체크박스
   getChecked(): Array<{ row: T; rowIndex: number }>;
@@ -1174,9 +1437,9 @@ export interface OpenGridInstance<T = any> {
   restoreFilter(state: Record<string, FilterItem[]>): void;
 
   // 그리드↔그리드 행 이동 (드래그 또는 화살표 셔틀과 공통 경로)
-  /** 지정 행들을 다른 그리드로 이동. 3단계 이벤트 + crossGridMapping 적용. */
+  /** 지정한 행들을 다른 그리드로 옮깁니다(드래그·셔틀과 같은 경로). 옮기는 전·후·완료 3단계 이벤트가 나고 필드 매핑 규칙이 적용됩니다. / Move the given rows into another grid (same path as drag/shuttle). Fires the three-phase events and applies the field-mapping rule. */
   moveRowsTo(target: OpenGridInstance<T>, sourceIndexes: number[], targetIndex?: number): Promise<boolean>;
-  /** 체크된 행을 다른 그리드로 이동 (화살표 셔틀용) */
+  /** 체크박스로 고른 행들을 다른 그리드로 옮깁니다(화살표 셔틀 버튼용). / Move the checkbox-selected rows into another grid (for the arrow-shuttle buttons). */
   moveCheckedTo(target: OpenGridInstance<T>): Promise<boolean>;
 
   // 고정
@@ -1214,25 +1477,25 @@ export interface OpenGridInstance<T = any> {
   resize(width?: number, height?: number): void;
   setTheme(theme: string): void;
   setThemeVar(varName: string, value: string): void;
-  /** R12b: 스킨(FORM 축) 전환 — data-og-skin 설정 + 인라인 form 사이트 재해석. 색 테마와 직교. */
+  /** 스킨(형태 축)을 바꿉니다 — 모서리·테두리·여백 같은 "생김새"만 갈아 끼우고, 색 테마는 그대로 둡니다. / Switch the skin (form axis) — swaps the "shape" (corners, borders, spacing …) only, leaving the color theme untouched. */
   setSkin(skin: string): void;
-  /** R12b: 현재 스킨 id('default' = 오늘). */
+  /** 지금 적용된 스킨 id('default' = 기본 생김새). / The currently applied skin id ('default' = stock look). */
   getSkin(): string;
-  /** R12b: FORM 축 단일 토큰 런타임 오버라이드(setThemeVar 의 형태-축 형제). 색 값은 거부. */
+  /** 형태 축의 CSS 변수 하나만 즉석에서 바꿉니다(setThemeVar 의 형태 버전). 색 값을 넣으면 거부됩니다. / Override a single form-axis CSS variable at runtime (the form-axis sibling of setThemeVar). Color values are rejected. */
   setSkinVar(varName: string, value: string): void;
-  /** DD-11: 밀도(DENSITY 축) 전환 — data-og-density + --og-density-* 토큰(+행높이 미러, relayout). 미등록 never-throw. 색⊥형태⊥밀도⊥질감 직교. / DD-11: switch the density axis — additive data-og-density + --og-density-* tokens (row-height mirror + relayout). Never throws. */
+  /** 밀도(행 간격)를 바꿉니다 — 촘촘/보통/여유처럼 행 높이와 여백을 통째로 조절합니다. 색·스킨과 따로 노는 별개 축이며, 없는 이름을 줘도 오류를 내지 않습니다. / Switch the density (row spacing) — compact/normal/roomy row heights and paddings. An independent axis from color/skin; never throws on an unknown name. */
   setDensity(name: string): void;
-  /** DD-11: 질감(TEXTURE 축) 전환 — data-og-texture + --og-texture-* 토큰(배경 페인트만, relayout 없음). 미등록 never-throw. / DD-11: switch the texture axis — additive data-og-texture + --og-texture-* tokens (paint only, no relayout). Never throws. */
+  /** 질감(배경 패턴)을 바꿉니다 — 배경 페인트만 입히고 크기 재계산은 하지 않습니다. 없는 이름을 줘도 오류를 내지 않습니다. / Switch the texture (background pattern) — paints the background only, no relayout. Never throws on an unknown name. */
   setTexture(name: string): void;
 
   // i18n: 로케일 전환·조회·메시지 오버라이드·해석 / i18n: locale switch/read/override/resolve
-  /** UI 로케일 전환 — 크롬+가시창 재렌더 + emit('localeChange'). 미등록 로케일은 never-throw. */
+  /** UI 문구의 언어(로케일)를 바꾸고 화면을 다시 그립니다. 등록되지 않은 로케일을 줘도 오류를 내지 않습니다. / Switch the UI language (locale) and re-render. Never throws on an unregistered locale. */
   setLocale(locale: string): void;
-  /** 현재 인스턴스 로케일 id. */
+  /** 이 그리드에 지금 적용된 로케일 id. / The locale id currently applied to this grid. */
   getLocale(): string;
-  /** 이 인스턴스만 단일 메시지 오버라이드(setIcon 동형, 첫 호출 시 child 지연생성). */
+  /** 이 그리드에서만 특정 문구 하나를 다른 말로 바꿉니다. / Override a single UI message for this grid only. */
   setMessage(key: LocaleMessageKey | string, value: MessageValue): OpenGridInstance<T>;
-  /** 메시지 해석(오버라이드 우선 → 활성 로케일 → ko → 키). 절대 throw 안 함. */
+  /** 키에 해당하는 문구를 찾아 돌려줍니다(개별 오버라이드 → 활성 로케일 → 한국어 → 키 순). 오류를 내지 않습니다. / Resolve a message by key (per-message override → active locale → Korean → the key itself). Never throws. */
   t(key: LocaleMessageKey | string, params?: Record<string, string | number>): string;
 
   destroy(): void;
@@ -1353,10 +1616,20 @@ export interface TriggerContext<TResult = any> {
   cancel(): void;
 }
 
-/** 트리거 핸들러 함수 타입 / Trigger handler function type */
+/**
+ * 트리거로 등록하는 핸들러 함수의 형태입니다. 작업의 맥락(TriggerContext)을 인자로 받아,
+ * 작업 전이라면 검증·취소하고 작업 후라면 결과를 확인하는 등의 일을 합니다.
+ * / The shape of a handler you register as a trigger. It receives the operation's context
+ * (TriggerContext) — validate/cancel before, or inspect the result after.
+ */
 export type TriggerHandler<TResult = any> = (ctx: TriggerContext<TResult>) => void;
 
-/** 지원되는 트리거 이벤트명 / Supported trigger event names */
+/**
+ * 트리거를 걸 수 있는 이벤트 이름들. 형식은 '시점:작업' 입니다 — 'before:작업'은 그 작업이 실행되기
+ * 직전(여기서 취소 가능), 'after:작업'은 끝난 직후, 'complete'는 어떤 작업이든 끝난 뒤 공통으로 호출됩니다.
+ * / The event names you can attach triggers to, in 'phase:operation' form — 'before:*' fires just
+ * before the operation (cancelable there), 'after:*' just after, and 'complete' after any operation.
+ */
 export type TriggerEvent =
   | 'before:setData'     | 'after:setData'
   | 'before:insertRow'   | 'after:insertRow'

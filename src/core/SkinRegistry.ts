@@ -17,9 +17,20 @@
 
 import type { SkinTokenDelta, SkinTokenName } from './types.js';
 
-/** 허용되는 FORM 토큰 이름(SkinTokenName 과 동일 집합의 런타임 가드).
- *  export 이유(DD-11): 테마 델타의 대칭 검증 `assertColorOnly` 가 이 집합을 denylist 로 재사용해
- *  색축⊥형태축을 양방향으로 기계강제한다(형태/밀도/질감 shape 토큰이 테마 델타에 오면 거부). */
+// 계약 추적: item2 §3.1 C14 / DD-11(테마쪽 대칭 검증 assertColorOnly 가 이 집합을 재사용).
+// / Contract refs: item2 §3.1 C14 / DD-11 (the theme-side symmetric check assertColorOnly reuses this set).
+/**
+ * 스킨(FORM) 델타에 등장할 수 있는 CSS 커스텀 프로퍼티 이름의 허용 목록(런타임 가드).
+ * 스킨은 형태(모서리·테두리·그림자·밀도 등)만 다루고 색은 다루지 않는다는 규칙을, 이 목록이
+ * 물리적으로 강제한다 — `define()`/`registerBuiltin()` 이 델타를 검사할 때 이 집합에 없는
+ * 키는 거부한다. 반대 방향(테마 델타에 형태 토큰이 섞이는 것)도 이 집합을 재사용해 막는다
+ * (색⊥형태 축 분리를 양방향으로 기계 강제).
+ * / Allow-list of CSS custom-property names permitted in a skin (FORM) delta (runtime guard).
+ *   It physically enforces the rule that skins own shape only (radius/border/elevation/density/…)
+ *   and never color — `define()`/`registerBuiltin()` reject any key outside this set. The reverse
+ *   direction (shape tokens leaking into a theme delta) reuses this same set, so the color⊥shape
+ *   axis separation is mechanically enforced both ways.
+ */
 export const FORM_TOKENS: ReadonlySet<string> = new Set<SkinTokenName>([
   '--og-radius-none', '--og-radius-sm', '--og-radius-md', '--og-radius-lg', '--og-radius-pill',
   '--og-radius-container', '--og-radius-control', '--og-radius-widget', '--og-container-radius',
@@ -53,12 +64,19 @@ export interface SkinDefineResult {
 }
 
 /**
- * 스킨 델타가 색 리터럴을 담고 있는지 검사하고, 위반 시 던진다(FORM-only, Rule 2).
- * / Assert a skin delta carries no color literal; throws on violation (FORM-only, Rule 2).
+ * 스킨(FORM)에는 형태만 담고 색은 담지 않는다는 규칙을 실제로 검사하는 함수. 왜 필요한가:
+ * 스킨과 테마(색)를 분리해 두어도, 개발자가 실수로 스킨 델타에 `#fff` 같은 색을 넣으면 그
+ * 분리가 눈에 안 띄게 무너진다 — 그래서 등록 시점에 색 리터럴이 섞이면 즉시 던져서 알아채게
+ * 한다(조용히 무시하지 않음).
+ * / Actually enforces the rule that a skin (FORM) carries shape only, never color. Why: even with
+ *   skin/theme separation on paper, a developer slipping `#fff` into a skin delta would quietly
+ *   break that separation — so this throws immediately at registration time instead of ignoring it.
  *
  * @param id - 스킨 id / Skin id
  * @param delta - 검사할 토큰 델타 / Token delta to validate
  * @throws FORM 토큰이 아니거나 색 리터럴이 있으면 Error / Throws if a non-FORM token or a color literal is present
+ * @example
+ * skinRegistry.define('my-skin', { '--og-radius-md': '#fff' }); // throws — 색 리터럴 검출 / color literal detected
  */
 export function assertFormOnly(id: string, delta: SkinTokenDelta): void {
   for (const [rawKey, rawVal] of Object.entries(delta)) {
@@ -79,15 +97,23 @@ export function assertFormOnly(id: string, delta: SkinTokenDelta): void {
   }
 }
 
+// 계약 추적: §6.4. / Contract ref: §6.4.
 /**
- * 접근성 가드레일(불변식) 적용 — 정의 시점 클램프(§6.4).
- * / Apply accessibility guardrails (invariants) — clamp at definition time (§6.4).
- *
- *  - focus-width < 2px → 2px 로 클램프(가시 포커스 비협상). / clamp to 2px (visible focus is non-negotiable).
+ * 접근성 가드레일(불변식)을 적용해 델타를 정의 시점에 안전값으로 클램프한다. `define()`/
+ * `registerBuiltin()` 내부에서 자동 호출되므로 보통 직접 부를 일은 없다(커스텀 등록 파이프라인·
+ * 테스트에서 직접 검증할 때만 예외적으로 사용). 스킨 저자가 접근성 최소 기준 이하로 값을
+ * 설정해도 조용히 그대로 등록되지 않도록 막는다.
+ *  - focus-width < 2px → 2px 로 클램프(가시 포커스 비협상).
  *  - focus-style: none → solid.
- *
  * 반환은 조정된 델타 + 경고 목록(silent override 아님 — 무엇을 클램프했는지 알린다).
- * / Returns the adjusted delta plus a warning list (not a silent override — it reports what was clamped).
+ * / Applies accessibility guardrails (invariants), clamping the delta to a safe value at
+ *   definition time. Called automatically inside `define()`/`registerBuiltin()`, so you rarely
+ *   call it directly (only in a custom registration pipeline or a test that checks it directly).
+ *   Prevents a skin author from silently registering values below the minimum accessibility bar.
+ *   - focus-width < 2px → clamped to 2px (visible focus is non-negotiable).
+ *   - focus-style: none → solid.
+ *   Returns the adjusted delta plus a warning list (not a silent override — it reports what was
+ *   clamped).
  *
  * @param id - 스킨 id / Skin id
  * @param delta - 조정할 토큰 델타 / Token delta to adjust
@@ -114,10 +140,19 @@ export function applyGuardrails(id: string, delta: SkinTokenDelta): SkinDefineRe
 }
 
 /**
- * 프로세스 전역 스킨 등록소. defineSkin(사용자) 는 검증+가드레일+`<style>` 주입,
- * registerBuiltin(내장) 은 검증+가드레일만(CSS 는 skins.css 정적 번들 소유).
- * / Process-global skin registry. `define` (user) does validation + guardrails + `<style>` injection;
- * `registerBuiltin` (built-in) does validation + guardrails only (CSS is owned by the skins.css static bundle).
+ * 스킨(FORM 축 — 모서리·테두리·그림자·밀도 등 "생김새")을 등록하는 전역 레지스트리. 등록하면
+ * 내부에서 벌어지는 일: `define()` 은 색 리터럴이 없는지 검사 → 접근성 가드레일 클램프 →
+ * `.og-container[data-og-skin="id"] { ... }` 규칙을 담은 `<style>` 태그를 문서 head 에 주입한다.
+ * 그리드 쪽에서 `data-og-skin="id"` 속성만 설정하면 이 CSS 가 매치되어 적용된다. 내장 스킨은
+ * `registerBuiltin()` 으로 검증+가드레일만 거치고 실제 CSS 는 정적 번들 skins.css 가 이미
+ * 담당하므로 별도 주입이 없다.
+ * / A global registry for registering skins (the FORM axis — corner/border/shadow/density, i.e.
+ *   "shape"). What happens internally when you register: `define()` checks for no color literals
+ *   → clamps via accessibility guardrails → injects a `<style>` tag into document head containing
+ *   a `.og-container[data-og-skin="id"] { ... }` rule. The grid side only needs to set the
+ *   `data-og-skin="id"` attribute for this CSS to match and apply. Built-in skins go through
+ *   `registerBuiltin()` for validation + guardrails only — their CSS is already owned by the
+ *   static skins.css bundle, so no injection happens.
  *
  * @example
  * skinRegistry.define('my-skin', { '--og-radius-md': '10px', '--og-border-style': 'solid' });
@@ -189,7 +224,13 @@ export class SkinRegistry {
 // 값은 item3 §3.1~§3.6 + HANMS §3(Material) 의 구체 토큰. density 행은 **권장 밀도 힌트**
 // (실제 relayout 은 data-og-density 축 소유, item4 C1 — setSkin 은 무비용).
 
-/** Sharp/Gothic — 엔터프라이즈 고밀도·각짐(§3.1). / Sharp/Gothic — enterprise high-density, squared corners (§3.1). */
+// 계약 추적: item3 §3.1. / Contract ref: item3 §3.1.
+/**
+ * Sharp/Gothic — 엔터프라이즈 고밀도 화면에 맞춘 각진(라운드 0) 형태. 데이터 밀도가 중요한
+ * 백오피스·트레이딩 화면에 어울린다.
+ * / Sharp/Gothic — squared (zero-radius) shape tuned for high-density enterprise screens; suits
+ *   back-office/trading UIs where data density matters.
+ */
 export const SKIN_SHARP: SkinTokenDelta = {
   '--og-radius-sm': '0', '--og-radius-md': '0', '--og-radius-lg': '0',
   '--og-radius-pill': '0', '--og-radius-container': '0', '--og-container-radius': '0',
@@ -201,7 +242,11 @@ export const SKIN_SHARP: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'miter',
 };
 
-/** Rounded — 소비자 SaaS 소프트(§3.2). / Rounded — consumer-SaaS soft look (§3.2). */
+// 계약 추적: item3 §3.2. / Contract ref: item3 §3.2.
+/**
+ * Rounded — 소비자 SaaS 에 어울리는 부드러운(둥근 모서리·큰 그림자) 형태.
+ * / Rounded — soft shape (rounded corners, larger shadows) suited to consumer-SaaS products.
+ */
 export const SKIN_ROUNDED: SkinTokenDelta = {
   '--og-radius-sm': '4px', '--og-radius-md': '8px', '--og-radius-lg': '12px',
   '--og-radius-pill': '999px', '--og-radius-container': '12px', '--og-container-radius': '12px',
@@ -215,7 +260,13 @@ export const SKIN_ROUNDED: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** Stitch — 핸드크래프트(§3.3). 색(리넨/자수)은 theme 축. / Stitch — handcrafted look (§3.3); color (linen/embroidery) lives on the theme axis. */
+// 계약 추적: item3 §3.3. / Contract ref: item3 §3.3.
+/**
+ * Stitch — 손바느질/리넨 소재 느낌을 주는 형태(점선 테두리·텍스처). 리넨 색·자수 색 자체는
+ * 이 스킨이 아니라 theme(색) 축이 담당한다(색⊥형태 분리).
+ * / Stitch — a handcrafted, linen-textured shape (dashed borders, texture). The linen/embroidery
+ *   color itself belongs to the theme (color) axis, not this skin (color⊥shape separation).
+ */
 export const SKIN_STITCH: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '3px', '--og-radius-lg': '4px', '--og-container-radius': '3px',
   '--og-border-width': '1px', '--og-border-style': 'dashed', '--og-divider-style': 'dashed',
@@ -230,7 +281,11 @@ export const SKIN_STITCH: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** Flat/Minimal — 플랫 2.0(§3.5). / Flat/Minimal — flat 2.0 (§3.5). */
+// 계약 추적: item3 §3.5. / Contract ref: item3 §3.5.
+/**
+ * Flat/Minimal — 그림자·입체감을 없앤 평평한(flat 2.0) 형태. 미니멀한 대시보드에 어울린다.
+ * / Flat/Minimal — a flat (flat 2.0) shape with shadows/depth removed; suits minimal dashboards.
+ */
 export const SKIN_FLAT: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '3px', '--og-radius-lg': '4px', '--og-container-radius': '4px',
   '--og-border-width': '1px', '--og-border-style': 'solid', '--og-divider-style': 'solid',
@@ -242,7 +297,14 @@ export const SKIN_FLAT: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** High-Contrast — 접근성 우선·레퍼런스(§3.6). / High-Contrast — accessibility-first reference skin (§3.6). */
+// 계약 추적: item3 §3.6. / Contract ref: item3 §3.6.
+/**
+ * High-Contrast — 접근성을 최우선에 둔 레퍼런스 스킨(굵은 테두리·큰 포커스 링·굵은 아이콘 획).
+ * 다른 스킨을 만들 때 "접근성 하한선이 뭔가"를 확인하는 기준으로도 쓸 수 있다.
+ * / High-Contrast — a reference skin that puts accessibility first (thick borders, a large focus
+ *   ring, bold icon strokes). Also useful as a baseline for "what's the accessibility floor" when
+ *   authoring other skins.
+ */
 export const SKIN_HIGH_CONTRAST: SkinTokenDelta = {
   '--og-radius-sm': '0', '--og-radius-md': '2px', '--og-radius-lg': '2px', '--og-container-radius': '2px',
   '--og-border-width': '2px', '--og-border-width-strong': '3px',
@@ -255,7 +317,11 @@ export const SKIN_HIGH_CONTRAST: SkinTokenDelta = {
   '--og-icon-size': '18px', '--og-icon-fill': '1', '--og-icon-stroke-width': '2', '--og-icon-corner': 'miter',
 };
 
-/** Material/Elevated — 중간 반경 + 정직한 그림자 엘리베이션. / Material/Elevated — medium radius plus honest shadow elevation. */
+/**
+ * Material/Elevated — 중간 정도 반경 + 과장 없는 그림자 엘리베이션을 쓰는 형태.
+ * / Material/Elevated — a shape using medium-radius corners plus restrained (non-exaggerated)
+ *   shadow elevation.
+ */
 export const SKIN_MATERIAL: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '4px', '--og-radius-lg': '8px', '--og-container-radius': '8px',
   '--og-radius-control': '4px', '--og-radius-widget': '4px',
@@ -268,7 +334,12 @@ export const SKIN_MATERIAL: SkinTokenDelta = {
   '--og-icon-fill': '0', '--og-icon-corner': 'round',
 };
 
-/** 내장 스킨 카탈로그(확정 6종). id → 델타. / Built-in skin catalog (6 finalized skins). id → delta. */
+/**
+ * 내장 스킨 카탈로그(확정 6종, id → 델타). `skinRegistry.list()`/설정 UI 에서 선택지를 보여줄 때
+ * 이 배열을 순회하면 된다.
+ * / Built-in skin catalog (6 finalized skins, id → delta). Iterate this array when building a
+ *   picker UI or listing options via `skinRegistry.list()`.
+ */
 export const BUILTIN_SKINS: ReadonlyArray<readonly [string, SkinTokenDelta]> = [
   ['sharp', SKIN_SHARP],
   ['rounded', SKIN_ROUNDED],

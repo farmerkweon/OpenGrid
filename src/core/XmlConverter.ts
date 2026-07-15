@@ -2,6 +2,16 @@
  * XmlConverter — XML ↔ 그리드 데이터 양방향 변환 유틸리티.
  * / XmlConverter — bidirectional XML ↔ grid-data conversion utility.
  *
+ * SAP·레거시 백엔드처럼 JSON이 아니라 XML로 응답을 주는 시스템과 그리드를 연결할 때 쓴다.
+ * 데이터가 흐르는 방향은 두 가지다: **입력**(서버가 준 XML 문자열) → **변환**(태그/속성을
+ * 파싱해 행 객체 배열로 정규화) → **출력**(그리드가 바로 `setData()`에 넣을 수 있는
+ * `Record<string, any>[]`). 반대 방향(그리드에서 편집한 데이터 → XML)도 동일한 변환기로 처리한다.
+ * / Use this to bridge the grid with systems that answer in XML instead of JSON — SAP and other
+ * legacy backends being the common case. Data flows in two directions: **input** (the XML string
+ * a server returned) → **transform** (tags/attributes parsed and normalized into row objects) →
+ * **output** (a `Record<string, any>[]` the grid can pass straight to `setData()`). The reverse
+ * direction (grid-edited data → XML) goes through the same converter.
+ *
  * 지원 포맷 / Supported formats:
  *   A. Element 방식  <row><name>홍길동</name></row>
  *   B. Attribute 방식  <row name="홍길동" />
@@ -80,6 +90,10 @@ export class XmlConverter {
    * @param options - 파싱 옵션 / Parse options
    * @returns 행 객체 배열 / Array of row objects
    * @throws XML 파싱 오류 시 Error 발생 / Throws an Error on XML parse failure
+   * @example
+   * // <rows><row><name>Kim</name><dept>Sales</dept></row></rows>
+   * const rows = XmlConverter.parse(xmlText);
+   * grid.setData(rows); // → [{ name: 'Kim', dept: 'Sales' }]
    */
   static parse(xml: string, options: XmlParseOptions = {}): Record<string, any>[] {
     const { fieldMap = {}, trim = true } = options;
@@ -132,6 +146,9 @@ export class XmlConverter {
    * @param data - 직렬화할 행 배열 / Row array to serialize
    * @param options - 직렬화 옵션 / Serialize options
    * @returns XML 문자열 / XML string
+   * @example
+   * // 그리드에서 수정된 행을 서버로 보낼 때 / Sending grid-edited rows back to a server
+   * const xml = XmlConverter.stringify(grid.getEditedRows(), { mode: 'attribute' });
    */
   static stringify(data: Record<string, any>[], options: XmlStringifyOptions = {}): string {
     const {
@@ -183,6 +200,15 @@ export class XmlConverter {
    * SAP BAPI XML 응답을 파싱하여 { header, items, returns } 구조로 반환.
    * / Parse a SAP BAPI XML response into a { header, items, returns } structure.
    *
+   * SAP BAPI 응답은 "행이 죽 나열된" 단순 목록이 아니라 문서 헤더(DOCUMENTHEADER)·라인
+   * 아이템(ACCOUNTGL 등)·처리 결과 메시지(RETURN)가 뒤섞여 한 응답 안에 들어온다. 그래서 범용
+   * `parse()`(단일 rowTag 기준)로는 못 풀고, 이 메서드가 세 부분을 각각 알아서 찾아 분리해 준다.
+   * 라인 아이템은 그리드에 그대로 `setData()`할 수 있는 배열로 나온다.
+   * / A SAP BAPI response isn't a flat list of rows — a document header (DOCUMENTHEADER), line
+   * items (e.g. ACCOUNTGL), and result messages (RETURN) are all mixed into one response. The
+   * generic `parse()` (which assumes a single rowTag) can't untangle that, so this method locates
+   * and splits all three parts for you. `items` comes out ready to hand to the grid's `setData()`.
+   *
    * 지원 패턴 / Supported patterns:
    *   <DOCUMENTHEADER>...</DOCUMENTHEADER>
    *   <ACCOUNTGL><ITEM>...</ITEM></ACCOUNTGL>
@@ -190,6 +216,10 @@ export class XmlConverter {
    *
    * @param xml - SAP BAPI XML 응답 문자열 / SAP BAPI XML response string
    * @returns 파싱 결과 구조 / Parsed result structure
+   * @example
+   * const { header, items, returns } = XmlConverter.parseSap(sapResponseXml);
+   * grid.setData(items);
+   * if (returns.some(r => r.TYPE === 'E')) console.error('SAP 오류 응답', returns);
    */
   static parseSap(xml: string): SapParseResult {
     const parser = new DOMParser();
@@ -257,8 +287,18 @@ export class XmlConverter {
    * BAPI 페이로드 객체를 SAP XML 형식으로 직렬화. sapGenPayload() 결과 또는 단일 document 객체를 받음.
    * / Serialize a BAPI payload object into SAP XML. Accepts a sapGenPayload() result or a single document object.
    *
+   * `parseSap()`의 반대 방향 — 그리드에서 만든/편집한 전표 데이터를 SAP가 받을 수 있는
+   * BAPI 호출용 XML로 만들 때 쓴다. / The reverse of `parseSap()` — use this to turn
+   * grid-built/edited document data into the BAPI-call XML that SAP expects.
+   *
    * @param payload - BAPI 페이로드 객체 / BAPI payload object
    * @returns SAP XML 문자열 / SAP XML string
+   * @example
+   * const xml = XmlConverter.stringifySap({
+   *   BAPI_FUNCTION: 'BAPI_ACC_DOCUMENT_POST',
+   *   DOCUMENTHEADER: { COMP_CODE: '1000', DOC_DATE: '20260101' },
+   *   ACCOUNTGL: grid.getData(),
+   * });
    */
   static stringifySap(payload: {
     BAPI_FUNCTION?: string;

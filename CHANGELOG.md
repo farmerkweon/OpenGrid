@@ -2,6 +2,18 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.3.1] - 2026-07-15
+
+### Docs
+- **공개 API JSDoc 인간화** / **Human-readable public API JSDoc.** TypeDoc 이 소비하는 공개
+  표면(OpenGrid·GridOptions/ColumnDef·i18n·Icon/Skin·GridShuttle·OrgChart·XmlConverter·
+  FilterSelect·chart 타입)의 주석을 "언제·왜 쓰나 + 무엇을 얻나" 중심으로 다시 써서
+  읽기 쉽게 승격하고, 표준 IT 용어로 교정했다. `@example` 다수 추가.
+  코드 로직은 한 줄도 바뀌지 않았다(주석 전용).
+  / Rewrote the comments on the public API surface consumed by TypeDoc to lead with
+  when/why-to-use and what-you-get, added many `@example`s, and normalized terminology.
+  No logic changed (comments only).
+
 ## [1.3.0] - 2026-07-15
 
 ### Added

@@ -16,18 +16,32 @@ export type MessageParams = Readonly<Record<string, string | number>>;
 
 /**
  * 메시지 값: 평문 문자열('{name}' 보간) 또는 함수(복수형·조사 등 "문법이 데이터인" 케이스의 탈출구).
- * ICU/CLDR 복수 엔진은 zero-dependency 정체성 때문에 도입하지 않는다(규칙은 로케일 파일에 둔다).
+ * 왜 함수까지 허용하나: "사과 1개/사과 2개"처럼 복수형 규칙이 언어마다 다른데, ICU/CLDR 같은
+ * 범용 복수형 엔진을 넣으면 zero-dependency 원칙이 깨진다. 그래서 그 규칙 자체를 로케일 파일
+ * 안의 함수로 옮겨, 각 언어가 자기 문법을 직접 결정하게 한다.
  * / A message value: a plain string ('{name}' interpolation) or a function (escape hatch for
- *   plurals/particles where "grammar is data"). No ICU/CLDR plural engine (zero-dependency).
+ *   plurals/particles where "grammar is data"). Why allow a function at all: plural rules differ
+ *   per language, and pulling in a general ICU/CLDR plural engine would break the
+ *   zero-dependency principle — so the rule itself moves into a function inside the locale file,
+ *   letting each language own its own grammar.
+ *
+ * @example
+ * const countBadge: MessageValue = (p) => `${p.n}건`; // 한국어는 복수형이 없음 / Korean has no plural form
  */
 export type MessageValue = string | ((params: MessageParams) => string);
 
 /**
- * 로케일 메시지 카탈로그(2단 중첩, 최상위 섹션 = 소비 UI 표면). 파라미터를 받는 값만 `MessageValue`
- * (함수형 복수 허용), 정적 라벨은 `string`. 내장 ko 가 SSOT 이며 en 은 동일 키 집합을 갖는다.
- * / The locale message catalog (2-level nested, top-level section = consuming UI surface). Only
- *   parameterized entries are `MessageValue` (allowing plural functions); static labels are
- *   `string`. Built-in ko is the SSOT; en carries the same key set.
+ * 로케일 메시지 카탈로그 전체 형태(2단 중첩, 최상위 섹션 = 소비하는 UI 표면 — 필터 패널, 찾기
+ * 바 등). 새 언어를 추가하거나 커스텀 로케일을 만들 때 이 타입에 맞춰 객체를 작성하면 된다.
+ * 파라미터를 받는 값만 `MessageValue`(함수형 복수 허용), 정적 라벨은 `string`. 내장 ko 가
+ * 단일 진실 공급원(SSOT)이며 en 은 동일 키 집합을 갖는다 — 새 언어도 이 키 집합을 채우면(또는
+ * 부분만 채우고 `register()` 의 `missingKeys` 로 진행률을 보면) 된다.
+ * / Shape of a full locale message catalog (2-level nested; the top-level section is the
+ *   consuming UI surface — filter panel, find bar, etc.). When adding a new language or building a
+ *   custom locale, shape your object to satisfy this type. Only parameterized entries are
+ *   `MessageValue` (allowing plural functions); static labels are `string`. Built-in ko is the
+ *   single source of truth (SSOT), and en carries the same key set — fill the same keys for a new
+ *   language (or fill partially and track progress via `register()`'s `missingKeys`).
  */
 export interface LocaleMessages {
   /** 우클릭 컨텍스트 메뉴 라벨. / Right-click context-menu labels. */
@@ -187,20 +201,40 @@ export interface LocaleMessages {
   };
 }
 
-/** 부분 오버라이드(2단 딥머지, 카탈로그 위). / Partial override (2-level deep-merge over the catalog). */
+/**
+ * `register()`/`extend()` 에 일부 섹션·키만 넘길 때 쓰는 타입(2단 딥머지로 카탈로그 위에 얹힌다).
+ * 전체 언어를 다 채우지 않아도 로케일을 등록할 수 있게 해 준다.
+ * / Type used when passing only some sections/keys to `register()`/`extend()` (layered onto the
+ *   catalog via 2-level deep-merge) — lets you register a locale before every key is translated.
+ */
 export type PartialLocaleMessages = { [S in keyof LocaleMessages]?: Partial<LocaleMessages[S]> };
 
-/** dot-key 유니온(`'filter.apply'` 등) — 오타를 컴파일 에러화. / Dot-key union (e.g. `'filter.apply'`) — typos become compile errors. */
+/**
+ * `t()` 에 넘길 수 있는 모든 유효 키의 유니온 타입(예: `'filter.apply'`). 왜 필요한가:
+ * `t('filter.aply')` 처럼 오타가 나면 이 타입이 없을 때는 런타임에야 "키 없음" 경고로 드러난다 —
+ * 유니온으로 묶어 두면 컴파일 타임에 바로 에러가 난다.
+ * / Union of every key valid for `t()` (e.g. `'filter.apply'`). Why this exists: without it, a typo
+ *   like `t('filter.aply')` only surfaces as a runtime "unknown key" warning; unioning the keys
+ *   turns it into a compile-time error instead.
+ */
 export type LocaleMessageKey =
   { [S in keyof LocaleMessages]: `${S & string}.${keyof LocaleMessages[S] & string}` }[keyof LocaleMessages];
 
+// 계약 추적: REQ-T9-816, DD-12 §2.4. 대표 소유=DD-12(DD-04 FormatContext.locale·DD-15
+// ExportRunCtx.locale 은 이 타입을 재선언 없이 import). / Contract refs: REQ-T9-816, DD-12 §2.4.
+// Canonical owner: DD-12 (DD-04/DD-15 import this type without re-declaring).
 /**
- * 문화 규칙 단일 컨텍스트(REQ-T9-816, DD-12 §2.4). 값객체·포맷터·정렬·검색이 문화를 **오직 여기서만**
- * 조회한다(불변식 3). 아래 확장 필드는 전부 additive·옵셔널 — 기존 3필드·소비처 불변(semver 하위호환).
- * ★대표 소유 = DD-12: DD-04 `FormatContext.locale`·DD-15 `ExportRunCtx.locale` 는 이 타입을 import(재선언 금지).
- * / Single culture context (REQ-T9-816, DD-12 §2.4). The only lawful culture-lookup path (invariant 3).
- *   The extension fields below are all additive & optional — original 3 fields/consumers unchanged.
- *   ★Canonical owner = DD-12; DD-04/DD-15 import this type (no re-declaration).
+ * 문화(지역) 규칙을 담는 단일 컨텍스트 타입. 통화·날짜·정렬·검색 등 "문화마다 다른 규칙"을
+ * 여러 군데서 각자 조회하게 두면, 그리드와 내보내기(export) 가 서로 다른 로케일을 참조하는
+ * 불일치가 생길 수 있다 — 그래서 값객체·포맷터·정렬·검색이 문화 정보를 **오직 이 타입을
+ * 통해서만** 조회하도록 강제한다(단일 진실 공급원). 아래 확장 필드는 전부 추가·옵셔널이라
+ * 기존 3필드를 쓰던 코드는 그대로 동작한다(semver 하위 호환).
+ * / A single context type carrying culture (locale) rules. Letting currency/date/sort/search each
+ *   look up their own culture rules independently could let the grid and the export path silently
+ *   disagree on locale — so value objects, formatters, sort, and search look up culture
+ *   information **only through this type** (single source of truth). The extension fields below
+ *   are all additive and optional, so code written against the original 3 fields keeps working
+ *   unchanged (semver-compatible).
  */
 export interface LocaleMeta {
   /** BCP-47 태그(toLocaleString/lang/인쇄 템플릿용). 예 'ko-KR'. / BCP-47 tag (for toLocaleString/lang/print template). e.g. 'ko-KR'. */
@@ -230,5 +264,5 @@ export interface LocaleMeta {
   readonly textExpansion?: number;
 }
 
-/** register() 결과 — 누락 키 정직 신호(막지 않음). / register() result — honest missing-key signal (never blocks). */
+/** register() 결과 — 누락 키 신호(막지 않음). / register() result — missing-key signal (never blocks). */
 export interface LocaleRegisterResult { readonly missingKeys: string[]; }

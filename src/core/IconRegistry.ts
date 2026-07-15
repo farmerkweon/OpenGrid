@@ -16,7 +16,7 @@
 //     0/1 이라 CSS `fill` 프로퍼티에 바인딩하면 자식 path 의 presentation `fill="#fff"` 를
 //     CSS 캐스케이드가 덮어써 렌더가 깨진다(마스킹 눈의 흰 동공). 따라서 `fill` 은 **presentation
 //     attribute** `fill="currentColor"` 로 두어 오늘의 렌더와 byte-identical 을 보존하고,
-//     variant 선택(filled vs outline role key)은 레지스트리 등록 층에서 다룬다(정직한 결합).
+//     variant 선택(filled vs outline role key)은 레지스트리 등록 층에서 다룬다(명시적 결합).
 //
 // 행동 보존:
 //   `render('mask.reveal', { size: 13 })` 는 기존 마스킹 셀의 커스텀 눈 SVG 와 **시각적으로 동일**
@@ -40,12 +40,16 @@ export interface IconRenderOptions {
 }
 
 /**
- * 시맨틱 ROLE → 아이콘 key(`BOOTSTRAP_ICONS` 의 symbolId) 기본 매핑.
- * / Default map of semantic ROLE → icon key (a `BOOTSTRAP_ICONS` symbolId).
+ * 시맨틱 role → 아이콘 key(`BOOTSTRAP_ICONS` 의 symbolId) 기본 매핑. 이 표 자체를 고치는 것은
+ * 라이브러리 소스에 손대는 것과 같으므로, 앱에서 아이콘을 바꾸고 싶으면 이 표 대신
+ * `grid.setIcon(role, key)`(인스턴스 한정) 또는 `defineIconSet()`(전역)으로 등록하는 것이 정석이다.
+ * / Default map of semantic role → icon key (a `BOOTSTRAP_ICONS` symbolId). Editing this table
+ *   means touching library source, so apps that want a different icon should instead register one
+ *   via `grid.setIcon(role, key)` (per instance) or `defineIconSet()` (globally).
  *
- * 렌더 코드는 이 역할 이름만 참조한다. key 교체는 이 표(혹은 register/setIcon)만 고치면 된다.
- * 참고 스왑: `row.delete`→`trash3`(Bootstrap 의 표준 휴지통, task 의 'trash' 동족), `chart.line`→`graph-up`.
- * / Render code references only these role names; swapping a glyph means editing this table (or register/setIcon).
+ * 렌더 코드는 이 역할 이름만 참조한다. / Render code references only these role names.
+ * 참고 스왑: `row.delete`→`trash3`(Bootstrap 의 표준 휴지통), `chart.line`→`graph-up`.
+ * / Example swap: `row.delete`→`trash3` (Bootstrap's standard trash-can icon), `chart.line`→`graph-up`.
  */
 export const DEFAULT_ICON_ROLES: Readonly<Record<string, string>> = {
   // 정렬
@@ -136,20 +140,29 @@ function _escapeAttr(s: string): string {
 }
 
 /**
- * IconRegistry — role → 글리프 본문(inner SVG markup) 해석 + svg 래핑.
- * / IconRegistry — resolves role → glyph body (inner SVG markup) and wraps it in an svg.
- *
- * 저장 단위는 **글리프 본문 문자열**(<path>/<g> 마크업). register(role, svgOrKey) 는
+ * IconRegistry — 시맨틱 role(예: 'sort.asc') 을 실제 아이콘 SVG 로 바꿔주는 등록소.
+ * 정렬 화살표·필터 깔때기 같은 아이콘을 코드 곳곳에 인라인 SVG 로 박아 두면, 아이콘 하나를
+ * 바꾸려 해도 렌더러 파일들을 찾아 고쳐야 한다 — 대신 렌더 코드는 "sort.asc 를 그려줘"라고만
+ * 요청하고, 실제 어떤 글리프인지는 이 레지스트리가 결정한다. 동작 순서: ① `register(role,
+ * svgOrKey)` 로 role↔글리프 매핑을 등록해 두면 → ② 렌더 시점에 `render(role)` 가 호출되어
+ * → ③ 등록된 본문을 `<svg>` 로 감싸 문자열(또는 SVGElement)로 돌려준다. 저장 단위는
+ * **글리프 본문 문자열**(<path>/<g> 마크업)뿐이라, register(role, svgOrKey) 는
  *   - svgOrKey 가 `BOOTSTRAP_ICONS` 의 알려진 key 면 그 본문으로,
  *   - 아니면 **원시 SVG 본문**(사용자 커스텀 <path…>)으로 저장한다.
  * 부모 체인(_parent)으로 per-instance 오버라이드 레지스트리를 전역 위에 얹는다(멀티그리드 격리).
- * / The storage unit is the glyph body string (<path>/<g> markup). register(role, svgOrKey) stores either
- * the body of a known `BOOTSTRAP_ICONS` key, or the raw SVG body otherwise. A parent chain (_parent) layers
- * a per-instance override registry on top of the global one (multi-grid isolation).
+ * / IconRegistry — a registry that turns a semantic role (e.g. 'sort.asc') into an actual icon
+ * SVG. Hardcoding inline SVG for every sort arrow or filter funnel across render code means
+ * hunting down every renderer file just to swap one icon — instead render code simply asks "draw
+ * sort.asc", and this registry decides which glyph that is. Flow: ① `register(role, svgOrKey)`
+ * records a role↔glyph mapping → ② at render time `render(role)` is called → ③ it wraps the
+ * registered body in an `<svg>` and returns a string (or SVGElement). The storage unit is only
+ * the glyph body string (<path>/<g> markup), so register(role, svgOrKey) stores either the body
+ * of a known `BOOTSTRAP_ICONS` key, or the raw SVG body otherwise. A parent chain (_parent)
+ * layers a per-instance override registry on top of the global one (multi-grid isolation).
  *
  * @example
  * const reg = iconRegistry.child();
- * reg.register('sort.asc', 'arrow-up');
+ * reg.register('sort.asc', 'arrow-up'); // 이 그리드 인스턴스만 화살표를 교체 / swap the arrow for this grid instance only
  * const svg = reg.render('sort.asc', { size: 16 }) as string;
  */
 export class IconRegistry {
@@ -170,6 +183,11 @@ export class IconRegistry {
    * @param role - 시맨틱 역할 키(예: 'sort.asc') / Semantic role key (e.g. 'sort.asc')
    * @param svgOrKey - 알려진 아이콘 key 또는 원시 SVG 본문 / A known icon key or raw SVG body
    * @returns 체이닝용 this / this for chaining
+   * @example
+   * // 다른 Bootstrap 아이콘 key 로 교체 / Swap to a different Bootstrap icon key
+   * iconRegistry.register('row.delete', 'x-circle');
+   * // 원시 SVG 본문으로 통째 교체 / Replace entirely with a custom raw SVG body
+   * iconRegistry.register('menu', '<path d="M2 4h12v2H2z"/>');
    */
   register(role: string, svgOrKey: string): this {
     const body = Object.prototype.hasOwnProperty.call(BOOTSTRAP_ICONS, svgOrKey)

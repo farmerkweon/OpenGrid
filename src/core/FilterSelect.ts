@@ -93,10 +93,29 @@ type ResetFn  = (field?: string) => void;
 /**
  * 캐스케이딩 필터 셀렉트 패널. / Cascading filter-select panel.
  *
- * 그리드 헤더 앞에 fieldset 형태의 셀렉트 필터를 삽입하고, 부모→자식 종속(캐스케이딩)
- * 옵션 재계산과 그리드 필터 콜백을 배선한다.
- * / Inserts a fieldset of select filters ahead of the grid header and wires parent→child cascading
- * option recalculation to the grid filter callbacks.
+ * "카테고리를 고르면 브랜드 목록이 그 카테고리에 맞게 좁혀지는" 것처럼, 상위 셀렉트의 선택에
+ * 따라 하위 셀렉트의 옵션이 자동으로 걸러지는 드롭다운 필터 묶음이 필요할 때 쓴다. 그리드
+ * 헤더 앞에 fieldset 형태로 삽입된다. 동작 순서: 사용자가 셀렉트를 바꾸면 → 내부에서 그리드
+ * 필터 콜백(onFilter/onReset)을 호출해 그리드를 걸러내고 → 종속된 자식 셀렉트의 옵션 목록을
+ * 새 부모값 기준으로 다시 계산해 넣는다(재귀적으로 손자 셀렉트까지 전파).
+ * 보통 직접 생성자를 호출하기보다 `grid.setFilterSelect(config)`를 통해 그리드에 붙인다.
+ * / Use this when you need a group of dropdown filters where picking a value in a parent select
+ * narrows the options in a child select — e.g. picking a category narrows the brand list. It's
+ * inserted as a fieldset ahead of the grid header. Operation order: the user changes a select →
+ * internally the grid filter callbacks (onFilter/onReset) run to filter the grid → then the
+ * dependent child select's options are recomputed against the new parent value (recursing down
+ * to grandchild selects). Usually attached via `grid.setFilterSelect(config)` rather than by
+ * calling the constructor directly.
+ *
+ * @example
+ * // 보통 이렇게 그리드를 통해 사용한다 / Typically wired through the grid like this:
+ * grid.setFilterSelect({
+ *   columns: [
+ *     { field: 'category', label: '카테고리', data: categoryList, valueKey: 'code', textKey: 'name' },
+ *     { field: 'brand', label: '브랜드', data: brandList, valueKey: 'code', textKey: 'name',
+ *       dependsOn: 'category', dependsOnKey: 'categoryCode' },
+ *   ],
+ * });
  */
 export class FilterSelectPanel {
   private _el:       HTMLFieldSetElement;
@@ -297,7 +316,9 @@ export class FilterSelectPanel {
   }
 
   // ─── 공개 API ─────────────────────────────────────────
-  /** 모든 필터 선택을 초기화한다. / Reset all filter selections. */
+  /** 모든 필터 선택을 초기화한다("전체 초기화" 버튼과 동일 동작을 코드에서 트리거하고 싶을 때).
+   * / Reset all filter selections (call this to trigger the same action as the "clear" button
+   * from code). */
   reset():   void { this._reset(); }
   /** 패널을 DOM 에서 제거한다. / Remove the panel from the DOM. */
   destroy(): void { this._el.remove(); }

@@ -12,7 +12,10 @@ export interface OrgChartColumnDef {
   className?: string;
   /** 인라인 스타일 문자열 또는 (값, 행)→스타일 함수. / Inline style string or (value, row)→style function. */
   style?: string | ((value: any, row: Record<string, any>) => string);
-  /** 커스텀 렌더러. 문자열 반환 시 innerHTML, 엘리먼트 반환 시 append. / Custom renderer; a string is set as innerHTML, an element is appended. */
+  /** 커스텀 렌더러. 값을 텍스트 그대로 보여주는 대신 아바타·배지·아이콘 같은 커스텀 마크업을
+   * 넣고 싶을 때 지정한다. 문자열 반환 시 innerHTML, 엘리먼트 반환 시 append.
+   * / Custom renderer. Set this when you need avatars, badges, or icons instead of plain text.
+   * A string return is set as innerHTML; an element return is appended. */
   renderer?: (value: any, row: Record<string, any>) => HTMLElement | string;
 }
 
@@ -45,10 +48,17 @@ interface LayoutInfo { x: number; y: number; }
 /**
  * 조직도 컴포넌트. / Org-chart component.
  *
- * 부모/자식 관계(idField/parentIdField)를 가진 평면 데이터를 트리로 구성해
- * SVG 연결선 + 노드 카드로 렌더한다. 그리드와 독립된 standalone 컴포넌트다.
- * / Builds a tree from flat parent/child data (idField/parentIdField) and renders it as
- * SVG connectors plus node cards. A standalone component independent of the grid.
+ * 보고 라인·조직 구조·계층형 카테고리처럼 "누가 누구 밑에 있는가"를 시각적으로 보여주고 싶을 때
+ * 쓴다. 그리드와 별개의 독립 컴포넌트라서, 그리드 없이 조직도 하나만 페이지에 넣어도 동작한다.
+ * 동작 순서: `setData()`로 평면 행 배열(각 행에 id/parentId만 있으면 됨)을 넘기면 → 내부에서
+ * 부모/자식 관계(idField/parentIdField)를 따라 트리로 구성하고 → 그 결과를 SVG 연결선 + 노드
+ * 카드로 화면에 그린다.
+ * / Use this when you need to show "who reports to whom" — org structure, reporting lines, or
+ * hierarchical categories. It's a standalone component independent of the grid, so it works on
+ * its own with no grid on the page. Operation order: pass a flat row array to `setData()` (each
+ * row just needs an id/parentId) → internally it's built into a tree following the parent/child
+ * relation (idField/parentIdField) → the result is drawn on screen as SVG connectors plus node
+ * cards.
  *
  * @example
  * const chart = new OrgChart('#org', {
@@ -82,7 +92,9 @@ export class OrgChart {
   }
 
   /**
-   * 조직도 데이터를 설정하고 렌더한다. / Set org-chart data and render.
+   * 조직도 데이터를 설정하고 렌더한다. 최초 로드는 물론, 데이터를 새로 받아올 때마다
+   * 다시 호출하면 트리를 재구성해 다시 그린다. / Set org-chart data and render. Call this on
+   * initial load and again whenever fresh data arrives — it rebuilds the tree and redraws.
    *
    * @param data - 부모/자식 관계를 가진 평면 행 배열 / Flat array of rows with parent/child relations
    */
@@ -97,7 +109,9 @@ export class OrgChart {
   }
 
   /**
-   * COLOR 축 테마를 컨테이너에 설정한다. / Set the COLOR-axis theme on the container.
+   * 색 테마(라이트/다크 등)를 컨테이너에 설정한다. 호스트 페이지의 다크모드 토글에 맞춰 전환할
+   * 때 호출한다. / Set the color theme (light/dark, etc.) on the container. Call this when
+   * switching to match the host page's dark-mode toggle.
    *
    * @param theme - data-og-theme 값 / data-og-theme value
    */
@@ -105,9 +119,14 @@ export class OrgChart {
     this._container.setAttribute('data-og-theme', theme);
   }
 
+  // R12b: FORM(스킨) 축 — data-og-skin 을 자기 컨테이너에 설정(setTheme 과 동형, 색과 직교).
   /**
-   * R12b: FORM(스킨) 축 — data-og-skin 을 자기 컨테이너에 설정(setTheme 과 동형, 색과 직교).
-   * / R12b: FORM (skin) axis — set data-og-skin on the container (symmetric to setTheme, orthogonal to color).
+   * 형태(스킨) 테마를 컨테이너에 설정한다. 색은 그대로 두고 모서리·밀도 같은 겉모양만 바꾸고
+   * 싶을 때 쓴다. `setTheme`(색)과 서로 독립된 축이라, 색 테마는 그대로 두고 스킨만 바꾸거나
+   * 그 반대로 자유롭게 조합할 수 있다.
+   * / Set the form (skin) theme on the container. Use this to change the look (corner radius,
+   * density, etc.) while leaving color untouched. This is an axis independent from `setTheme`
+   * (color), so you can swap the skin alone, the color theme alone, or both freely.
    *
    * @param skin - data-og-skin 값 / data-og-skin value
    */
@@ -115,7 +134,8 @@ export class OrgChart {
     this._container.setAttribute('data-og-skin', skin);
   }
 
-  /** 모든 노드를 펼친다. / Expand all nodes. */
+  /** 모든 노드를 펼친다. 조직 전체를 한눈에 훑어보고 싶을 때 호출. / Expand all nodes. Call when
+   * the viewer wants to see the whole organization at a glance. */
   expandAll(): void {
     const collect = (nodes: TreeNode<any>[]) => {
       for (const n of nodes) {
@@ -127,7 +147,9 @@ export class OrgChart {
     this._rebuild();
   }
 
-  /** 모든 노드를 접는다(루트만 표시). / Collapse all nodes (roots only). */
+  /** 모든 노드를 접는다(루트만 표시). 큰 조직도를 처음 접했을 때 최상위 구조부터 보여주고 싶을
+   * 때 호출. / Collapse all nodes (roots only). Call to show top-level structure first when a
+   * large org chart is first opened. */
   collapseAll(): void {
     this._expandedKeys.clear();
     this._rebuild();
