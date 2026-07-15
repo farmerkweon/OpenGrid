@@ -1,0 +1,183 @@
+@startuml arch_v13_component
+' OPEN_GRID v1.3 — 현행 컴포넌트 아키텍처 (파사드 + 서브시스템 그룹)
+' 코어=제로 의존성(외부 런타임 0). CF·RT 는 opt-in 동적 import 별 청크(베이스 번들 무증가).
+skinparam defaultFontName "NanumGothic"
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam ArrowColor #555555
+skinparam rectangle {
+  BorderColor #888
+  BackgroundColor #f6f8fa
+}
+title OPEN_GRID v1.3 컴포넌트 아키텍처 (파사드 중심 · 코어 제로 의존성)\n— OpenGrid 가 서브시스템 매니저를 합성으로 거느림 · CF/RT 는 opt-in 별 청크 —
+
+package "파사드 (진입점)" #eeeeee {
+  [OpenGrid\n(단일 공개 클래스 · 합성 루트)] as OG
+}
+
+package "데이터 (SSOT)" #dbeafe {
+  [DataLayer\n원본·표시 인덱스·_ogRowId] as DL
+  [FlatRowModel\nflat↔data 단일 리졸버] as FRM
+  [MutationService\nsetData/insert/delete/writeCells+batch] as MUT
+}
+
+package "렌더 · 가상스크롤" #dbeafe {
+  [RenderController\n렌더 루프 유일 진입점] as RCTL
+  [GridRenderer\nrenderBody(가시 윈도우)] as GR
+  [VirtualScroll\nrAF 코얼레싱·가시범위] as VS
+  [ColumnLayout\n컬럼·프리즈·병합] as CL
+}
+
+package "정렬 / 필터 / 그룹" #dcfce7 {
+  [SortFilterManager] as SF
+  [GroupTreeManager\n그룹·트리 splice] as GTM
+  [FooterManager\n집계 합계] as FM
+}
+
+package "편집 · 입력" #dcfce7 {
+  [CellEditManager] as CEM
+  [CellEventHandler] as CEH
+  [KeyboardManager] as KM
+  [FindBarManager] as FIND
+  [ContextMenuManager] as CTX
+}
+
+package "선택 / 범위 (F1)" #fef3c7 {
+  [RangeSelectionManager\nanchor/focus·채우기 핸들] as RSM
+  [RowManager\n선택·체크 상태] as RM
+}
+
+package "수식 (F3)" #fef3c7 {
+  [FormulaController\n공개 수식 API] as FC
+  [RecalcCoordinator\n의존그래프·위상 재계산] as RC
+}
+
+package "크로스그리드" #fef3c7 {
+  [CrossGridController\n행 이동·매핑·3단계 드롭] as CGC
+}
+
+package "마스터/디테일 (F2)" #fef3c7 {
+  [DetailManager\nexpand/collapse·detail splice] as DM
+}
+
+package "통합 차트 (F4)" #fef3c7 {
+  [ChartManager\ncreateChart·live-update] as CM
+}
+
+package "조건부서식 (CF · opt-in 별 청크)" #fde2e4 {
+  [CFEngine\n데이터바·히트맵·아이콘셋] as CF
+  [CFRenderBridge\nvisual spec → DOM] as CFB
+}
+
+package "실시간 (RT · opt-in 별 청크)" #fde2e4 {
+  [RealtimeController\n소스 구독·백프레셔·aria-live] as RT
+}
+
+package "외관 (스킨·아이콘·밀도·질감)" #ede9fe {
+  [AppearanceResolver\n스타일 해결 단일 초크포인트] as AR
+  [SkinRegistry\nFORM 축 토큰] as SR
+  [IconRegistry\n시맨틱 role] as IR
+  [DensityRegistry] as DR
+  [TextureRegistry] as TR
+}
+
+package "i18n" #ede9fe {
+  [LocaleRegistry\n로케일 메시지 카탈로그] as LR
+}
+
+package "내보내기" #dcfce7 {
+  [ExportManager\nExcel/CSV/JSON] as EM
+  [WorksheetManager\n다중 시트] as WM
+}
+
+package "확장 커널 (본문 무수정)" #e5e7eb {
+  [OverrideKernel\noverride/strategy] as OK
+  [ExtensionPointRegistry] as EPR
+  [TriggerManager\nbefore/after 훅] as TM
+}
+
+' ── 파사드 → 서브시스템 (합성·직접호출)
+OG --> DL
+OG --> MUT
+OG --> RCTL
+OG --> SF
+OG --> CEM
+OG --> RSM
+OG --> RM
+OG --> FC
+OG --> CGC
+OG --> DM
+OG --> CM
+OG --> AR
+OG --> LR
+OG --> EM
+OG --> WM
+OG --> OK
+OG --> TM
+OG --> CTX
+OG --> KM
+OG --> FIND
+
+' ── 데이터 계층
+MUT --> DL : 변경 적용
+FRM ..> DL : 인덱스 해소
+GTM ..> FRM : group/tree splice
+DM ..> FRM : detail splice
+
+' ── 렌더 루프
+RCTL --> GR : renderBody
+RCTL --> VS : 가시범위
+GR --> CL : 컬럼/폭/병합
+VS ..> RCTL : onRender(rAF)
+
+' ── 정렬/필터/집계
+SF ..> DL : predicate 적용
+FM ..> DL : 집계 재사용
+RCTL --> FM : 푸터 재렌더
+
+' ── 입력
+CEH ..> RSM : mousedown/move/up
+KM ..> RSM : Shift+Arrow·Ctrl+D/R
+CEM --> DL : 커밋
+
+' ── 수식
+FC --> RC
+RC ..> FRM : A1↔stable-id
+RC ..> DL : 값 쓰기
+
+' ── 차트 (그리드 데이터 소비)
+CM ..> RSM : getActiveRange
+CM ..> FM : 집계 재사용
+
+' ── CF (렌더 훅 · opt-in)
+CF ..> CFB
+CFB ..> GR : visual spec 적용
+
+' ── RT (opt-in)
+RT ..> MUT : writeCells(배치)
+
+' ── 외관
+AR --> SR
+AR --> IR
+AR --> DR
+AR --> TR
+GR ..> AR : 스타일 해결
+
+' ── 확장 규약
+OK ..> EPR
+OK ..> RSM : strategy(fillSeriesResolver)
+OK ..> RC : strategy(formulaResolver)
+TM ..> MUT : before/after:setData
+
+legend right
+  |= 색 |= 서브시스템 |
+  |<#eeeeee> 회색 | 파사드(OpenGrid) |
+  |<#dbeafe> 파랑 | 데이터·렌더·가상스크롤 |
+  |<#dcfce7> 초록 | 정렬/필터·편집·내보내기 |
+  |<#fef3c7> 노랑 | 4대 기능(F1 범위·F2 디테일·F3 수식·F4 차트) |
+  |<#fde2e4> 분홍 | CF·RT(opt-in · 동적 import 별 청크) |
+  |<#ede9fe> 보라 | 외관(스킨/아이콘/밀도/질감)·i18n |
+  |<#e5e7eb> 연회색 | 확장 커널(본문 무수정) |
+  실선 -->=직접호출/합성, 점선 ..>=계약/전략/이벤트
+endlegend
+@enduml

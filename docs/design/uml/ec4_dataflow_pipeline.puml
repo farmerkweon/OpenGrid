@@ -1,0 +1,45 @@
+@startuml ec4_dataflow_pipeline
+' 데이터 파이프라인 — 그리드 SSOT → 어댑터 변환(표준 설정 강제) → ECharts 렌더 + 프로비넌스 배지 + a11y 텍스트 등가
+skinparam defaultFontName "NanumGothic"
+skinparam shadowing false
+skinparam ArrowColor #555555
+title 데이터 파이프라인 (그리드=단일 진실 공급원 · 값 왜곡 방지 · 숨김 없이 고지)\n— 같은 값이면 같은 표기 · 왜곡이 없으면 배지 0개 —
+
+start
+
+:그리드 셀 값 (DataLayer = SSOT); <<#eeeeee>>
+note right: 차트는 그리드에 이미 있는 값을 그대로 쓴다.\n중간에 다시 계산해서 다른 값을 만들지 않는다.
+
+:snapshotTheme(gridEl)\nfoxnail CSS 토큰 → 리터럴 팔레트 T\n(다크 모드도 따라감); <<#dcfce7>>
+
+:baseOption(T)\n폰트·툴팁·모션·잉크 규율 baseline\n(prefers-reduced-motion 시 모션 off); <<#dcfce7>>
+
+:displayFmt(v, 'money'|'percent'|'number')\n그리드 셀과 동일 표기\n음수 통화=괄호 · 결측=—; <<#dcfce7>>
+
+partition "표준 차트 설정 강제 (값이 왜곡되지 않게)" {
+  :enforceBar(option)\n막대 → yAxis 제로 베이스라인(min:0, scale:false); <<#dcfce7>>
+  :결측 빈 구간 (connectNulls:false)\nnull 은 0이 아니다; <<#dcfce7>>
+  :순차 단색 명도 램프 (OG_AZURE_RAMP + 컬러바)\n무지개 색상 금지(순서가 헷갈리지 않게); <<#dcfce7>>
+  :파이=값→각도 선형 · 버블=면적∝√값\n(값을 반지름에 바로 대응하지 않음); <<#dcfce7>>
+}
+
+if (변환/왜곡 발생?) then (있음)
+  :provenanceBadges(meta)\n축 절단·집계·다운샘플·음수절댓값·이중축\n[주의] 클릭 팝오버로 이유 고지; <<#b7770f>>
+else (없음)
+  :배지 0개\n"변환 없음 (원본 그대로)"; <<#dcfce7>>
+endif
+
+:ECharts 렌더\nchart.setOption(표준화 option); <<#dbeafe>>
+
+:a11yTable({caption, columns, rows})\n시각 정보를 텍스트로도 제공(스크린리더)\n결측="결측(측정 안 됨)" 으로 0과 구분; <<#dcfce7>>
+
+stop
+
+legend right
+  |= 색 |= 의미 |
+  |<#eeeeee> 회색 | 그리드 코어 SSOT(무수정) |
+  |<#dcfce7> 초록 | 어댑터 변환·정직 규율 |
+  |<#b7770f> 앰버 | 왜곡 발생 시 명시 고지(배지) |
+  |<#dbeafe> 파랑 | ECharts 외부 렌더 |
+endlegend
+@enduml

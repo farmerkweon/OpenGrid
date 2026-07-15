@@ -1,0 +1,39 @@
+@startuml ec3_seq_chart_to_grid
+' 차트 → 그리드 시퀀스 — ECharts 이벤트 → 공개 API 역구동(코어 무수정). __ri 사이드카 매핑.
+skinparam defaultFontName "NanumGothic"
+skinparam shadowing false
+title 차트 → 그리드 (ECharts 이벤트 → 공개 API 역구동 · 코어 무수정)\n— __ri 사이드카 매핑(라벨 문자열 매칭 금지) · jumpToCol 은 no-op(한계) —
+
+actor 사용자 as U
+participant "ChartInstance\n(ECharts)" as CH
+participant "어댑터 배선\n(run.js 데모 코드)" as GLUE
+participant "OpenGrid\n(공개 API 역구동)" as OG
+participant "DataLayer\n(SSOT)" as DL
+
+== 사전: 사이드카 매핑 심기 ==
+note over GLUE #dcfce7: 데이터포인트마다 원본 행 인덱스를 data[i].__ri 로 심는다.\n양방향 매핑이 늘 같은 결과가 되게(중복·포맷 깨짐 방지).
+
+== 포인트 클릭 → 이동·선택 ==
+U -> CH : 데이터포인트 클릭
+CH -> GLUE : chart.on('click', p)
+GLUE -> GLUE : ri = (p.data && p.data.__ri != null) ? p.data.__ri : p.dataIndex
+GLUE -> OG : grid.jumpToRow(ri)
+OG -> DL : 해당 행으로 스크롤·포커스
+note right of GLUE: jumpToCol 은 no-op(한계) →\n컬럼 강조는 헤더 하이라이트 CSS 로 대체
+
+== 범주 클릭 → 다중 체크 ==
+U -> CH : 축 라벨 / 조각 클릭
+CH -> GLUE : chart.on('click', p)  (범주값)
+GLUE -> OG : grid.checkByValue(field, [값들])
+OG -> DL : 해당 값의 행 일괄 체크
+
+== 브러시 → 범위 선택 ==
+U -> CH : 브러시 드래그(영역 선택)
+CH -> GLUE : chart.on('brushSelected', ev)
+GLUE -> GLUE : 선택 포인트들의 __ri 수집 → range 산출
+GLUE -> OG : grid.setRangeSelection(range)
+OG -> DL : 대응 셀 범위 하이라이트
+
+note over CH,DL: 모든 역구동은 공개 API만 사용 — 코어 무수정.\n선택·편집·필터·정렬·체크·hover 양방향 전부 가능(컬럼 초점만 예외).
+
+@enduml

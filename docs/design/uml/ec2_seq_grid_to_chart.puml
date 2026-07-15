@@ -1,0 +1,49 @@
+@startuml ec2_seq_grid_to_chart
+' 그리드 → 차트 시퀀스 — 공개 이벤트 구독 + 공개 API 읽기로만 차트 구동(코어 무수정)
+skinparam defaultFontName "NanumGothic"
+skinparam shadowing false
+title 그리드 → 차트 (구독 + 읽기 · 코어 무수정)\n— grid.on(공개 이벤트) → 어댑터가 공개 API로 값 읽어 chart.setOption / dispatchAction —
+
+actor 사용자 as U
+participant "OpenGrid\n(공개 이벤트·API)" as OG
+participant "어댑터 배선\n(run.js 데모 코드)" as GLUE
+participant "echarts-adapter.js\n(displayFmt/baseOption/enforceBar)" as AD
+participant "ChartInstance\n(ECharts)" as CH
+
+== 초기 구독 (코어 무수정) ==
+GLUE -> OG : grid.on('selectionChange' | 'cellClick', cb)
+GLUE -> OG : grid.on('editEnd' | 'dataChange', cb)
+GLUE -> OG : grid.on('filterChange' | 'sortChange', cb)
+GLUE -> OG : grid.on('rowCheck', cb)  ..  getChecked()
+note over OG,GLUE #dcfce7: 어댑터는 공개 이벤트만 구독한다.\n코어 src/** 변경 0 · 차트 코드 0.
+
+== 선택 → 초점 ==
+U -> OG : 셀 선택 / 클릭
+OG -> GLUE : selectionChange | cellClick (event)
+GLUE -> AD : 행 값 읽기 → displayFmt(v, domain)
+GLUE -> CH : dispatchAction({type:'highlight', seriesIndex, dataIndex: __ri})
+note right of GLUE: dataIndex 는 사이드카 __ri 로 정한다.\n라벨 문자열로 맞추지 않는다.
+
+== 편집 → 갱신 ==
+U -> OG : 셀 편집 확정
+OG -> GLUE : editEnd | dataChange
+GLUE -> OG : getData() (변경 반영값 · SSOT)
+GLUE -> AD : baseOption(T) + enforceBar(option)
+GLUE -> CH : setOption(option, {notMerge:false})
+note over AD,CH: enforceBar → 막대 yAxis 를 제로 베이스라인으로(축 절단 방지)
+
+== 필터/정렬 → 맞추기 (§한계) ==
+U -> OG : 필터/정렬 변경
+OG -> GLUE : filterChange | sortChange
+GLUE -> OG : getFilterState()
+note right of GLUE: 보이는 행을 화면 순서대로 주는 단일 접근자가 없음 →\n① 전체+"필터 N중 M" 배지, 또는\n② 필터 술어 재적용+"재계산 뷰" 배지
+GLUE -> AD : provenanceBadges(meta) — 변경 고지
+GLUE -> CH : setOption(재계산 데이터)
+
+== 체크 → 계열 토글 ==
+U -> OG : 행 체크박스
+OG -> GLUE : rowCheck
+GLUE -> OG : getChecked()
+GLUE -> CH : setOption(체크 행만 series)
+
+@enduml

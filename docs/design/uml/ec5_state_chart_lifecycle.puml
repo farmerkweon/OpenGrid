@@ -1,0 +1,47 @@
+@startuml ec5_state_chart_lifecycle
+' 차트 인스턴스 라이프사이클 상태도 — 로드대기→초기화→활성/구독중→dispose. ResizeObserver 누수 방지.
+skinparam defaultFontName "NanumGothic"
+skinparam shadowing false
+title 차트 인스턴스 라이프사이클 (섹션 전환 누수 0 · registerChart / disposeCharts)
+
+[*] --> 로드대기
+
+state "로드 대기" as 로드대기 {
+  로드대기 : loadECharts() 호출
+  로드대기 : 외부 ESM 한 번만 로드·캐시(window.__ogECharts)
+  로드대기 : 실패하면 오류를 명시적으로 throw (조용히 넘어가지 않음)
+}
+
+state "초기화" as 초기화 {
+  초기화 : mkChartHost(extraEl, {title, height}) — 카드 DOM
+  초기화 : snapshotTheme → baseOption → setOption
+  초기화 : registerChart(echarts.init(chartEl)) — 전역 등록
+  초기화 : ResizeObserver.observe(chartEl)
+}
+
+state "활성 / 구독중" as 활성 {
+  활성 : 그리드 공개 이벤트 구독(selection/edit/filter/check)
+  활성 : 리사이즈 시 chart.resize()
+  활성 : 양방향 연동(공개 API 역구동)
+}
+
+state "정리 (dispose)" as 정리 {
+  정리 : ro.disconnect() — ResizeObserver 해제
+  정리 : disposeCharts() — 등록된 모든 인스턴스 dispose
+  정리 : grid.destroy()
+}
+
+로드대기 --> 초기화 : ESM 로드 성공
+로드대기 --> 정리 : 로드 실패 [주의] 오류 배지 후 정리
+초기화 --> 활성 : setOption 완료 · 첫 렌더
+활성 --> 활성 : 데이터 변경 / 리사이즈 (재렌더)
+활성 --> 정리 : 섹션 전환 / clearGrid / window._ogDispose()
+정리 --> [*]
+
+note right of 정리
+  ECharts 인스턴스는 내부에 ResizeObserver 를 가진다.
+  섹션을 바꿀 때 dispose 하지 않으면 메모리가 샌다.
+  registerChart/disposeCharts 가 이걸 자동으로 처리.
+end note
+
+@enduml

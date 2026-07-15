@@ -1,0 +1,80 @@
+@startuml arch_v13_seq_render
+' OPEN_GRID v1.3 — setData → 가상스크롤 가시범위 → GridRenderer 렌더 시퀀스(현행)
+skinparam defaultFontName "NanumGothic"
+skinparam shadowing false
+skinparam ArrowColor #555555
+skinparam sequence {
+  LifeLineBorderColor #888
+  ParticipantBorderColor #888
+  ParticipantBackgroundColor #f6f8fa
+}
+title OPEN_GRID v1.3 렌더 시퀀스\n— setData → MutationService → VirtualScroll(rAF 코얼레싱) → RenderController → GridRenderer —
+
+actor "클라이언트" as CL
+participant "OpenGrid<T>" as OG
+participant "MutationService" as MUT
+participant "DataLayer\n(SSOT)" as DL
+participant "RecalcCoordinator\n(F3)" as RC
+participant "FlatRowModel" as FRM
+participant "VirtualScroll" as VS
+participant "RenderController" as RCTL
+participant "GridRenderer" as GR
+participant "FooterManager" as FM
+
+CL -> OG : setData(data)
+activate OG
+OG -> MUT : setData(data)
+activate MUT
+
+MUT -> MUT : trigMgr.exec('before:setData')
+note right of MUT : 훅이 거부(false)하면 즉시 반환
+MUT -> DL : setData(data)
+activate DL
+DL --> MUT : rowId 재발급·표시 인덱스 재구성
+deactivate DL
+MUT -> RC : 재생성(rowId 재발급 대응)
+note right of MUT : F3 dirty seed clear
+MUT -> FRM : count() 조회
+MUT -> VS : setTotalRows(flatCount)
+note right of MUT : 렌더 모드 'async-vs':\n동기 _doRender 없음
+deactivate MUT
+OG --> CL
+deactivate OG
+
+== 다음 애니메이션 프레임 (rAF) ==
+
+VS -> VS : _scheduleRender() → rAF 콜백
+activate VS
+VS -> VS : getVisibleRange()\n(scrollTop·뷰포트·rowHeight)
+VS -> RCTL : onRender(startIndex, endIndex)
+activate RCTL
+
+RCTL -> VS : getVisibleRange() / getTotalHeight() / offsetY
+alt group/tree 또는 detail 활성
+  RCTL -> FRM : getFlatArray()\n(backing+splice 합성)
+else 평면 그리드
+  RCTL -> DL : getRowByIndex (렌더러 경유)
+end
+
+RCTL -> GR : renderBody({ startIndex, endIndex,\n data, leaves, widths, offsetY, totalHeight,\n selected/checked, groupFlatRows, detailApi })
+activate GR
+note right of GR : 가시 윈도우 행만 DOM 생성\n(host CSS 격리 · 절대배치 offsetY)
+GR --> RCTL
+deactivate GR
+
+RCTL -> FM : renderFooterEl()\n(집계 합계 재계산)
+activate FM
+FM --> RCTL
+deactivate FM
+
+RCTL --> VS
+deactivate RCTL
+deactivate VS
+
+legend right
+  실선 -->=직접 호출/반환, 점선 라벨=계약
+  가상스크롤은 scroll/setTotalRows 를 rAF 로 코얼레싱해
+  가시 범위만 렌더 콜백으로 통지(대량 행에서도 DOM=가시 윈도우).
+  CF/RT 설정 시엔 렌더 훅·writeCells 배치가 이 경로에 추가로 얹힌다.
+endlegend
+@enduml

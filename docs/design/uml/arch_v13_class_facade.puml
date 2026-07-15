@@ -1,0 +1,175 @@
+@startuml arch_v13_class_facade
+' OPEN_GRID v1.3 — 파사드 클래스도 (OpenGrid 가 매니저를 deps 주입/합성으로 소유)
+skinparam defaultFontName "NanumGothic"
+skinparam shadowing false
+skinparam ArrowColor #555555
+skinparam classAttributeIconSize 0
+skinparam class {
+  BorderColor #888
+  BackgroundColor #f6f8fa
+}
+title OPEN_GRID v1.3 파사드 클래스도\n— OpenGrid<T> 가 서브시스템 매니저를 합성(composition)·deps 주입으로 거느림 —
+
+class "OpenGrid<T>" as OG {
+  ' ── 주요 공개 메서드(발췌) ──
+  + setData(data: T[]): void
+  + getData(): T[]
+  + setSort(items): void
+  + setFilter(field, items): void
+  + setRangeSelection(range): void
+  + createChart(config): ChartInstance
+  + setConditionalFormat(rules): void
+  + setRealtimeSource(src, opts): void
+  + setSkin(name) / setDensity / setTexture
+  + setLocale(locale): void
+  + exportExcel/Csv/Json(opts): void
+  + override(layer): OverrideApi
+  --
+  ' ── 소유 협력자(private, 합성) ──
+  - _data: DataLayer<T>
+  - _flatModel: FlatRowModel
+  - _mutation: MutationService<T>
+  - _render: RenderController<T>
+  - _renderer: GridRenderer
+  - _vs: VirtualScroll
+  - _colLayout: ColumnLayout<T>
+  - _sfMgr: SortFilterManager<T>
+  - _grpMgr: GroupTreeManager<T>
+  - _rowMgr: RowManager<T>
+  - _editMgr: CellEditManager<T>
+  - _cellEvt: CellEventHandler<T>
+  - _kbdMgr: KeyboardManager<T>
+  - _findMgr: FindBarManager<T>
+  - _ctxMenu: ContextMenuManager
+  - _footerMgr: FooterManager<T>
+  - _rangeMgr: RangeSelectionManager<T>
+  - _detailMgr: DetailManager<T>
+  - _formula: FormulaController<T>
+  - _recalc: RecalcCoordinator
+  - _cross: CrossGridController<T>
+  - _chartMgr: ChartManager
+  - _cf: CFEngine | null (opt-in)
+  - _rt: RealtimeController<T> | null (opt-in)
+  - _appearance: AppearanceResolver
+  - _icons: IconRegistry | null
+  - _locales: LocaleRegistry | null
+  - _exportMgr: ExportManager<T>
+  - _wsManager: WorksheetManager<T> | null
+  - _ovk: OverrideKernel
+  - _extensions: ExtensionPointRegistry<T>
+  - _trigMgr: TriggerManager
+}
+
+' ── 데이터 계층 ──
+class "DataLayer<T>" as DL <<SSOT>>
+class "FlatRowModel" as FRM
+class "MutationService<T>" as MUT
+' ── 렌더 ──
+class "RenderController<T>" as RCTL
+class "GridRenderer" as GR
+class "VirtualScroll" as VS
+class "ColumnLayout<T>" as CL
+' ── 정렬/필터/그룹/집계 ──
+class "SortFilterManager<T>" as SF
+class "GroupTreeManager<T>" as GTM
+class "FooterManager<T>" as FM
+' ── 편집/입력 ──
+class "CellEditManager<T>" as CEM
+class "CellEventHandler<T>" as CEH
+class "KeyboardManager<T>" as KM
+class "FindBarManager<T>" as FIND
+class "ContextMenuManager" as CTX
+class "RowManager<T>" as RM
+' ── 4대 기능 ──
+class "RangeSelectionManager<T>" as RSM <<F1>>
+class "DetailManager<T>" as DM <<F2>>
+class "FormulaController<T>" as FC <<F3>>
+class "RecalcCoordinator" as RC <<F3>>
+class "ChartManager" as CM <<F4>>
+class "CrossGridController<T>" as CGC
+' ── opt-in 서브시스템 ──
+class "CFEngine" as CF <<opt-in>>
+class "RealtimeController<T>" as RT <<opt-in>>
+' ── 외관/i18n ──
+class "AppearanceResolver" as AR
+class "SkinRegistry" as SR
+class "IconRegistry" as IR
+class "DensityRegistry" as DR
+class "TextureRegistry" as TR
+class "LocaleRegistry" as LR
+' ── 내보내기/시트 ──
+class "ExportManager<T>" as EM
+class "WorksheetManager<T>" as WM
+' ── 확장 커널 ──
+class "OverrideKernel" as OK
+class "ExtensionPointRegistry<T>" as EPR
+class "TriggerManager" as TM
+
+' ── 합성(◆ 실선) : OpenGrid 가 소유·생성 ──
+OG *-- DL
+OG *-- FRM
+OG *-- MUT
+OG *-- RCTL
+OG *-- GR
+OG *-- VS
+OG *-- CL
+OG *-- SF
+OG *-- GTM
+OG *-- FM
+OG *-- CEM
+OG *-- CEH
+OG *-- KM
+OG *-- FIND
+OG *-- CTX
+OG *-- RM
+OG *-- RSM
+OG *-- DM
+OG *-- FC
+OG *-- RC
+OG *-- CM
+OG *-- CGC
+OG *-- CF
+OG *-- RT
+OG *-- AR
+OG *-- EM
+OG *-- WM
+OG *-- OK
+OG *-- TM
+
+' ── deps 주입/사용(실선 -->) ──
+MUT --> DL
+RCTL --> GR
+RCTL --> VS
+GR --> CL
+FC --> RC
+AR --> SR
+AR --> IR
+AR --> DR
+AR --> TR
+EM --> WM
+OK --> EPR
+
+' ── 계약/전략(점선 ..>) ──
+FRM ..> DL
+GTM ..> FRM
+DM ..> FRM
+RC ..> FRM
+CM ..> RSM
+CM ..> FM
+CF ..> GR : 렌더 훅
+RT ..> MUT : writeCells
+LR ..> AR : 메시지 해소
+TM ..> MUT : before/after 훅
+OK ..> RSM : strategy
+OK ..> RC : strategy
+
+legend right
+  |= 표기 |= 의미 |
+  | *-- | 합성(OpenGrid 소유·생성) |
+  | --> | deps 주입/직접호출 |
+  | ..> | 계약/전략/렌더 훅 |
+  | <<F1..F4>> | 4대 기능 매니저 |
+  | <<opt-in>> | 첫 호출 때 동적 import(별 청크) |
+  코어 제로 의존성 · 외관/i18n 레지스트리는 per-instance child 지연 생성
+endlegend
+@enduml

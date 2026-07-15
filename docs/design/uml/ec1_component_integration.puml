@@ -1,0 +1,76 @@
+@startuml ec1_component_integration
+' OPEN GRID × Apache ECharts — 코어 무수정(비침습) 통합 컴포넌트 아키텍처
+' 그리드 코어(회색, 무수정) = 데이터·공개이벤트만 / 어댑터(초록, 데모자산) = 그리드값→ECharts option 변환 / ECharts(파랑, 외부 ESM)
+skinparam defaultFontName "NanumGothic"
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam ArrowColor #555555
+skinparam rectangle {
+  BorderColor #888
+  BackgroundColor #f6f8fa
+}
+title OPEN GRID × Apache ECharts 통합 아키텍처 (코어 무수정 · 번들 영향 0)\n— 그리드=데이터·이벤트 · 어댑터=변환(데모 자산) · ECharts=외부 동적 import —
+
+package "그리드 코어 (무수정 — 차트 코드 0)" #eeeeee {
+  [OpenGrid\n(파사드)] as OG
+  [공개 이벤트 버스\nselectionChange/cellClick/editEnd\nfilterChange/rowCheck/rowMouseOver] as EV
+  [공개 API (읽기)\ngetData/getChecked/getFilterState] as APIR
+  [공개 API (역구동)\njumpToRow/checkByValue\nsetRangeSelection] as APIW
+  [DataLayer\n(단일 진실 공급원 SSOT)] as DL
+}
+
+package "ECharts 어댑터 (데모 자산 — echarts-adapter.js)" #dcfce7 {
+  [loadECharts()\n외부 ESM 한 번만 로드·캐시] as LE
+  [snapshotTheme(gridEl)\nfoxnail 색 토큰 → 팔레트] as ST
+  [baseOption(T)\n공통 기본값 · 잉크 규율] as BO
+  [displayFmt(v, domain)\n그리드 셀과 똑같이 표기] as DF
+  [enforceBar(option)\n막대를 제로 베이스라인으로 맞춤] as EB
+  [provenanceBadges(meta)\n변환 이력 배지(왜곡 고지)] as PB
+  [a11yTable(spec)\n텍스트 등가(스크린리더)] as A11
+  [mkChartHost(extraEl,opts)\n차트 카드 DOM] as MCH
+  [registerChart / disposeCharts\n차트 등록 · 한꺼번에 정리] as RC
+}
+
+package "Apache ECharts (외부 ESM · 동적 import)" #dbeafe {
+  [ECharts 네임스페이스\necharts.init] as ECN
+  [ChartInstance\nsetOption/dispatchAction\non/resize/dispose] as INST
+  [CDN 버전 고정\n@5.5.1 (또는 자체 호스팅)] as CDN
+}
+
+' ── 그리드 → 어댑터 (구독·읽기 · 코어 무수정)
+EV ..> RC : 공개 이벤트 구독(계약)
+APIR ..> ST : 컨테이너의 색 토큰 읽기
+APIR ..> DF : 셀 값 읽기
+OG --> EV
+OG --> APIR
+OG --> APIW
+OG --> DL
+DL --> APIR : 값 공급(SSOT)
+
+' ── 어댑터 내부 흐름
+ST --> BO : 팔레트 T 주입
+BO --> EB : option 표준화
+EB --> PB : 맞춘 항목 → 배지 meta
+DF --> A11 : 동일 표기로 텍스트 등가
+MCH --> PB : 배지줄 슬롯
+MCH --> A11 : a11y 슬롯
+
+' ── 어댑터 → ECharts (외부 ESM)
+LE ..> CDN : 동적 import(버전 고정)
+LE --> ECN : 네임스페이스 반환
+RC --> ECN : init(host, ...)
+ECN --> INST : 인스턴스 생성
+EB --> INST : setOption(표준 option)
+RC --> INST : dispose(메모리 누수 방지)
+
+' ── 차트 → 그리드 (역구동 · 공개 API만)
+INST ..> APIW : chart.on(click/brushSelected) → 공개 API 역구동
+
+legend right
+  |= 색 |= 의미 |
+  |<#eeeeee> 회색 | 그리드 코어(무수정 · 차트 코드 0) |
+  |<#dcfce7> 초록 | ECharts 어댑터(데모 자산) |
+  |<#dbeafe> 파랑 | Apache ECharts(외부 ESM · 번들 영향 0) |
+  실선=직접 호출, 점선=계약/이벤트 구독 의존
+endlegend
+@enduml
