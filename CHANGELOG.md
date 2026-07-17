@@ -2,6 +2,34 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.4.0] - 2026-07-17
+
+### Added
+- **확장 레지스트리 공개** / **Extension registry is now public.** 커스텀 등록소를 만들 때 쓰는
+  등록 정책 엔진 `TypedRegistry` 와 예약 네임스페이스 가드를 공개 API 로 내보낸다. 구현은
+  이전부터 코어 안에 있었고, 이번에 공개 표면에 올렸다.
+  - `TypedRegistry` — 매 등록의 처리 결과를 돌려준다: `added`(신규) · `replaced`(덮어씀) ·
+    `kept`(기존 유지) · `rejected`(거부). 유지·거부에는 `reason` 이 함께 온다.
+  - `RESERVED_PREFIXES` · `isReserved` — `og:` · `og-` 는 그리드가 예약한 대역이라 외부 등록이 거부된다.
+  - `duplicatePolicy: 'protect-builtin'` — `origin: 'builtin'` 으로 등록된 항목을 나중 등록이 덮지 못하게 막는다.
+  - 타입 10종(`IRegistry`·`RegisterOptions`·`RegisterResult`·`RegisterAction`·`RegisterReason`·
+    `RegistryEntry`·`EntryOrigin`·`DuplicatePolicy`·`DeprecationInfo`·`TypedRegistryConfig`).
+  - / `TypedRegistry` returns what each registration actually did, guards the reserved `og:`/`og-`
+    namespace, and can shield built-in entries. Types are erased at runtime.
+  - **번들 영향 +80B**(gzip, ES entry 4,441→4,521B / 예산 8,000B). ES 코어 청크는 불변.
+  - **순수 additive — 기존 사용자 조치 불필요.** `OpenGrid.registerRenderer` 의 내부 등록 경로는
+    바뀌지 않았다(정책 엔진을 거치지 않는다). 기존 동작 100% 보존.
+
+### Docs
+- **공개 API JSDoc 4개 국어(한국어·English·日本語·中文)** — TypeDoc 이 렌더하는 공개 선언 전 파일
+  891블록. 기존의 `설명. / English.` 한 줄 병기는 문서에서 두 언어가 한 문단에 뭉쳐 나오던 문제가
+  있어 **언어별 문단 분리**로 전환했다. 코드 로직 변화 0(주석 전용).
+  / Public API JSDoc in Korean, English, Japanese and Chinese — 891 blocks, one paragraph per
+  language (the previous single-line `ko / en` form collapsed into one rendered paragraph).
+- **README 일본어·중국어판** 신설(`README.ja.md` · `README.zh.md`) + 원본 현행화
+  (기능표가 v0.1 시절에 머물러 있던 것을 실제 구현 현황으로 교정, 테마 12→15).
+- 영문 JSDoc 드리프트 2건 교정(`ChartSeries.pattern` 이 "색 대신" 분기를 누락, `sampled` 설명 정리).
+
 ## [1.3.1] - 2026-07-15
 
 ### Docs

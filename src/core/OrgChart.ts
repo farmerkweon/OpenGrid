@@ -3,62 +3,208 @@ import { buildTree, TreeNode } from './TreeEngine.js';
 import { t } from './i18n/LocaleRegistry.js';
 
 /**
- * 조직도 노드 카드의 컬럼(필드) 정의. / Column (field) definition for an org-chart node card.
+ * 조직도 노드 카드의 컬럼(필드) 정의.
+ *
+ * Column (field) definition for an org-chart node card.
+ *
+ * 組織図のノードカードの列(フィールド)定義。
+ *
+ * 组织架构图节点卡片的列(字段)定义。
  */
 export interface OrgChartColumnDef {
-  /** 표시할 데이터 필드명. / Data field name to display. */
+  /**
+   * 표시할 데이터 필드명.
+   *
+   * Data field name to display.
+   *
+   * 表示するデータのフィールド名。
+   *
+   * 要显示的数据字段名。
+   */
   field: string;
-  /** 셀 래퍼에 추가할 CSS 클래스명. / Extra CSS class name for the cell wrapper. */
+  /**
+   * 셀 래퍼에 추가할 CSS 클래스명.
+   *
+   * Extra CSS class name for the cell wrapper.
+   *
+   * セルラッパーに追加する CSS クラス名。
+   *
+   * 为单元格包装元素追加的 CSS 类名。
+   */
   className?: string;
-  /** 인라인 스타일 문자열 또는 (값, 행)→스타일 함수. / Inline style string or (value, row)→style function. */
+  /**
+   * 인라인 스타일 문자열 또는 (값, 행)→스타일 함수.
+   *
+   * Inline style string or (value, row)→style function.
+   *
+   * インラインスタイル文字列、または (値, 行)→スタイル の関数。
+   *
+   * 内联样式字符串,或 (值, 行)→样式 的函数。
+   */
   style?: string | ((value: any, row: Record<string, any>) => string);
-  /** 커스텀 렌더러. 값을 텍스트 그대로 보여주는 대신 아바타·배지·아이콘 같은 커스텀 마크업을
+  /**
+   * 커스텀 렌더러. 값을 텍스트 그대로 보여주는 대신 아바타·배지·아이콘 같은 커스텀 마크업을
    * 넣고 싶을 때 지정한다. 문자열 반환 시 innerHTML, 엘리먼트 반환 시 append.
-   * / Custom renderer. Set this when you need avatars, badges, or icons instead of plain text.
-   * A string return is set as innerHTML; an element return is appended. */
+   *
+   * Custom renderer. Set this when you need avatars, badges, or icons instead of plain text.
+   * A string return is set as innerHTML; an element return is appended.
+   *
+   * カスタムレンダラー。値をテキストのまま見せる代わりに、アバター・バッジ・アイコンのような
+   * カスタムマークアップを入れたいときに指定します。文字列を返すと innerHTML、
+   * 要素を返すと append されます。
+   *
+   * 自定义渲染器。当你不想把值原样显示为文本,而要放入头像、徽标、图标这类自定义标记时指定它。
+   * 返回字符串则作为 innerHTML 写入,返回元素则以 append 方式插入。
+   */
   renderer?: (value: any, row: Record<string, any>) => HTMLElement | string;
 }
 
 /**
- * 조직도 생성 옵션. / Org-chart construction options.
+ * 조직도 생성 옵션.
+ *
+ * Org-chart construction options.
+ *
+ * 組織図の生成オプション。
+ *
+ * 组织架构图的生成选项。
  */
 export interface OrgChartOptions {
-  /** 각 행의 고유 id 필드명. / Field name holding each row's unique id. */
+  /**
+   * 각 행의 고유 id 필드명.
+   *
+   * Field name holding each row's unique id.
+   *
+   * 各行の一意な id を持つフィールド名。
+   *
+   * 存放每行唯一 id 的字段名。
+   */
   idField: string;
-  /** 부모 id 를 담은 필드명(트리 구성 기준). / Field name holding the parent id (tree structure key). */
+  /**
+   * 부모 id 를 담은 필드명(트리 구성 기준).
+   *
+   * Field name holding the parent id (tree structure key).
+   *
+   * 親の id を持つフィールド名(ツリー構成の基準)。
+   *
+   * 存放父级 id 的字段名(构建树的依据)。
+   */
   parentIdField: string;
-  /** 노드 카드에 렌더할 컬럼 정의 배열. / Column definitions rendered inside each node card. */
+  /**
+   * 노드 카드에 렌더할 컬럼 정의 배열.
+   *
+   * Column definitions rendered inside each node card.
+   *
+   * ノードカードにレンダリングする列定義の配列。
+   *
+   * 在节点卡片中渲染的列定义数组。
+   */
   columns: OrgChartColumnDef[];
-  /** 노드 카드 너비(px). 기본 160. / Node card width in px. Default 160. @defaultValue 160 */
+  /**
+   * 노드 카드 너비(px). 기본 160.
+   *
+   * Node card width in px. Default 160.
+   *
+   * ノードカードの幅(px)。既定は 160。
+   *
+   * 节点卡片宽度(px)。默认 160。
+   *
+   * @defaultValue 160
+   */
   nodeWidth?: number;
-  /** 노드 카드 높이(px). 기본 72. / Node card height in px. Default 72. @defaultValue 72 */
+  /**
+   * 노드 카드 높이(px). 기본 72.
+   *
+   * Node card height in px. Default 72.
+   *
+   * ノードカードの高さ(px)。既定は 72。
+   *
+   * 节点卡片高度(px)。默认 72。
+   *
+   * @defaultValue 72
+   */
   nodeHeight?: number;
-  /** 레벨(세대) 간 세로 간격(px). 기본 52. / Vertical gap between levels in px. Default 52. @defaultValue 52 */
+  /**
+   * 레벨(세대) 간 세로 간격(px). 기본 52.
+   *
+   * Vertical gap between levels in px. Default 52.
+   *
+   * レベル(世代)間の縦の間隔(px)。既定は 52。
+   *
+   * 层级(代)之间的纵向间距(px)。默认 52。
+   *
+   * @defaultValue 52
+   */
   levelGap?: number;
-  /** 형제 노드 간 가로 간격(px). 기본 20. / Horizontal gap between siblings in px. Default 20. @defaultValue 20 */
+  /**
+   * 형제 노드 간 가로 간격(px). 기본 20.
+   *
+   * Horizontal gap between siblings in px. Default 20.
+   *
+   * 兄弟ノード間の横の間隔(px)。既定は 20。
+   *
+   * 同级节点之间的横向间距(px)。默认 20。
+   *
+   * @defaultValue 20
+   */
   siblingGap?: number;
-  /** 최초 로드 시 전체 펼침 여부. 기본 true. / Whether to expand all on first load. Default true. @defaultValue true */
+  /**
+   * 최초 로드 시 전체 펼침 여부. 기본 true.
+   *
+   * Whether to expand all on first load. Default true.
+   *
+   * 初回ロード時に全体を展開するかどうか。既定は true。
+   *
+   * 首次加载时是否展开全部。默认 true。
+   *
+   * @defaultValue true
+   */
   expandOnLoad?: boolean;
-  /** 노드 클릭 콜백 (id, 행데이터). / Node click callback (id, row data). */
+  /**
+   * 노드 클릭 콜백 (id, 행데이터).
+   *
+   * Node click callback (id, row data).
+   *
+   * ノードクリックのコールバック (id, 行データ)。
+   *
+   * 节点点击回调 (id, 行数据)。
+   */
   onNodeClick?: (id: any, data: Record<string, any>) => void;
 }
 
 interface LayoutInfo { x: number; y: number; }
 
 /**
- * 조직도 컴포넌트. / Org-chart component.
+ * 조직도 컴포넌트.
+ *
+ * Org-chart component.
+ *
+ * 組織図コンポーネント。
+ *
+ * 组织架构图组件。
  *
  * 보고 라인·조직 구조·계층형 카테고리처럼 "누가 누구 밑에 있는가"를 시각적으로 보여주고 싶을 때
  * 쓴다. 그리드와 별개의 독립 컴포넌트라서, 그리드 없이 조직도 하나만 페이지에 넣어도 동작한다.
  * 동작 순서: `setData()`로 평면 행 배열(각 행에 id/parentId만 있으면 됨)을 넘기면 → 내부에서
  * 부모/자식 관계(idField/parentIdField)를 따라 트리로 구성하고 → 그 결과를 SVG 연결선 + 노드
  * 카드로 화면에 그린다.
- * / Use this when you need to show "who reports to whom" — org structure, reporting lines, or
+ *
+ * Use this when you need to show "who reports to whom" — org structure, reporting lines, or
  * hierarchical categories. It's a standalone component independent of the grid, so it works on
  * its own with no grid on the page. Operation order: pass a flat row array to `setData()` (each
  * row just needs an id/parentId) → internally it's built into a tree following the parent/child
  * relation (idField/parentIdField) → the result is drawn on screen as SVG connectors plus node
  * cards.
+ *
+ * レポートライン・組織構造・階層型カテゴリのように「誰が誰の下にいるか」を視覚的に見せたいときに
+ * 使います。グリッドとは別の独立したコンポーネントなので、グリッドなしで組織図だけをページに
+ * 置いても動作します。動作の順序: `setData()` にフラットな行の配列(各行に id/parentId さえあれば
+ * 十分)を渡すと → 内部で親子関係(idField/parentIdField)をたどってツリーを構成し → その結果を
+ * SVG の連結線 + ノードカードとして画面に描画します。
+ *
+ * 当你需要直观展示「谁在谁的下面」时使用它 —— 汇报关系、组织结构或层级分类。它是独立于表格的
+ * 组件,页面上没有表格也能单独工作。执行顺序: 向 `setData()` 传入扁平的行数组(每行只需带有
+ * id/parentId) → 内部按父子关系(idField/parentIdField)构建成树 → 再把结果绘制为 SVG 连接线和
+ * 节点卡片。
  *
  * @example
  * const chart = new OrgChart('#org', {
@@ -76,8 +222,21 @@ export class OrgChart {
   private _selectedId: any = null;
 
   /**
-   * @param selector - 마운트할 컨테이너 셀렉터 문자열 또는 엘리먼트 / Container selector string or element to mount into
-   * @param opts - 조직도 옵션 / Org-chart options
+   * @param selector - 마운트할 컨테이너 셀렉터 문자열 또는 엘리먼트
+   *
+   * Container selector string or element to mount into
+   *
+   * マウントするコンテナのセレクタ文字列、または要素
+   *
+   * 挂载目标容器的选择器字符串或元素
+   *
+   * @param opts - 조직도 옵션
+   *
+   * Org-chart options
+   *
+   * 組織図のオプション
+   *
+   * 组织架构图选项
    */
   constructor(selector: string | HTMLElement, opts: OrgChartOptions) {
     this._container = typeof selector === 'string'
@@ -93,10 +252,24 @@ export class OrgChart {
 
   /**
    * 조직도 데이터를 설정하고 렌더한다. 최초 로드는 물론, 데이터를 새로 받아올 때마다
-   * 다시 호출하면 트리를 재구성해 다시 그린다. / Set org-chart data and render. Call this on
+   * 다시 호출하면 트리를 재구성해 다시 그린다.
+   *
+   * Set org-chart data and render. Call this on
    * initial load and again whenever fresh data arrives — it rebuilds the tree and redraws.
    *
-   * @param data - 부모/자식 관계를 가진 평면 행 배열 / Flat array of rows with parent/child relations
+   * 組織図のデータを設定してレンダリングします。初回ロードはもちろん、データを新しく受け取るたびに
+   * 再び呼び出せば、ツリーを再構成して描き直します。
+   *
+   * 设置组织架构图数据并渲染。首次加载时调用它,之后每次拿到新数据也再调用一次 —— 它会重建树并
+   * 重新绘制。
+   *
+   * @param data - 부모/자식 관계를 가진 평면 행 배열
+   *
+   * Flat array of rows with parent/child relations
+   *
+   * 親子関係を持つフラットな行の配列
+   *
+   * 带有父子关系的扁平行数组
    */
   setData(data: Record<string, any>[]): void {
     this._data = data;
@@ -110,10 +283,23 @@ export class OrgChart {
 
   /**
    * 색 테마(라이트/다크 등)를 컨테이너에 설정한다. 호스트 페이지의 다크모드 토글에 맞춰 전환할
-   * 때 호출한다. / Set the color theme (light/dark, etc.) on the container. Call this when
+   * 때 호출한다.
+   *
+   * Set the color theme (light/dark, etc.) on the container. Call this when
    * switching to match the host page's dark-mode toggle.
    *
-   * @param theme - data-og-theme 값 / data-og-theme value
+   * 色テーマ(ライト/ダークなど)をコンテナに設定します。ホストページのダークモードトグルに
+   * 合わせて切り替えるときに呼び出します。
+   *
+   * 在容器上设置颜色主题(浅色/深色等)。需要跟随宿主页面的深色模式开关切换时调用它。
+   *
+   * @param theme - data-og-theme 값
+   *
+   * data-og-theme value
+   *
+   * data-og-theme の値
+   *
+   * data-og-theme 的值
    */
   setTheme(theme: string): void {
     this._container.setAttribute('data-og-theme', theme);
@@ -124,18 +310,40 @@ export class OrgChart {
    * 형태(스킨) 테마를 컨테이너에 설정한다. 색은 그대로 두고 모서리·밀도 같은 겉모양만 바꾸고
    * 싶을 때 쓴다. `setTheme`(색)과 서로 독립된 축이라, 색 테마는 그대로 두고 스킨만 바꾸거나
    * 그 반대로 자유롭게 조합할 수 있다.
-   * / Set the form (skin) theme on the container. Use this to change the look (corner radius,
+   *
+   * Set the form (skin) theme on the container. Use this to change the look (corner radius,
    * density, etc.) while leaving color untouched. This is an axis independent from `setTheme`
    * (color), so you can swap the skin alone, the color theme alone, or both freely.
    *
-   * @param skin - data-og-skin 값 / data-og-skin value
+   * 形(スキン)テーマをコンテナに設定します。色はそのままにして、角丸・密度のような見た目だけを
+   * 変えたいときに使います。`setTheme`(色)とは互いに独立した軸なので、色テーマはそのままで
+   * スキンだけを変えたり、その逆も自由に組み合わせできます。
+   *
+   * 在容器上设置形态(皮肤)主题。想保持颜色不变,只改圆角、密度这类外观时使用它。它与
+   * `setTheme`(颜色)是彼此独立的两个维度,因此可以只换皮肤、只换颜色主题,也可以两者自由组合。
+   *
+   * @param skin - data-og-skin 값
+   *
+   * data-og-skin value
+   *
+   * data-og-skin の値
+   *
+   * data-og-skin 的值
    */
   setSkin(skin: string): void {
     this._container.setAttribute('data-og-skin', skin);
   }
 
-  /** 모든 노드를 펼친다. 조직 전체를 한눈에 훑어보고 싶을 때 호출. / Expand all nodes. Call when
-   * the viewer wants to see the whole organization at a glance. */
+  /**
+   * 모든 노드를 펼친다. 조직 전체를 한눈에 훑어보고 싶을 때 호출.
+   *
+   * Expand all nodes. Call when
+   * the viewer wants to see the whole organization at a glance.
+   *
+   * すべてのノードを展開します。組織全体をひと目で見渡したいときに呼び出します。
+   *
+   * 展开所有节点。想一眼纵览整个组织时调用。
+   */
   expandAll(): void {
     const collect = (nodes: TreeNode<any>[]) => {
       for (const n of nodes) {
@@ -147,9 +355,18 @@ export class OrgChart {
     this._rebuild();
   }
 
-  /** 모든 노드를 접는다(루트만 표시). 큰 조직도를 처음 접했을 때 최상위 구조부터 보여주고 싶을
-   * 때 호출. / Collapse all nodes (roots only). Call to show top-level structure first when a
-   * large org chart is first opened. */
+  /**
+   * 모든 노드를 접는다(루트만 표시). 큰 조직도를 처음 접했을 때 최상위 구조부터 보여주고 싶을
+   * 때 호출.
+   *
+   * Collapse all nodes (roots only). Call to show top-level structure first when a
+   * large org chart is first opened.
+   *
+   * すべてのノードを折りたたみます(ルートのみ表示)。大きな組織図を初めて開いたときに、
+   * 最上位の構造から見せたい場合に呼び出します。
+   *
+   * 折叠所有节点(仅显示根节点)。初次打开较大的组织架构图,想先展示最上层结构时调用。
+   */
   collapseAll(): void {
     this._expandedKeys.clear();
     this._rebuild();

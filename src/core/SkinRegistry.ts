@@ -25,11 +25,23 @@ import type { SkinTokenDelta, SkinTokenName } from './types.js';
  * 물리적으로 강제한다 — `define()`/`registerBuiltin()` 이 델타를 검사할 때 이 집합에 없는
  * 키는 거부한다. 반대 방향(테마 델타에 형태 토큰이 섞이는 것)도 이 집합을 재사용해 막는다
  * (색⊥형태 축 분리를 양방향으로 기계 강제).
- * / Allow-list of CSS custom-property names permitted in a skin (FORM) delta (runtime guard).
- *   It physically enforces the rule that skins own shape only (radius/border/elevation/density/…)
- *   and never color — `define()`/`registerBuiltin()` reject any key outside this set. The reverse
- *   direction (shape tokens leaking into a theme delta) reuses this same set, so the color⊥shape
- *   axis separation is mechanically enforced both ways.
+ *
+ * Allow-list of CSS custom-property names permitted in a skin (FORM) delta (runtime guard).
+ * It physically enforces the rule that skins own shape only (radius/border/elevation/density/…)
+ * and never color — `define()`/`registerBuiltin()` reject any key outside this set. The reverse
+ * direction (shape tokens leaking into a theme delta) reuses this same set, so the color⊥shape
+ * axis separation is mechanically enforced both ways.
+ *
+ * スキン(FORM)デルタに登場できる CSS カスタムプロパティ名の許可リスト(ランタイムガード)。
+ * スキンは形状(角・境界線・影・密度など)だけを扱い色は扱わないというルールを、このリストが
+ * 物理的に強制します — `define()`/`registerBuiltin()` がデルタを検査するとき、この集合にない
+ * キーは拒否します。逆方向(テーマデルタに形状トークンが混ざること)も、この集合を再利用して
+ * 防ぎます(色⊥形状の軸分離を双方向で機械的に強制)。
+ *
+ * 皮肤(FORM)增量中允许出现的 CSS 自定义属性名白名单(运行时防护)。
+ * 这份清单从物理上强制"皮肤只负责形状(圆角、边框、阴影、密度等),不负责颜色"这条规则 —
+ * `define()`/`registerBuiltin()` 检查增量时,拒绝该集合之外的键。反方向(形状令牌混入主题增量)
+ * 也复用同一集合来阻止,因此色⊥形的轴分离在两个方向上都由机器强制。
  */
 export const FORM_TOKENS: ReadonlySet<string> = new Set<SkinTokenName>([
   '--og-radius-none', '--og-radius-sm', '--og-radius-md', '--og-radius-lg', '--og-radius-pill',
@@ -48,18 +60,57 @@ export const FORM_TOKENS: ReadonlySet<string> = new Set<SkinTokenName>([
   '--og-row-accent-width',
 ]);
 
-/** 색 리터럴 탐지: hex(#rgb..) 또는 rgb()/hsl() 에 리터럴 채널(숫자 시작)이 오면 색으로 본다.
- *  `rgba(var(--og-texture-ink), 0.04)` 처럼 var() 로 색을 **참조**하는 것은 허용(Rule 2). */
+/**
+ * 색 리터럴 탐지: hex(#rgb..) 또는 rgb()/hsl() 에 리터럴 채널(숫자 시작)이 오면 색으로 본다.
+ * `rgba(var(--og-texture-ink), 0.04)` 처럼 var() 로 색을 **참조**하는 것은 허용(Rule 2).
+ *
+ * 色リテラルの検出: hex(#rgb..) または rgb()/hsl() にリテラルのチャンネル(数字始まり)が来れば
+ * 色とみなします。`rgba(var(--og-texture-ink), 0.04)` のように var() で色を**参照**するのは
+ * 許可します(Rule 2)。
+ *
+ * 颜色字面量的检测: hex(#rgb..) 或 rgb()/hsl() 中出现字面量通道(以数字开头)即视为颜色。
+ * 像 `rgba(var(--og-texture-ink), 0.04)` 这样用 var() **引用**颜色则允许(Rule 2)。
+ */
 const HEX_COLOR = /#[0-9a-fA-F]{3,8}\b/;
 const FUNC_COLOR_LITERAL = /\b(?:rgba?|hsla?)\(\s*\d/;
-/** 흔한 named color 몇 개(스킨 델타엔 색이 오면 안 되므로 대표만 차단). */
+/**
+ * 흔한 named color 몇 개(스킨 델타엔 색이 오면 안 되므로 대표만 차단).
+ *
+ * よくある named color をいくつか(スキンデルタに色が来てはいけないので代表のみ遮断)。
+ *
+ * 几个常见的 named color(皮肤增量中不该出现颜色,故只拦截代表性的几个)。
+ */
 const NAMED_COLOR = /\b(?:red|green|blue|black|white|gray|grey|yellow|orange|purple|pink|brown|cyan|magenta)\b/i;
 
-/** 스킨 정의 결과. / Result of a skin definition. */
+/**
+ * 스킨 정의 결과.
+ *
+ * Result of a skin definition.
+ *
+ * スキン定義の結果。
+ *
+ * 皮肤定义的结果。
+ */
 export interface SkinDefineResult {
-  /** 실제 등록된(가드레일 클램프가 반영된) 델타. / The actually registered delta (with guardrail clamps applied). */
+  /**
+   * 실제 등록된(가드레일 클램프가 반영된) 델타.
+   *
+   * The actually registered delta (with guardrail clamps applied).
+   *
+   * 実際に登録された(ガードレールのクランプが反映された)デルタ。
+   *
+   * 实际注册的增量(已反映防护栏的钳制)。
+   */
   readonly delta: SkinTokenDelta;
-  /** 접근성 가드레일이 조정한 토큰 경고(있으면 콘솔에도 출력). / Warnings for tokens adjusted by accessibility guardrails (also logged to console when present). */
+  /**
+   * 접근성 가드레일이 조정한 토큰 경고(있으면 콘솔에도 출력).
+   *
+   * Warnings for tokens adjusted by accessibility guardrails (also logged to console when present).
+   *
+   * アクセシビリティガードレールが調整したトークンの警告(あればコンソールにも出力)。
+   *
+   * 无障碍防护栏所调整令牌的警告(存在时也输出到控制台)。
+   */
   readonly warnings: string[];
 }
 
@@ -68,15 +119,43 @@ export interface SkinDefineResult {
  * 스킨과 테마(색)를 분리해 두어도, 개발자가 실수로 스킨 델타에 `#fff` 같은 색을 넣으면 그
  * 분리가 눈에 안 띄게 무너진다 — 그래서 등록 시점에 색 리터럴이 섞이면 즉시 던져서 알아채게
  * 한다(조용히 무시하지 않음).
- * / Actually enforces the rule that a skin (FORM) carries shape only, never color. Why: even with
- *   skin/theme separation on paper, a developer slipping `#fff` into a skin delta would quietly
- *   break that separation — so this throws immediately at registration time instead of ignoring it.
  *
- * @param id - 스킨 id / Skin id
- * @param delta - 검사할 토큰 델타 / Token delta to validate
- * @throws FORM 토큰이 아니거나 색 리터럴이 있으면 Error / Throws if a non-FORM token or a color literal is present
+ * Actually enforces the rule that a skin (FORM) carries shape only, never color. Why: even with
+ * skin/theme separation on paper, a developer slipping `#fff` into a skin delta would quietly
+ * break that separation — so this throws immediately at registration time instead of ignoring it.
+ *
+ * スキン(FORM)には形状だけを入れ、色は入れないというルールを実際に検査する関数です。なぜ必要か:
+ * スキンとテーマ(色)を分離しておいても、開発者が誤ってスキンデルタに `#fff` のような色を入れると、
+ * その分離は気づかないうちに崩れます — そこで登録の時点で色リテラルが混ざれば即座に throw して
+ * 気づかせます(黙って無視しません)。
+ *
+ * 实际检查"皮肤(FORM)只装形状、不装颜色"这条规则的函数。为什么需要它: 即便皮肤与主题(颜色)
+ * 在纸面上已经分离,开发者一旦误把 `#fff` 这样的颜色写进皮肤增量,这层分离就会在无人察觉中瓦解 —
+ * 因此本函数在注册的时点立即 throw 让人发现,而不是默默忽略。
+ *
+ * @param id - 스킨 id
+ *
+ * Skin id
+ *
+ * スキン id
+ *
+ * 皮肤 id
+ * @param delta - 검사할 토큰 델타
+ *
+ * Token delta to validate
+ *
+ * 検査するトークンデルタ
+ *
+ * 待检查的令牌增量
+ * @throws FORM 토큰이 아니거나 색 리터럴이 있으면 Error
+ *
+ * Throws if a non-FORM token or a color literal is present
+ *
+ * FORM トークンでないか、色リテラルがある場合は Error
+ *
+ * 存在非 FORM 令牌或颜色字面量时抛出 Error
  * @example
- * skinRegistry.define('my-skin', { '--og-radius-md': '#fff' }); // throws — 색 리터럴 검출 / color literal detected
+ * skinRegistry.define('my-skin', { '--og-radius-md': '#fff' }); // throws — color literal detected
  */
 export function assertFormOnly(id: string, delta: SkinTokenDelta): void {
   for (const [rawKey, rawVal] of Object.entries(delta)) {
@@ -106,18 +185,52 @@ export function assertFormOnly(id: string, delta: SkinTokenDelta): void {
  *  - focus-width < 2px → 2px 로 클램프(가시 포커스 비협상).
  *  - focus-style: none → solid.
  * 반환은 조정된 델타 + 경고 목록(silent override 아님 — 무엇을 클램프했는지 알린다).
- * / Applies accessibility guardrails (invariants), clamping the delta to a safe value at
- *   definition time. Called automatically inside `define()`/`registerBuiltin()`, so you rarely
- *   call it directly (only in a custom registration pipeline or a test that checks it directly).
- *   Prevents a skin author from silently registering values below the minimum accessibility bar.
- *   - focus-width < 2px → clamped to 2px (visible focus is non-negotiable).
- *   - focus-style: none → solid.
- *   Returns the adjusted delta plus a warning list (not a silent override — it reports what was
- *   clamped).
  *
- * @param id - 스킨 id / Skin id
- * @param delta - 조정할 토큰 델타 / Token delta to adjust
- * @returns 조정된 델타 + 경고 목록 / Adjusted delta plus warnings
+ * Applies accessibility guardrails (invariants), clamping the delta to a safe value at
+ * definition time. Called automatically inside `define()`/`registerBuiltin()`, so you rarely
+ * call it directly (only in a custom registration pipeline or a test that checks it directly).
+ * Prevents a skin author from silently registering values below the minimum accessibility bar.
+ *  - focus-width < 2px → clamped to 2px (visible focus is non-negotiable).
+ *  - focus-style: none → solid.
+ * Returns the adjusted delta plus a warning list (not a silent override — it reports what was
+ * clamped).
+ *
+ * アクセシビリティガードレール(不変条件)を適用し、デルタを定義の時点で安全値へクランプします。
+ * `define()`/`registerBuiltin()` の内部で自動的に呼ばれるので、通常は直接呼ぶことはありません
+ * (カスタム登録パイプラインやテストで直接検証するときだけ例外的に使います)。スキン作者が
+ * アクセシビリティの最低基準を下回る値を設定しても、黙ってそのまま登録されないように防ぎます。
+ *  - focus-width < 2px → 2px にクランプ(可視フォーカスは非交渉)。
+ *  - focus-style: none → solid。
+ * 戻り値は調整されたデルタ + 警告リスト(silent override ではなく、何をクランプしたかを知らせます)。
+ *
+ * 应用无障碍防护栏(不变式),在定义的时点把增量钳制到安全值。`define()`/`registerBuiltin()`
+ * 内部会自动调用,所以很少需要直接调用(只有在自定义注册流水线或直接验证它的测试中才例外使用)。
+ * 它防止皮肤作者把值设到无障碍最低标准以下后仍被静默注册。
+ *  - focus-width < 2px → 钳制为 2px(可见焦点不可协商)。
+ *  - focus-style: none → solid。
+ * 返回调整后的增量加警告列表(并非 silent override — 会告知钳制了什么)。
+ *
+ * @param id - 스킨 id
+ *
+ * Skin id
+ *
+ * スキン id
+ *
+ * 皮肤 id
+ * @param delta - 조정할 토큰 델타
+ *
+ * Token delta to adjust
+ *
+ * 調整するトークンデルタ
+ *
+ * 待调整的令牌增量
+ * @returns 조정된 델타 + 경고 목록
+ *
+ * Adjusted delta plus warnings
+ *
+ * 調整されたデルタ + 警告リスト
+ *
+ * 调整后的增量加警告列表
  */
 export function applyGuardrails(id: string, delta: SkinTokenDelta): SkinDefineResult {
   const out: SkinTokenDelta = { ...delta };
@@ -146,13 +259,27 @@ export function applyGuardrails(id: string, delta: SkinTokenDelta): SkinDefineRe
  * 그리드 쪽에서 `data-og-skin="id"` 속성만 설정하면 이 CSS 가 매치되어 적용된다. 내장 스킨은
  * `registerBuiltin()` 으로 검증+가드레일만 거치고 실제 CSS 는 정적 번들 skins.css 가 이미
  * 담당하므로 별도 주입이 없다.
- * / A global registry for registering skins (the FORM axis — corner/border/shadow/density, i.e.
- *   "shape"). What happens internally when you register: `define()` checks for no color literals
- *   → clamps via accessibility guardrails → injects a `<style>` tag into document head containing
- *   a `.og-container[data-og-skin="id"] { ... }` rule. The grid side only needs to set the
- *   `data-og-skin="id"` attribute for this CSS to match and apply. Built-in skins go through
- *   `registerBuiltin()` for validation + guardrails only — their CSS is already owned by the
- *   static skins.css bundle, so no injection happens.
+ *
+ * A global registry for registering skins (the FORM axis — corner/border/shadow/density, i.e.
+ * "shape"). What happens internally when you register: `define()` checks for no color literals
+ * → clamps via accessibility guardrails → injects a `<style>` tag into document head containing
+ * a `.og-container[data-og-skin="id"] { ... }` rule. The grid side only needs to set the
+ * `data-og-skin="id"` attribute for this CSS to match and apply. Built-in skins go through
+ * `registerBuiltin()` for validation + guardrails only — their CSS is already owned by the
+ * static skins.css bundle, so no injection happens.
+ *
+ * スキン(FORM 軸 — 角・境界線・影・密度などの「見た目」)を登録するグローバルレジストリです。
+ * 登録すると内部で起きること: `define()` は色リテラルがないかを検査 → アクセシビリティ
+ * ガードレールでクランプ → `.og-container[data-og-skin="id"] { ... }` ルールを収めた `<style>`
+ * タグをドキュメントの head に注入します。グリッド側で `data-og-skin="id"` 属性を設定するだけで、
+ * この CSS がマッチして適用されます。内蔵スキンは `registerBuiltin()` で検証 + ガードレールだけを
+ * 通り、実際の CSS は静的バンドルの skins.css がすでに担当するので、別途の注入はありません。
+ *
+ * 注册皮肤(FORM 轴 — 圆角、边框、阴影、密度等"外观")的全局注册表。注册时内部发生的事:
+ * `define()` 先检查有无颜色字面量 → 用无障碍防护栏钳制 → 把含 `.og-container[data-og-skin="id"]
+ * { ... }` 规则的 `<style>` 标签注入文档 head。表格一侧只需设置 `data-og-skin="id"` 属性,这段 CSS
+ * 就会匹配并生效。内置皮肤经 `registerBuiltin()` 只走检查 + 防护栏,实际 CSS 已由静态包 skins.css
+ * 负责,因此不做注入。
  *
  * @example
  * skinRegistry.define('my-skin', { '--og-radius-md': '10px', '--og-border-style': 'solid' });
@@ -163,10 +290,27 @@ export class SkinRegistry {
 
   /**
    * 내장 스킨 등록(주입 없음 — CSS 는 skins.css 가 전달). 검증/가드레일은 동일 적용.
-   * / Register a built-in skin (no injection — CSS is delivered by skins.css). Validation/guardrails still apply.
    *
-   * @param id - 스킨 id / Skin id
-   * @param delta - FORM 토큰 델타 / FORM token delta
+   * Register a built-in skin (no injection — CSS is delivered by skins.css). Validation/guardrails still apply.
+   *
+   * 内蔵スキンの登録(注入なし — CSS は skins.css が届けます)。検証/ガードレールは同じく適用します。
+   *
+   * 注册内置皮肤(不注入 — CSS 由 skins.css 交付)。检查/防护栏照常适用。
+   *
+   * @param id - 스킨 id
+   *
+   * Skin id
+   *
+   * スキン id
+   *
+   * 皮肤 id
+   * @param delta - FORM 토큰 델타
+   *
+   * FORM token delta
+   *
+   * FORM トークンデルタ
+   *
+   * FORM 令牌增量
    */
   registerBuiltin(id: string, delta: SkinTokenDelta): void {
     assertFormOnly(id, delta);
@@ -177,12 +321,37 @@ export class SkinRegistry {
   /**
    * 사용자 스킨 등록. FORM-only 검증 + 가드레일 클램프 후 런타임 `<style>` 로
    * `.og-container[data-og-skin="id"]` 블록을 주입(브라우저 환경). 반환은 조정 결과.
-   * / Register a user skin. After FORM-only validation and guardrail clamps, injects a
+   *
+   * Register a user skin. After FORM-only validation and guardrail clamps, injects a
    * `.og-container[data-og-skin="id"]` block via a runtime `<style>` (browser env). Returns the adjusted result.
    *
-   * @param id - 스킨 id / Skin id
-   * @param delta - FORM 토큰 델타 / FORM token delta
-   * @returns 조정된 델타 + 경고 목록 / Adjusted delta plus warnings
+   * ユーザースキンの登録。FORM-only 検証 + ガードレールのクランプのあと、ランタイムの `<style>` で
+   * `.og-container[data-og-skin="id"]` ブロックを注入します(ブラウザ環境)。戻り値は調整の結果です。
+   *
+   * 注册用户皮肤。经 FORM-only 检查 + 防护栏钳制后,用运行时 `<style>` 注入
+   * `.og-container[data-og-skin="id"]` 块(浏览器环境)。返回调整的结果。
+   *
+   * @param id - 스킨 id
+   *
+   * Skin id
+   *
+   * スキン id
+   *
+   * 皮肤 id
+   * @param delta - FORM 토큰 델타
+   *
+   * FORM token delta
+   *
+   * FORM トークンデルタ
+   *
+   * FORM 令牌增量
+   * @returns 조정된 델타 + 경고 목록
+   *
+   * Adjusted delta plus warnings
+   *
+   * 調整されたデルタ + 警告リスト
+   *
+   * 调整后的增量加警告列表
    */
   define(id: string, delta: SkinTokenDelta): SkinDefineResult {
     assertFormOnly(id, delta);
@@ -196,14 +365,44 @@ export class SkinRegistry {
     return result;
   }
 
-  /** 스킨 id 등록 여부. / Whether a skin id is registered. */
+  /**
+   * 스킨 id 등록 여부.
+   *
+   * Whether a skin id is registered.
+   *
+   * スキン id が登録されているかどうか。
+   *
+   * 皮肤 id 是否已注册。
+   */
   has(id: string): boolean { return this._skins.has(id); }
-  /** 등록된 스킨 델타 조회(없으면 undefined). / Get a registered skin delta (undefined if absent). */
+  /**
+   * 등록된 스킨 델타 조회(없으면 undefined).
+   *
+   * Get a registered skin delta (undefined if absent).
+   *
+   * 登録されたスキンデルタの取得(なければ undefined)。
+   *
+   * 获取已注册的皮肤增量(不存在则为 undefined)。
+   */
   get(id: string): SkinTokenDelta | undefined { return this._skins.get(id); }
-  /** 등록된 모든 스킨 id(내장 + 사용자). / All registered skin ids (built-in + user). */
+  /**
+   * 등록된 모든 스킨 id(내장 + 사용자).
+   *
+   * All registered skin ids (built-in + user).
+   *
+   * 登録されたすべてのスキン id(内蔵 + ユーザー)。
+   *
+   * 已注册的全部皮肤 id(内置 + 用户)。
+   */
   list(): string[] { return [...this._skins.keys()]; }
 
-  /** 런타임 `<style>` 주입(테스트/SSR 등 document 없으면 no-op). 같은 태그를 누적 사용. */
+  /**
+   * 런타임 `<style>` 주입(테스트/SSR 등 document 없으면 no-op). 같은 태그를 누적 사용.
+   *
+   * ランタイムの `<style>` 注入(テスト/SSR など document がなければ no-op)。同じタグを累積して使います。
+   *
+   * 运行时 `<style>` 注入(测试/SSR 等无 document 时为 no-op)。累积使用同一个标签。
+   */
   private _inject(id: string, delta: SkinTokenDelta): void {
     if (typeof document === 'undefined') return;
     if (!this._styleEl) {
@@ -228,8 +427,15 @@ export class SkinRegistry {
 /**
  * Sharp/Gothic — 엔터프라이즈 고밀도 화면에 맞춘 각진(라운드 0) 형태. 데이터 밀도가 중요한
  * 백오피스·트레이딩 화면에 어울린다.
- * / Sharp/Gothic — squared (zero-radius) shape tuned for high-density enterprise screens; suits
- *   back-office/trading UIs where data density matters.
+ *
+ * Sharp/Gothic — squared (zero-radius) shape tuned for high-density enterprise screens; suits
+ * back-office/trading UIs where data density matters.
+ *
+ * Sharp/Gothic — エンタープライズの高密度画面に合わせた角張った(ラウンド 0)形状。データ密度が
+ * 重要なバックオフィス・トレーディング画面に向いています。
+ *
+ * Sharp/Gothic — 为企业级高密度画面而生的方正(圆角为 0)形状。适合数据密度至关重要的
+ * 后台管理、交易画面。
  */
 export const SKIN_SHARP: SkinTokenDelta = {
   '--og-radius-sm': '0', '--og-radius-md': '0', '--og-radius-lg': '0',
@@ -245,7 +451,12 @@ export const SKIN_SHARP: SkinTokenDelta = {
 // 계약 추적: item3 §3.2. / Contract ref: item3 §3.2.
 /**
  * Rounded — 소비자 SaaS 에 어울리는 부드러운(둥근 모서리·큰 그림자) 형태.
- * / Rounded — soft shape (rounded corners, larger shadows) suited to consumer-SaaS products.
+ *
+ * Rounded — soft shape (rounded corners, larger shadows) suited to consumer-SaaS products.
+ *
+ * Rounded — コンシューマー SaaS に向いた柔らかい(丸い角・大きな影)形状。
+ *
+ * Rounded — 适合消费级 SaaS 的柔和(圆角、大阴影)形状。
  */
 export const SKIN_ROUNDED: SkinTokenDelta = {
   '--og-radius-sm': '4px', '--og-radius-md': '8px', '--og-radius-lg': '12px',
@@ -264,8 +475,15 @@ export const SKIN_ROUNDED: SkinTokenDelta = {
 /**
  * Stitch — 손바느질/리넨 소재 느낌을 주는 형태(점선 테두리·텍스처). 리넨 색·자수 색 자체는
  * 이 스킨이 아니라 theme(색) 축이 담당한다(색⊥형태 분리).
- * / Stitch — a handcrafted, linen-textured shape (dashed borders, texture). The linen/embroidery
- *   color itself belongs to the theme (color) axis, not this skin (color⊥shape separation).
+ *
+ * Stitch — a handcrafted, linen-textured shape (dashed borders, texture). The linen/embroidery
+ * color itself belongs to the theme (color) axis, not this skin (color⊥shape separation).
+ *
+ * Stitch — 手縫い/リネン素材の質感を与える形状(破線の境界線・テクスチャ)。リネンの色・刺繍の色
+ * 自体は、このスキンではなく theme(色)軸が担当します(色⊥形状の分離)。
+ *
+ * Stitch — 呈现手工缝制/亚麻材质感的形状(虚线边框、纹理)。亚麻色、刺绣色本身不由该皮肤负责,
+ * 而由 theme(颜色)轴负责(色⊥形的分离)。
  */
 export const SKIN_STITCH: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '3px', '--og-radius-lg': '4px', '--og-container-radius': '3px',
@@ -284,7 +502,12 @@ export const SKIN_STITCH: SkinTokenDelta = {
 // 계약 추적: item3 §3.5. / Contract ref: item3 §3.5.
 /**
  * Flat/Minimal — 그림자·입체감을 없앤 평평한(flat 2.0) 형태. 미니멀한 대시보드에 어울린다.
- * / Flat/Minimal — a flat (flat 2.0) shape with shadows/depth removed; suits minimal dashboards.
+ *
+ * Flat/Minimal — a flat (flat 2.0) shape with shadows/depth removed; suits minimal dashboards.
+ *
+ * Flat/Minimal — 影・立体感をなくした平らな(flat 2.0)形状。ミニマルなダッシュボードに向いています。
+ *
+ * Flat/Minimal — 去掉阴影与立体感的扁平(flat 2.0)形状。适合极简风的仪表盘。
  */
 export const SKIN_FLAT: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '3px', '--og-radius-lg': '4px', '--og-container-radius': '4px',
@@ -301,9 +524,17 @@ export const SKIN_FLAT: SkinTokenDelta = {
 /**
  * High-Contrast — 접근성을 최우선에 둔 레퍼런스 스킨(굵은 테두리·큰 포커스 링·굵은 아이콘 획).
  * 다른 스킨을 만들 때 "접근성 하한선이 뭔가"를 확인하는 기준으로도 쓸 수 있다.
- * / High-Contrast — a reference skin that puts accessibility first (thick borders, a large focus
- *   ring, bold icon strokes). Also useful as a baseline for "what's the accessibility floor" when
- *   authoring other skins.
+ *
+ * High-Contrast — a reference skin that puts accessibility first (thick borders, a large focus
+ * ring, bold icon strokes). Also useful as a baseline for "what's the accessibility floor" when
+ * authoring other skins.
+ *
+ * High-Contrast — アクセシビリティを最優先に置いたリファレンススキン(太い境界線・大きな
+ * フォーカスリング・太いアイコンの線)。他のスキンを作るとき「アクセシビリティの下限は何か」を
+ * 確認する基準としても使えます。
+ *
+ * High-Contrast — 把无障碍放在首位的参考皮肤(粗边框、大焦点环、粗图标笔画)。制作其他皮肤时,
+ * 也可以拿它作为确认"无障碍下限是什么"的基准。
  */
 export const SKIN_HIGH_CONTRAST: SkinTokenDelta = {
   '--og-radius-sm': '0', '--og-radius-md': '2px', '--og-radius-lg': '2px', '--og-container-radius': '2px',
@@ -319,8 +550,13 @@ export const SKIN_HIGH_CONTRAST: SkinTokenDelta = {
 
 /**
  * Material/Elevated — 중간 정도 반경 + 과장 없는 그림자 엘리베이션을 쓰는 형태.
- * / Material/Elevated — a shape using medium-radius corners plus restrained (non-exaggerated)
- *   shadow elevation.
+ *
+ * Material/Elevated — a shape using medium-radius corners plus restrained (non-exaggerated)
+ * shadow elevation.
+ *
+ * Material/Elevated — 中程度の半径 + 誇張のない影のエレベーションを使う形状。
+ *
+ * Material/Elevated — 使用中等半径圆角加不夸张的阴影抬升的形状。
  */
 export const SKIN_MATERIAL: SkinTokenDelta = {
   '--og-radius-sm': '2px', '--og-radius-md': '4px', '--og-radius-lg': '8px', '--og-container-radius': '8px',
@@ -337,8 +573,15 @@ export const SKIN_MATERIAL: SkinTokenDelta = {
 /**
  * 내장 스킨 카탈로그(확정 6종, id → 델타). `skinRegistry.list()`/설정 UI 에서 선택지를 보여줄 때
  * 이 배열을 순회하면 된다.
- * / Built-in skin catalog (6 finalized skins, id → delta). Iterate this array when building a
- *   picker UI or listing options via `skinRegistry.list()`.
+ *
+ * Built-in skin catalog (6 finalized skins, id → delta). Iterate this array when building a
+ * picker UI or listing options via `skinRegistry.list()`.
+ *
+ * 内蔵スキンのカタログ(確定 6 種、id → デルタ)。`skinRegistry.list()`/設定 UI で選択肢を見せる
+ * ときは、この配列を走査します。
+ *
+ * 内置皮肤目录(确定的 6 种,id → 增量)。在 `skinRegistry.list()`/设置 UI 中展示选项时,
+ * 遍历这个数组即可。
  */
 export const BUILTIN_SKINS: ReadonlyArray<readonly [string, SkinTokenDelta]> = [
   ['sharp', SKIN_SHARP],
@@ -349,7 +592,14 @@ export const BUILTIN_SKINS: ReadonlyArray<readonly [string, SkinTokenDelta]> = [
   ['material', SKIN_MATERIAL],
 ];
 
-/** 프로세스 전역 기본 레지스트리 — 내장 스킨을 부트스트랩 등록(주입 없음, CSS=skins.css).
- *  / Process-global default registry — bootstraps the built-in skins (no injection; CSS=skins.css). */
+/**
+ * 프로세스 전역 기본 레지스트리 — 내장 스킨을 부트스트랩 등록(주입 없음, CSS=skins.css).
+ *
+ * Process-global default registry — bootstraps the built-in skins (no injection; CSS=skins.css).
+ *
+ * プロセスグローバルの既定レジストリ — 内蔵スキンをブートストラップ登録(注入なし、CSS=skins.css)。
+ *
+ * 进程全局的默认注册表 — 引导注册内置皮肤(不注入,CSS=skins.css)。
+ */
 export const skinRegistry = new SkinRegistry();
 for (const [id, delta] of BUILTIN_SKINS) skinRegistry.registerBuiltin(id, delta);

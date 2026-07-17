@@ -9,18 +9,23 @@ High-performance, framework-agnostic data grid with virtual scrolling, inline ed
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![npm](https://img.shields.io/badge/npm-1.2.1-orange)](https://www.npmjs.com/package/open-grid)
+[![npm](https://img.shields.io/badge/npm-1.4.0-orange)](https://www.npmjs.com/package/open-grid)
+
+**English** · [日本語](README.ja.md) · [中文](README.zh.md)
 
 📖 **[개발 가이드](https://foxnail.kr/open-grid/demo/v2/guide/index.php)** — 설치부터 고급 API까지 단계별 가이드
 🔗 **[데모/홈페이지](https://foxnail.kr/open-grid/demo/v2/index.php)**
+📚 **[API 문서](https://foxnail.kr/open-grid/demo/v2/api-docs/)** — 한·영·일·중 4개 국어 JSDoc
 
 ## Features
 
+### Core
+
 | Feature | Status |
 |---|---|
-| Virtual Scroll (100k+ rows) | ✅ |
+| Virtual Scroll (1M+ rows) | ✅ |
 | Inline Editing (click / dblclick / F2) | ✅ |
-| 8 Cell Renderers (text, number, date, checkbox, button, badge, link, template) | ✅ |
+| Cell Renderers (text, number, date, checkbox, button, badge, link, template, sparkline, …) | ✅ |
 | 5 Cell Editors (text, number, select, date, checkbox) | ✅ |
 | Multi-sort (Shift+click) | ✅ |
 | Column Filter UI (9 operators) | ✅ |
@@ -28,7 +33,6 @@ High-performance, framework-agnostic data grid with virtual scrolling, inline ed
 | Column Reorder (drag header, `columnReorder: true`) | ✅ |
 | Frozen Columns | ✅ |
 | Row/Column Groups (header merge) | ✅ |
-| Localization / i18n (built-in `ko`·`en`, `setLocale`, custom locales) | ✅ |
 | Grouping + Summary (SUM/AVG/MIN/MAX/COUNT) | ✅ |
 | Tree Grid (flat → hierarchy, expand/collapse) | ✅ |
 | OrgChart (organization chart with theme) | ✅ |
@@ -42,10 +46,42 @@ High-performance, framework-agnostic data grid with virtual scrolling, inline ed
 | CSV / JSON Export | ✅ |
 | Clipboard (Ctrl+C / Ctrl+V) | ✅ |
 | Keyboard Navigation (Arrow / Tab / F2 / Esc) | ✅ |
-| 12 Built-in Themes (dark, ocean, forest, …) | ✅ |
+| Zero core dependencies | ✅ |
+
+### Spreadsheet-grade (v1.1)
+
+| Feature | Status |
+|---|---|
+| Range Selection + Fill — drag a cell range, series fill, TSV clipboard, Ctrl+D/R (`rangeSelection`) | ✅ |
+| Master/Detail — expand a row into an HTML panel or a subgrid (`masterDetail`, `expandRow`) | ✅ |
+| Formula Cells — `=B1*C1`, `=SUM(C1:C10)`, 19 functions, `[field]`/A1 refs, `#REF`/`#CYCLE` errors (`formula`) | ✅ |
+| Integrated Chart — draw bar/line from grid data, LTTB downsampling + sampling badge, built-in canvas renderer (`chart`) | ✅ |
+
+### Formatting & data (v1.3)
+
+| Feature | Status |
+|---|---|
+| Conditional Formatting — data bars, heatmap, icon sets, rule priority | ✅ |
+| Realtime Data — streaming / polling sources with backpressure | ✅ |
+| Appearance Axes — density & texture setters | ✅ |
+
+### Look & feel
+
+| Feature | Status |
+|---|---|
+| 15 Built-in Themes (dark, ocean, forest, crimson, stitch, …) | ✅ |
+| 6 Skins (form axis, orthogonal to color) — sharp / rounded / stitch / flat / high-contrast / material | ✅ |
+| 64 Role Icons (Bootstrap Icons, MIT) — `renderIcon`, `grid.setIcon`, `OpenGrid.defineIconSet` | ✅ |
+| Localization / i18n (built-in `ko`·`en`, `setLocale`, custom locales) | ✅ |
+
+### Extensibility
+
+| Feature | Status |
+|---|---|
+| `grid.override(...)` — customize behavior without touching the core (AI-friendly guide) | ✅ |
+| Extension Registry — `TypedRegistry` with `added`/`replaced`/`kept`/`rejected` outcomes, reserved `og:` guard, `protect-builtin` | ✅ |
 | Vue 3 Component | ✅ |
 | React 18 Component | ✅ |
-| Zero core dependencies | ✅ |
 
 ## Installation
 
@@ -381,20 +417,18 @@ Number/date formatting and developer-facing error messages are intentionally out
 
 ## Changelog
 
-### v0.1.2 (2026-05-30)
-- 변경 추적 API: `getChanges()` / `getEditedRows()` / `getChangedColumns()` / `getOriginalRow()`
-- 합계/소계 푸터: `setFooter()` / `getFooterValue()` / `getFooterData()` — OGDecimal 정밀계산 (0.1×10=1.00)
-- 개발 가이드 28챕터 완성 (Ch26 변경 추적, Ch27 합계/소계, Ch28 컬럼 리오더)
-- 5프레임워크 예제(Vanilla/Vue/React/jQuery/Angular)에 변경 추적 + 합계/소계 섹션 추가
-- E2E 테스트 `sprint30.spec.ts` 18개 추가
+See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.
 
-### v0.1.1 (2026-05-27)
-- 컬럼 드래그 리오더: `columnReorder: true` / `onColumnReorder` 이벤트
-- 개발 가이드 24챕터 → 27챕터 확장 (Ch22 마스킹, Ch23 조직도, Ch24 페이지네이션, Ch25 키보드)
-- Sprint 29 E2E 25개 추가
+Recent highlights:
 
-### v0.1.0 (2026-05-24)
-- 최초 공개 릴리즈
+- **1.4.0** — Extension registry made public (`TypedRegistry`, reserved-namespace guard);
+  public API JSDoc in Korean, English, Japanese and Chinese.
+- **1.3.1** — Public API JSDoc rewritten to be human-readable (comments only, no logic change).
+- **1.3.0** — Conditional formatting, integrated chart subsystem, realtime data sources,
+  appearance axes (density/texture).
+- **1.2.0** — Internationalization with separated locale resources (`LocaleRegistry`).
+- **1.1.0** — Range selection + fill, master/detail, formula cells, integrated chart.
+- **1.0.0** — `grid.override()` customization surface.
 
 ## License
 
