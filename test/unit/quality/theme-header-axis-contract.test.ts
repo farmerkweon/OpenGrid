@@ -13,17 +13,22 @@ import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const ROOT = resolve(__dirname, '../../..');
-const BASELINE_REF = process.env.OG_BASELINE_REF ?? 'master';
+// 기준 브랜치: 작업장은 master, 공개 저장소는 main 이다. 없는 이름을 고정하면 기준을 못 읽어
+// 선존 누락까지 「새 누락」으로 세어 실패한다(공개 저장소 CI 에서 실제로 걸렸다).
+const BASELINE_REFS = process.env.OG_BASELINE_REF ? [process.env.OG_BASELINE_REF] : ['master', 'main', 'HEAD'];
 
 const read = (p: string): string | null =>
   existsSync(resolve(ROOT, p)) ? readFileSync(resolve(ROOT, p), 'utf8') : null;
 
 const gitShow = (p: string): string | null => {
-  try {
-    return execFileSync('git', ['show', BASELINE_REF + ':' + p], {
-      cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
-    });
-  } catch { return null; }
+  for (const ref of BASELINE_REFS) {
+    try {
+      return execFileSync('git', ['show', ref + ':' + p], {
+        cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch { /* 다음 기준 브랜치 */ }
+  }
+  return null;
 };
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
