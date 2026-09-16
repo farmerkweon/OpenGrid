@@ -1,11 +1,11 @@
 // ============================================================
 // DD-03 렌더 파이프라인 — 계약 타입 정본 / DD-03 render pipeline — contract types
-// 설계: DD-03 §2 (MARTIN, 교차구현 YOURDON). 헤드리스·순수(DOM 접근 0).
+// 설계: DD-03 §2 (의존성설계, 교차구현 구조설계). 헤드리스·순수(DOM 접근 0).
 // 이 파일은 파이프라인 입력(CellRenderRequest)·단계 SPI(ICellStage)·값 렌더러 SPI
 // (ICellRenderer)·페인트 지시(StagePaint/PaintAccumulator) 계약을 소유한다.
 //   * CellRect  = DD-02 소유 → import(재선언 금지, 소비만).
 //   * Delta     = DD-01 소유 → import.
-//   * RuleVerdict/ValidationVerdict = DD-05(FOWLER) 소유 예정 → 미구현이므로 구조적 최소 계약을
+//   * RuleVerdict/ValidationVerdict = DD-05(리팩터링) 소유 예정 → 미구현이므로 구조적 최소 계약을
 //     ★임시 정의(PROVISIONAL). DD-05 착지 시 아래 블록을 `import type … from '../cf'` 로 교체.
 //   * AppearanceResolver = DD-11 소유 → import(형태 값 질의 초크포인트).
 // ============================================================
@@ -22,7 +22,7 @@ export interface Disposable {
 }
 
 // ── ★PROVISIONAL(DD-05 미구현) — RuleVerdict/ValidationVerdict 구조적 최소 계약 ────────────
-// DD-05(조건부서식, FOWLER)이 착지하면 이 두 블록을 삭제하고 `import type { RuleVerdict } from '../cf'`
+// DD-05(조건부서식, 리팩터링)이 착지하면 이 두 블록을 삭제하고 `import type { RuleVerdict } from '../cf'`
 // 로 교체한다(§R 중복소유권 정리). 파이프라인은 판정을 '적용'만 하므로 소비 형상만 필요하다.
 /** DD-05 조건부서식 규칙 판정(임시 최소형). 배경/데코 단계가 페인트로 옮긴다. */
 export interface RuleVerdict {

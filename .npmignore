@@ -17,6 +17,9 @@ node_modules/
 .vite/
 .cache/
 
+# 경량화: 소스맵 제외 (소스는 GitHub 공개 — github.com/farmerkweon/OpenGrid)
+*.map
+
 # 개발용 파일
 sessions/
 CHANGELOG.md
@@ -33,3 +36,6 @@ CHANGELOG.md
 .idea/
 *.suo
 *.user
+
+# Angular 래퍼 빌드 작업 공간(결과물은 dist/angular)
+angular/

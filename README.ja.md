@@ -82,6 +82,7 @@ MIT ライセンスなので商用利用も自由、カスタマイズに際限�
 | 拡張レジストリ — `added`／`replaced`／`kept`／`rejected` の結果を返す `TypedRegistry`、予約済み `og:` のガード、`protect-builtin` | ✅ |
 | Vue 3 コンポーネント | ✅ |
 | React 18 コンポーネント | ✅ |
+| Angular コンポーネント（17 以上） | ✅ |
 
 ## インストール
 
@@ -163,6 +164,44 @@ function App() {
       onDataChange={setData}
     />
   );
+}
+```
+
+### Angular（17 以上）
+
+`open-grid/angular` のスタンドアロンコンポーネントです。スタイルシートは `angular.json` の `styles` に追加します：
+`node_modules/open-grid/dist/open-grid-base.css`、`node_modules/open-grid/dist/open-grid-themes.css`。
+
+```ts
+import { Component } from '@angular/core';
+import { OpenGridComponent } from 'open-grid/angular';
+import type { OpenGridInstance } from 'open-grid';
+
+@Component({
+  selector: 'app-orders',
+  standalone: true,
+  imports: [OpenGridComponent],
+  template: `
+    <open-grid
+      [columns]="columns"
+      [data]="rows"
+      [editable]="true"
+      [height]="500"
+      [options]="{ rowNumber: true }"
+      (ready)="grid = $event"
+      (cellClick)="onCellClick($event)"
+      (editEnd)="onEditEnd($event)">
+    </open-grid>`,
+})
+export class OrdersComponent {
+  columns = [
+    { field: 'name',  header: '이름', width: 120 },
+    { field: 'price', header: '금액', width: 100, type: 'number', align: 'right' },
+  ];
+  rows = myData;
+  grid?: OpenGridInstance;
+  onCellClick(e: any) { console.log(e.field, e.value); }
+  onEditEnd(e: any) { console.log(e.oldValue, '→', e.newValue); }
 }
 ```
 

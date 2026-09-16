@@ -6,7 +6,7 @@
  *    reproduces the getDisplayValue display-text behavior identically (regression 0), and unset
  *    hooks stay zero-cost (gate short-circuits before resolve).
  *  - NEW render hooks beyond display-text (cellClass, ariaLabel) that the render layer consults
- *    only if registered — with consuming tests (DeMarco M9b: no phantom extension points).
+ *    only if registered — with consuming tests (측정성 검토 M9b: no phantom extension points).
  *  - Typed strategy slots, typed OverridePoints<T> override overload + preserved string escape
  *    hatch (UC-11), MutationHook before/after on the MutationService commit chokepoint.
  *  - Reversibility (restore/restoreAll) unchanged.

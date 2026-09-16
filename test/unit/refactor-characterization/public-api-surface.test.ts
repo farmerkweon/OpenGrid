@@ -1,5 +1,5 @@
 /**
- * R0 CHARACTERIZATION — public API surface freeze (DeMarco M2b: "0 deletions").
+ * R0 CHARACTERIZATION — public API surface freeze (측정성 검토 M2b: "0 deletions").
  *
  * Enumerates the public method names on a constructed OpenGrid instance (own + full prototype
  * chain, excluding `_`-prefixed privates and the constructor, functions only), sorts them, and

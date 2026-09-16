@@ -301,7 +301,7 @@ describe('F1 배선 — Esc/편집 우선순위(C9)', () => {
 });
 
 // ── C0.5/§2.5: 정렬 후 선택 재투영(해제 아님) ───────────────────────────────
-describe('F1 배선 — 정렬 후 범위 재투영(C0.5, HANMS-04)', () => {
+describe('F1 배선 — 정렬 후 범위 재투영(C0.5, UX-REVIEW-04)', () => {
   it('orderBy 이후에도 선택했던 행들이 rowId 기준으로 재투영되어 유지된다', () => {
     const grid = makeGrid();
     grid.setData(sampleData);

@@ -82,6 +82,7 @@ High-performance, framework-agnostic data grid with virtual scrolling, inline ed
 | Extension Registry — `TypedRegistry` with `added`/`replaced`/`kept`/`rejected` outcomes, reserved `og:` guard, `protect-builtin` | ✅ |
 | Vue 3 Component | ✅ |
 | React 18 Component | ✅ |
+| Angular Component (17+) | ✅ |
 
 ## Installation
 
@@ -163,6 +164,44 @@ function App() {
       onDataChange={setData}
     />
   );
+}
+```
+
+### Angular (17+)
+
+Standalone component from `open-grid/angular`. Add the stylesheets to `angular.json` → `styles`:
+`node_modules/open-grid/dist/open-grid-base.css`, `node_modules/open-grid/dist/open-grid-themes.css`.
+
+```ts
+import { Component } from '@angular/core';
+import { OpenGridComponent } from 'open-grid/angular';
+import type { OpenGridInstance } from 'open-grid';
+
+@Component({
+  selector: 'app-orders',
+  standalone: true,
+  imports: [OpenGridComponent],
+  template: `
+    <open-grid
+      [columns]="columns"
+      [data]="rows"
+      [editable]="true"
+      [height]="500"
+      [options]="{ rowNumber: true }"
+      (ready)="grid = $event"
+      (cellClick)="onCellClick($event)"
+      (editEnd)="onEditEnd($event)">
+    </open-grid>`,
+})
+export class OrdersComponent {
+  columns = [
+    { field: 'name',  header: '이름', width: 120 },
+    { field: 'price', header: '금액', width: 100, type: 'number', align: 'right' },
+  ];
+  rows = myData;
+  grid?: OpenGridInstance;
+  onCellClick(e: any) { console.log(e.field, e.value); }
+  onEditEnd(e: any) { console.log(e.oldValue, '→', e.newValue); }
 }
 ```
 
@@ -281,9 +320,26 @@ grid.applyColumns([...originalColumns]);  // 원래 순서로 복원
 | Method | Description |
 |---|---|
 | `jumpToRow(rowIndex)` | 특정 행으로 스크롤 |
-| `setTheme(theme)` | 테마 변경 (`'default'` / `'dark'`) |
+| `setTheme(theme)` | 색 테마 변경 — 내장 **27종** (`'default'` / `'dark'` / `'graphite'` / `'ocean-dark'` / `'high-contrast'` …) |
+| `setSkin(skin)` | 형태(모서리·외곽선·그림자) 변경 — 색은 그대로 |
+| `setDensity(name)` | 밀도(행 높이·폰트 크기) 변경 |
 | `resize(w?, h?)` | 크기 조정 |
 | `destroy()` | 인스턴스 소멸 |
+
+### 타이포그래피 (별도 플러그인)
+
+서체·자간·숫자 자형은 **다섯 번째 외관 축**이며, 쓰지 않는 사람의 번들을 늘리지 않으려고
+**별도 엔트리**로 분리돼 있습니다. `import` 하지 않으면 **1바이트도 포함되지 않습니다.**
+
+```ts
+import { applyTypography } from 'open-grid/typography';
+import 'open-grid/typography.css';
+
+applyTypography(gridContainerEl, 'ledger');  // 회계 원장용 — 자릿수 정렬 + slashed-zero
+```
+
+프리셋 7종: `ui` · `ledger` · `terminal` · `dense-scan` · `humanist` · `hangul-first` · `cjk-doc`.
+**웹폰트를 내려받지 않습니다** — 시스템에 있는 서체만 골라 쓰고 없으면 다음 후보로 내려앉습니다.
 
 ## GridOptions
 

@@ -1,5 +1,5 @@
 /* ============================================================
-   OPEN_GRID — 15가지 테마 정의
+   OPEN_GRID — 27가지 테마 정의
    사용법: <div data-og-theme="ocean"> 또는 grid.setTheme('ocean')
    ============================================================ */
 
@@ -723,3 +723,776 @@
 .og-container[data-og-theme="stitch"] .og-footer       { border-top-style: dashed; }
 [data-og-theme="stitch"] .og-empty-message { color: #6b5d46; }
 [data-og-theme="stitch"] .og-loading-mask  { background: rgba(250,245,233,0.80); }
+
+/* ============================================================
+   신규 12종 (16~27)  — 2026-08 파이널 시안 (검토자 7인 만장일치 · 17조 위반 0)
+   값은 실브라우저 렌더로 검증한 뒤 옮겼다 (2026-08-08).
+   기존 15종이 못 덮던 사용 맥락을 메운다: 무채 크롬 · 접근성 AAA ·
+   장시간 정독 · 야외 · 의료 · 제도 · 관제 · 트레이딩, 그리고 다크 짝 보강.
+   전부 **색 전용**이다 — 형태(skins.css)·밀도·타이포 토큰은 한 줄도 넣지 않는다.
+   ⚠ 이 블록은 파이널 시안으로 **통째 교체**됐다(2026-08-08 정정 지시).
+      · 삭제 3종  ledger · daylight · ocean-dark   (미배포 중간 산출 — 나간 적 없다)
+      · 신설 3종  plain · field · high-contrast-dark
+      · 갱신 9종  나머지는 id 는 같고 값이 5라운드 동안 바뀌었다
+   기존 15종(1~15)은 한 글자도 안 바뀐다 — 위 726행까지가 그 영역이다(금지선 2).
+
+   ★ 옛 3종(ledger · daylight · ocean-dark) 삭제 완료 — 2026-08-08 결정 D-7 「지운다」.
+     한 라운드 동안 「보류 구역」으로 남겨 뒀던 블록을 이 커밋에서 실제로 지웠다.
+     · 배포 이력: 이 3종은 커밋 ca39cd7(2026-08-03)에 들어왔고 npm 1.4.0 은 2026-07-17 발행이다.
+       **어떤 배포본에도 실린 적이 없다** → 하위호환 파괴가 아니다.
+     · 함께 정리한 것: ThemeMetaRegistry 의 메타 3줄 + ocean 의 darkPair(사유는 그 파일 주석).
+     · 건드리지 않은 것: 타이포그래피 프리셋 `ledger`(typography.css) — **동명이인이고 다른 축이다.**
+     · 남긴 것: 아래 `field` 블록 머리의 "daylight 자리" 문구는 그 칸의 출처 기록이라 남긴다.
+   ============================================================ */
+/* == ★ 4차 신규 — `--og-header-hover-bg` 가 화면에 아예 안 나온다 (값 시각규칙) ==
+   `#1976d2`(D-1) · `#999`(행번호) · 하드코딩 border-radius 29곳에 이은 **네 번째 같은 계열**이다.
+   다만 이건 앞의 셋보다 나쁘다 — 앞의 셋은 "테마를 안 따라온다"였고, 이건 "아무 일도 안 일어난다"다.
+
+   기전. base.css 에 규칙은 있다:
+       .og-header-cell:hover { background: var(--og-header-hover-bg); }   (0,2,0)
+   그런데 렌더러가 매 헤더 칸에 배경을 **인라인**으로 쓴다:
+       <th class="og-header-cell" style="... background: var(--og-header-bg); ...">
+   인라인은 시트 규칙을 이긴다. 그래서 저 :hover 규칙은 **한 번도 발화한 적이 없다.**
+
+   실측(실크롬, 12칸 전량 · 프리셋 5종 전량 · 원본 proto 기준):
+       헤더 칸 hover 실효 ΔL* = **0.00**  — 12/12, 5/5. 한 픽셀도 안 바뀐다.
+
+   이 사실이 4차 안건을 바꾼다. **제16조ⓒ(헤더hover ÷ 행hover = 0.8~1.3)가 8칸에서 걸렸는데,
+   그 조항이 재고 있던 값은 화면에 나오지 않는 값이었다.** 값 다툼도 조문 다툼도 아니고 배선이다.
+
+   고침 — 코어 JS 0줄. 인라인을 이기는 유일한 CSS 수단이 `!important` 라 그것만 쓴다.
+   신규 12칸에만 건다(`[data-og-theme]` 아래 12종 명시 = 제10조). 기존 15종·무테마는 오늘과 바이트가 같다.
+   27종 전부로 넓힐지는 D-1 과 같은 성격의 물음이라 **아직 정하지 않고 남긴다.** */
+[data-og-theme="graphite"] .og-header-cell:hover,
+[data-og-theme="high-contrast"] .og-header-cell:hover,
+[data-og-theme="washi"] .og-header-cell:hover,
+[data-og-theme="plain"] .og-header-cell:hover,
+[data-og-theme="field"] .og-header-cell:hover,
+[data-og-theme="clinical"] .og-header-cell:hover,
+[data-og-theme="high-contrast-dark"] .og-header-cell:hover,
+[data-og-theme="blueprint"] .og-header-cell:hover,
+[data-og-theme="nocturne"] .og-header-cell:hover,
+[data-og-theme="graphite-dark"] .og-header-cell:hover,
+[data-og-theme="sentinel"] .og-header-cell:hover,
+[data-og-theme="ticker"] .og-header-cell:hover {
+  background: var(--og-header-hover-bg) !important;
+}
+
+/* ── graphite  (채택: 타이포그래피) ── */
+[data-og-theme="graphite"] {
+  --og-primary:                   #37474f;
+  --og-primary-light:             #eceff1;
+  --og-primary-dark:              #263238;
+  --og-header-bg:                 #eceff1;
+  --og-header-color:              #1c252b;
+  --og-header-hover-bg:           #d0d5d8;   /* r4 CSS(R-5) — 제16조ⓒ — 헤더hover/행hover 0.57→0.96 */
+  --og-header-sort-color:         #37474f;
+  --og-row-bg:                    #ffffff;
+  --og-row-alt-bg:                #f6f7f7;
+  --og-row-hover-bg:              #dee4e8;   /* r4 CSS(R-5) — 제16조ⓐ — hover 가 줄무늬에 4.10 으로 붙고 신규와 1.07 이었다. 6.91 / 3.25 */
+  --og-row-color:                 #1c252b;
+  --og-row-selected-bg:           #cfdce6;
+  --og-row-selected-color:        #10242f;
+  --og-row-added-bg:              #d6f4db;   /* r4 CSS(R-5) — 제8조C — 신규행 OKLCH C 0.024 로 초록이 거의 없었다(회색과 구분이 안 됨). 0.046. 계열 유지 */
+  --og-row-added-color:           #123d18;
+  --og-row-edited-bg:             #e7d5ad;
+  --og-row-edited-color:          #43320a;
+  --og-row-removed-bg:            #e8bcb9;
+  --og-row-removed-color:         #4d0f0c;
+  --og-group-bg:                  #dbdfe2;   /* r4 CSS(R-5) — 제12조 — 내려온 hover 와 1.65 확보. 그룹 ΔL* -11.40 (제2조 -10±2 유지) */
+  --og-group-color:               #22303a;
+  --og-group-border:              #c2cbd1;
+  --og-tree-toggle-color:         #455a64;
+  --og-tree-line-color:           #ccd3d8;
+  --og-tree-folder-color:         #8a6a1f;
+  --og-tree-file-color:           #63727a;
+  --og-tree-indent-guide:         #dde2e5;
+  --og-merge-bg:                  #ece3c9;
+  --og-merge-border:              #a4762a;
+  --og-border-color:              #d1d6d9;   /* r4 CSS(R-5) — 제12조 — 선과 선택면이 ΔL* 0.03 로 같은 밝기였다. 1.75. 1.8 L* 이동이라 눈에는 같은 선이다 */
+  --og-focus-border:              #37474f;
+  --og-pagination-bg:             #ffffff;
+  --og-pagination-btn-bg:         #ffffff;
+  --og-pagination-btn-color:      #1c252b;
+  --og-input-bg:                  #ffffff;
+  --og-input-color:               #1c252b;
+  --og-input-border:              #37474f;
+  --og-filter-bg:                 #ffffff;
+  --og-filter-color:              #1c252b;
+  /* 선택 토큰 */
+  --og-tree-folder-closed-color:  #7a8b95;
+  --og-tree-hover-bg:             rgba(55,71,79,0.06);
+  --og-spinner-track:             rgba(0,0,0,0.10);
+  --og-shadow-sm:                 0 1px 2px rgba(28,37,43,0.08);
+  --og-shadow-md:                 0 4px 12px rgba(28,37,43,0.10), 0 1px 3px rgba(28,37,43,0.06);
+  /* 신규 — 정렬 헤더 (§3.2) */
+  --og-header-sorted-bg:          #d5dde3;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.67 */
+  --og-rownum-color:              #4b5256;
+}
+[data-og-theme="graphite"] .og-empty-message { color: #5c6a72; }
+[data-og-theme="graphite"] .og-loading-mask  { background: rgba(255,255,255,0.78); }
+
+/* ── high-contrast  (채택: 인터랙션) ── */
+[data-og-theme="high-contrast"] {
+  --og-primary:            #0b3da7;
+  --og-primary-light:      #dce4f7;
+  --og-primary-dark:       #06266b;
+  --og-header-bg:          #000000;
+  --og-header-color:       #ffffff;
+  --og-header-hover-bg:    #212121;   /* r4 CSS(R-5) — 제16조ⓒ — 2.01→1.06 (헤더가 검정이라 hover 폭이 행보다 2배였다) */
+  --og-header-sort-color:  #ffd400;
+  --og-row-bg:             #ffffff;
+  --og-row-alt-bg:         #f2f2f2;
+  --og-row-hover-bg:       #dddddd;   /* r4 CSS(R-5) — 제16조ⓐ — hover 가 줄무늬에 4.20 으로 붙어 있었다. 7.37 */
+  --og-row-color:          #000000;
+  --og-row-selected-bg:    #96b0dd;
+  --og-row-selected-color: #000000;
+  --og-row-added-bg:       #d3f4dd;   /* r4 CSS(R-5) — 제8조C — 신규 OKLCH C 0.026→0.046 */
+  --og-row-added-color:    #10471e;
+  --og-row-edited-bg:      #e9ce95;
+  --og-row-edited-color:   #3f2b00;
+  --og-row-removed-bg:     #e9acac;
+  --og-row-removed-color:  #1a0000;
+  --og-group-bg:           #e2e2e2;   /* r4 CSS(R-5) — 제12조 — 내려온 hover 와 1.76 확보. 그룹 ΔL* -10.12 */
+  --og-group-color:        #000000;
+  --og-group-border:       #8f8f8f;
+  --og-tree-toggle-color:  #000000;
+  --og-tree-line-color:    #5c5c5c;
+  --og-tree-folder-color:  #6b4400;
+  --og-tree-file-color:    #262626;
+  --og-tree-indent-guide:  #8f8f8f;
+  --og-merge-bg:           #e6e6e6;
+  --og-merge-border:       #000000;
+  --og-border-color:       #000000;
+  --og-focus-border:       #000000;
+  --og-pagination-bg:      #ffffff;
+  --og-pagination-btn-bg:  #ffffff;
+  --og-pagination-btn-color:#000000;
+  --og-input-bg:           #ffffff;
+  --og-input-color:        #000000;
+  --og-input-border:       #000000;
+  --og-filter-bg:          #ffffff;
+  --og-filter-color:       #000000;
+  /* 선택 토큰 */
+  --og-tree-folder-closed-color: #3d3d3d;
+  --og-tree-hover-bg:      rgba(0,0,0,0.10);
+  --og-spinner-track:      rgba(0,0,0,0.20);
+  /* 신규 제안 토큰 */
+  --og-cell-focus-ring:    #000000;
+  --og-cell-focus-halo:    #ffffff;
+  --og-row-accent-color:   #0b3da7;
+  --og-row-selected-accent:#0b3da7;
+  --og-row-hover-overlay:  rgba(0,0,0,0.10);
+  --og-range-bg:           rgba(11,61,167,0.16);
+  --og-range-border:       #0b3da7;
+  /* 신규 — 헤더 축 (§3.3 / §3.10) */
+  --og-header-sorted-bg:   #1f1f1f;
+  --og-header-sorted-color:#ffffff;
+  --og-header-focus-color: #ffd400;
+  --og-header-rule-width:  3px;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 CSS. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 7.06 (AAA 하한 7) */
+  --og-rownum-color:              #242424;
+}
+[data-og-theme="high-contrast"] .og-empty-message { color: #4a4a4a; }
+[data-og-theme="high-contrast"] .og-loading-mask  { background: rgba(255,255,255,0.82); }
+
+/* ── washi  (채택: 타이포그래피) ── */
+[data-og-theme="washi"] {
+  --og-primary:                   #7a5c14;
+  --og-primary-light:             #f3e9d2;
+  --og-primary-dark:              #6b5115;
+  --og-header-bg:                 #ece3d0;
+  --og-header-color:              #3c3020;
+  --og-header-hover-bg:           #d4c9b2;
+  --og-header-sort-color:         #694c0e;
+  --og-row-bg:                    #f9f6ec;
+  --og-row-alt-bg:                #fefcf7;
+  --og-row-hover-bg:              #e0d7c0;
+  --og-row-color:                 #33291c;
+  --og-row-selected-bg:           #faedc5;
+  --og-row-selected-color:        #2e2312;
+  --og-row-added-bg:              #cae8cd;
+  --og-row-added-color:           #1d3d1a;
+  --og-row-edited-bg:             #e6cc99;
+  --og-row-edited-color:          #4f3506;
+  --og-row-removed-bg:            #e0aca2;
+  --og-row-removed-color:         #3e100b;
+  --og-group-bg:                  #e7ddc6;
+  --og-group-color:               #40331f;
+  --og-group-border:              #d3c5a4;
+  --og-tree-toggle-color:         #6b5115;
+  --og-tree-line-color:           #d5c8ab;
+  --og-tree-folder-color:         #8a6512;
+  --og-tree-file-color:           #6f6247;
+  --og-tree-indent-guide:         #ddd2ba;
+  --og-merge-bg:                  #f0e2b8;
+  --og-merge-border:              #a97f22;
+  --og-border-color:              #ddd2ba;
+  --og-focus-border:              #5e4712;
+  --og-pagination-bg:             #f9f6ec;
+  --og-pagination-btn-bg:         #fffdf6;
+  --og-pagination-btn-color:      #33291c;
+  --og-input-bg:                  #fffdf6;
+  --og-input-color:               #33291c;
+  --og-input-border:              #8a6a1f;
+  --og-filter-bg:                 #fffdf6;
+  --og-filter-color:              #33291c;
+  /* 선택 토큰 */
+  --og-tree-folder-closed-color:  #9c8f74;
+  --og-tree-hover-bg:             rgba(138,106,31,0.07);
+  --og-spinner-track:             rgba(51,41,28,0.12);
+  --og-shadow-sm:                 0 1px 2px rgba(51,41,28,0.10);
+  --og-shadow-md:                 0 4px 12px rgba(51,41,28,0.12);
+  /* 신규 — 정렬 헤더 (§3.4) */
+  --og-header-sorted-bg:          #ddd0ae;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.67 */
+  --og-rownum-color:              #4f4639;
+}
+[data-og-theme="washi"] .og-empty-message { color: #6b5d46; }
+[data-og-theme="washi"] .og-loading-mask  { background: rgba(249,246,236,0.80); }
+
+/* ── plain  (채택: 타이포그래피) ── */
+/* plain / 「쉬운 표」 (제안: 타이포그래피 · 보정: 모션) — RESOLUTIONS §3.5 */
+[data-og-theme="plain"] {
+  --og-primary:                   #1f5490;   /* 모션 보정 (원안 #2b6cb0) — 액센트 막대 2.73 -> 3.88 */
+  --og-primary-light:             #e4edf6;
+  --og-primary-dark:              #1f4f80;
+  --og-header-bg:                 #f0f2f3;
+  --og-header-color:              #1b2229;
+  --og-header-hover-bg:           #dbdee1;
+  --og-header-sort-color:         #2b6cb0;
+  --og-row-bg:                    #ffffff;
+  --og-row-alt-bg:                #f7f8f9;
+  --og-row-hover-bg:              #e1e7ec;   /* 모션 보정 (원안 #eef1f4) — 짝수행 hover 2.53 -> 6.20 */
+  --og-row-color:                 #1b2229;
+  --og-row-selected-bg:           #bcd6ee;
+  --og-row-selected-color:        #0f2438;
+  --og-row-added-bg:              #bde0c2;   /* 모션 보정 (원안 #cfe8d2) */
+  --og-row-added-color:           #12401b;
+  --og-row-edited-bg:             #dec48d;   /* 모션 보정 (원안 #e6cf99) */
+  --og-row-edited-color:          #4a3406;
+  --og-row-removed-bg:            #e9a8a3;
+  --og-row-removed-color:         #3c0c06;
+  --og-group-bg:                  #dee1e3;
+  --og-group-color:               #1b2229;
+  --og-group-border:              #c9ced4;
+  --og-tree-toggle-color:         #2b6cb0;
+  --og-tree-line-color:           #ccd2d8;
+  --og-tree-folder-color:         #8a6a1f;
+  --og-tree-file-color:           #5f6a75;
+  --og-tree-indent-guide:         #e0e4e8;
+  --og-merge-bg:                  #f0e6cd;
+  --og-merge-border:              #a4762a;
+  --og-border-color:              #d6dbe0;
+  --og-focus-border:              #2b6cb0;
+  --og-pagination-bg:             #ffffff;
+  --og-pagination-btn-bg:         #ffffff;
+  --og-pagination-btn-color:      #1b2229;
+  --og-input-bg:                  #ffffff;
+  --og-input-color:               #1b2229;
+  --og-input-border:              #2b6cb0;
+  --og-filter-bg:                 #ffffff;
+  --og-filter-color:              #1b2229;
+  /* 선택 토큰 */
+  --og-tree-folder-closed-color:  #7a838d;
+  --og-tree-hover-bg:             rgba(43,108,176,0.06);
+  --og-spinner-track:             rgba(27,34,41,0.10);
+  --og-shadow-sm:                 0 1px 2px rgba(27,34,41,0.07);
+  --og-shadow-md:                 0 4px 12px rgba(27,34,41,0.10), 0 1px 3px rgba(27,34,41,0.05);
+  /* 신규 — 정렬 헤더 (모션 보정) */
+  --og-header-sorted-bg:          #e8eaed;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.60 */
+  --og-rownum-color:              #43494e;
+}
+[data-og-theme="plain"] .og-empty-message { color: #5c6773; }
+[data-og-theme="plain"] .og-loading-mask  { background: rgba(255,255,255,0.80); }
+
+/* ── field  (채택: 테이블패턴 인수본) ── */
+/* field — daylight 자리. CSS 원안 · 테이블패턴 인수·보정 (r3/field-테이블패턴.md §6)
+   밴드: 강함 (사유 — 햇빛 아래) · 짝: 없음 (밝음 단독, 야외 일은 밤에 안 한다)
+   토큰 49 = 원안 44 + 제17조 배선 2 + 제13/16조 헤더 3 */
+[data-og-theme="field"] {
+  --og-primary:                      #12558c;
+  --og-primary-light:                #dfe9f2;
+  --og-primary-dark:                 #0b3e69;
+  --og-header-bg:                    #e4e9ec;
+  --og-header-color:                 #30353b;
+  --og-header-hover-bg:              #c2c7cb;
+  --og-header-sort-color:            #0b3e69;
+  --og-row-bg:                       #fefefe;
+  --og-row-alt-bg:                   #eef1f3;
+  --og-row-hover-bg:                 #cddce8;
+  --og-row-color:                    #292d30;
+  --og-row-selected-bg:              #9ab9de;
+  --og-row-selected-color:           #203244;
+  --og-row-added-bg:                 #b5d7ba;
+  --og-row-added-color:              #274f30;
+  --og-row-edited-bg:                #d5bb8f;
+  --og-row-edited-color:             #54421b;
+  --og-row-removed-bg:               #de9d9d;
+  --og-row-removed-color:            #36090c;
+  --og-group-bg:                     #dce3e9;
+  --og-group-color:                  #28313a;
+  --og-group-border:                 #aab2b7;
+  --og-tree-toggle-color:            #12558c;
+  --og-tree-line-color:              #bec1c4;
+  --og-tree-folder-color:            #886e3c;
+  --og-tree-file-color:              #696e72;
+  --og-tree-indent-guide:            #d7dadd;
+  --og-merge-bg:                     #eadfbd;
+  --og-merge-border:                 #a28857;
+  --og-border-color:                 #c3c7ca;
+  --og-focus-border:                 #12558c;
+  --og-pagination-bg:                #eef1f3;
+  --og-pagination-btn-bg:            #fefefe;
+  --og-pagination-btn-color:         #292d30;
+  --og-input-bg:                     #fefefe;
+  --og-input-color:                  #292d30;
+  --og-input-border:                 #12558c;
+  --og-filter-bg:                    #fefefe;
+  --og-filter-color:                 #292d30;
+  --og-tree-folder-closed-color:     #787d81;
+  --og-tree-hover-bg:                rgba(18,85,140,0.07);
+  --og-spinner-track:                rgba(41,45,48,0.14);
+  --og-shadow-sm:                    0 1px 2px rgba(41,45,48,0.10);
+  --og-shadow-md:                    0 3px 8px rgba(41,45,48,0.12);
+  /* 제17조(배선) — :root 파생 토큰을 테마가 직접 선언한다 */
+  --og-row-accent-color:             #12558c;
+  --og-spinner-color:                #12558c;
+  /* 제13조·제16조ⓔ — 정렬 헤더 */
+  --og-header-sorted-bg:             #d2d8dc;
+  --og-header-sorted-color:          #30353b;
+  --og-header-focus-color:           #0b3e69;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.62 */
+  --og-rownum-color:              #3d4144;
+}
+[data-og-theme="field"] .og-empty-message { color: #696e72; }
+[data-og-theme="field"] .og-loading-mask  { background: rgba(254,254,254,0.86); }
+
+/* ── clinical  (채택: 테이블패턴) ── */
+[data-og-theme="clinical"] {
+  --og-primary:                  #175A85;
+  --og-primary-light:            #E2EDF4;
+  --og-primary-dark:             #0E3E5C;
+  --og-header-bg:                #1a3444;   /* r4 CSS(R-5) — 제5조 — 크롬 C*max 15.5→13.7, 색상각 266.5→251.1 로 나머지 넷(241~247)에 붙인다. 편차 108.3→9.9 */
+  --og-header-color:             #EAF1F7;
+  --og-header-hover-bg:          #2E4761;
+  --og-header-sort-color:        #8CC4E8;
+  --og-row-bg:                   #f8fcff;   /* r4 CSS(R-5) — 제5조 — 순백의 색상각은 잡음(158.2°)이라 편차가 108.3 으로 잡혔다. C* 2.0/247.6° 로 각을 준다(육안 백색 유지) */
+  --og-row-alt-bg:               #EDF2F5;
+  --og-row-hover-bg:             #d3e1eb;   /* r4 CSS(R-5) — 제16조ⓐ — hover 가 줄무늬에 4.66 으로 붙고 신규와 0.56 이었다. 6.42 / 3.63 */
+  --og-row-color:                #141C24;
+  --og-row-selected-bg:          #89abc1;
+  --og-row-selected-color:       #000000;
+  --og-row-added-bg:             #d8f0d3;   /* r4 CSS(R-5) — 제8조C — 신규 OKLCH C 0.024 로 색이 거의 없었다. 0.046 */
+  --og-row-added-color:          #1D3A1D;
+  --og-row-edited-bg:            #e7d4af;   /* 3차 반영(모션) — 제8조 인접 ΔL* 3.07 → 5.51. 색상·채도 유지, 밝기만 이동 */
+  --og-row-edited-color:         #463109;
+  --og-row-removed-bg:           #DCB3AE;
+  --og-row-removed-color:        #40100c;
+  --og-group-bg:                 #DEE5EA;
+  --og-group-color:              #141C24;
+  --og-group-border:             #A8B6C1;
+  --og-tree-toggle-color:        #1F3348;
+  --og-tree-line-color:          #B4C1CB;
+  --og-tree-folder-color:        #4A6274;
+  --og-tree-file-color:          #55656F;
+  --og-tree-indent-guide:        #CDD7DE;
+  --og-merge-bg:                 #E9EEF2;
+  --og-merge-border:             #8FA3B2;
+  --og-border-color:             #9DAEBA;
+  --og-focus-border:             #0E3E5C;
+  --og-pagination-bg:            #F3F6F8;
+  --og-pagination-btn-bg:        #FFFFFF;
+  --og-pagination-btn-color:     #141C24;
+  --og-input-bg:                 #FFFFFF;
+  --og-input-color:              #141C24;
+  --og-input-border:             #175A85;
+  --og-filter-bg:                #FFFFFF;
+  --og-filter-color:             #141C24;
+  /* 선택 */
+  --og-tree-folder-closed-color: #6B7C88;
+  --og-tree-hover-bg:            #D8E6F0;
+  --og-spinner-track:            rgba(20,28,36,0.12);
+  --og-shadow-sm:                0 1px 2px rgba(20,28,36,0.16);
+  --og-shadow-md:                0 3px 8px rgba(20,28,36,0.20);
+  /* 신규 — 정렬 헤더 (§3.8). 헤더 극성 뒤집기는 [미정] 후보라 현행(어두운 헤더) 값 */
+  --og-header-sorted-bg:         #2E4761;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙·CSS 동일값. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.61 */
+  --og-rownum-color:              #353c43;
+}
+[data-og-theme="clinical"] .og-empty-message { color: #5A6B78; }
+[data-og-theme="clinical"] .og-loading-mask  { background: rgba(255,255,255,0.88); }
+
+/* ── high-contrast-dark  (채택: 디자인시스템) ── */
+/* high-contrast-dark (제안: 디자인시스템) — RESOLUTIONS §3.7 */
+/* 배선 — §4.4 의 T1 수법. base.css 의 !important 를 !important 없이 이긴다 */
+[data-og-theme="high-contrast-dark"] .og-header-cell.og-sorted {
+  --og-primary-light: var(--og-header-sorted-bg, #e2e2e2);  /* R4 디자인시스템 — 폴백도 sorted 와 같이 옮긴다 */
+}
+[data-og-theme="high-contrast-dark"] .og-header-cell {
+  --og-focus-border: var(--og-header-focus-color, #0033cc);
+}
+[data-og-theme="high-contrast-dark"] {
+  --og-primary:                   #7fb2ff;
+  --og-primary-light:             #1a2a44;
+  --og-primary-dark:              #a8ccff;
+  --og-header-bg:                 #ffffff;
+  --og-header-color:              #000000;
+  --og-header-hover-bg:           #d4d4d4;
+  --og-header-sort-color:         #000000;
+  --og-row-bg:                    #000000;
+  --og-row-alt-bg:                #131313;   /* R4 디자인시스템 — L* 8.76 → 5.88. 제7조후단 줄무늬 8.76 → 5.88. ★ 처음엔 3.97(라이트 짝과 같은 폭)로 잡았다가 화면을 보고 되돌렸다 — 저시력 사용자용 칸에서 줄무늬를 일부러 흐리게 만드는 꼴이었다. 규칙이 허용하는 상한(6) 바로 아래에 붙인다 */
+  --og-row-hover-bg:              #222222;   /* R4 디자인시스템 — L* 15.16 → 13.23. 그룹과 같은 hex 였다(제12조 0.00). 제16조ⓐ hover↔추가 1.97 → 3.90 · hover↔줄무늬 7.35 */
+  --og-row-color:                 #ffffff;
+  --og-row-selected-bg:           #284a7a;
+  --og-row-selected-color:        #ffffff;
+  --og-row-added-bg:              #0c3115;
+  --og-row-added-color:           #b6f0c1;
+  --og-row-edited-bg:             #4d3c00;   /* 모션 보정 (원안 #5a4600) — 인접 ΔL* 9.06 */
+  --og-row-edited-color:          #ffe680;
+  --og-row-removed-bg:            #783636;   /* 3차 반영(모션) — 제8조 인접 4.02 → 5.39 + 제7조 순서 복구(삭제가 가장 멀다). 대기안 #982222 는 겹침 3.62 라 못 쓴다 */
+  --og-row-removed-color:         #ffd6da;   /* 3차 반영(모션) — 위 배경 위 겹침 4.96 */
+  --og-group-bg:                  #181818;   /* R4 디자인시스템 — L* 15.16 → 8.25. 제2조 그룹 ΔL* 15.16 → 8.25 (기대 8±2) */
+  --og-group-color:               #ffffff;
+  --og-group-border:              #ffffff;
+  --og-tree-toggle-color:         #ffffff;
+  --og-tree-line-color:           #8a8a8a;
+  --og-tree-folder-color:         #7fb2ff;
+  --og-tree-file-color:           #c9c9c9;
+  --og-tree-indent-guide:         #6e6e6e;
+  --og-merge-bg:                  #1c1c3a;
+  --og-merge-border:              #ffffff;
+  --og-border-color:              #ffffff;
+  --og-focus-border:              #ffffff;
+  --og-pagination-bg:             #000000;
+  --og-pagination-btn-bg:         #000000;
+  --og-pagination-btn-color:      #ffffff;
+  --og-input-bg:                  #000000;
+  --og-input-color:               #ffffff;
+  --og-input-border:              #ffffff;
+  --og-filter-bg:                 #000000;
+  --og-filter-color:              #ffffff;
+  /* 선택 토큰 */
+  --og-tree-folder-closed-color:  #a0a0a0;
+  --og-tree-hover-bg:             rgba(255,255,255,0.12);
+  --og-spinner-track:             rgba(255,255,255,0.25);
+  /* 제11조(극성 반전 헤더) 필수 2종 — 이 칸은 |ΔL*| = 100 이다 */
+  --og-header-sorted-bg:          #e2e2e2;   /* R4 디자인시스템 — L* 84.91 → 89.88. 제16조ⓔ 정렬 점멸폭 15.09 → 10.12 (≤12). 덤으로 헤더 hover(#d4d4d4)와 겹쳐 있던 것이 갈라진다 — 정렬과 hover 가 같은 회색이었다 */
+  --og-header-focus-color:        #0033cc;
+  /* §4.5 — 기본 헤더 band + 3px (짝 high-contrast 와 같다, 제14조ⓒ) */
+  --og-header-rule-width:         3px;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 CSS. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 7.16 (AAA 하한 7) */
+  --og-rownum-color:              #e6e6e6;
+}
+[data-og-theme="high-contrast-dark"] .og-empty-message { color: #c9c9c9; }
+[data-og-theme="high-contrast-dark"] .og-loading-mask  { background: rgba(0,0,0,0.85); }
+
+/* ── blueprint  (채택: CSS) ── */
+[data-og-theme="blueprint"] {
+  --og-primary:                  #a3dce7;   /* oklch(0.859 0.060 211) */
+  --og-primary-light:            #003a44;   /* oklch(0.320 0.056 213) */
+  --og-primary-dark:             #7bbeca;   /* oklch(0.761 0.070 210) */
+  --og-header-bg:                #001a24;   /* r4 타이포그래피(R-5): r5 — 색상각 241 */   /* r4 타이포그래피(R-5): 제2조 헤더 ΔL* -2.71 -> -5.04 · 제5조 C* 14.8 -> 11.9 */   /* oklch(0.227 0.044 253) */
+  --og-header-color:             #dcebf1;   /* oklch(0.931 0.018 224) */
+  --og-header-hover-bg:          #0f3645;   /* r4 타이포그래피(R-5): r5 — 가족 색상각 240 */   /* r4 타이포그래피(R-5): 제16조ⓒ 0.71 -> 1.03 */   /* oklch(0.291 0.051 251) */
+  --og-header-sort-color:        #76c9dc;   /* oklch(0.790 0.085 214) */
+  --og-row-bg:                   #13242d;   /* r4 타이포그래피(R-5): r5 — 크롬 가족을 남색이 아니라 청록 쪽(색상각 244)으로 모은다. C* 9.1 유지 */   /* §3.9 — 크롬 OKLCH C 0.0588 -> 0.0277 (타이포그래피 원안, CSS 수용) */
+  --og-row-alt-bg:               #0c2a36;   /* r4 타이포그래피(R-5): r5 — 색상각 240. C* 12.7 (상한 14) */   /* r4 타이포그래피(R-5): 제7조후단 0.33 -> 2.37 · 제5조 C* 17.5 -> 11.9 */   /* oklch(0.247 0.052 252) */
+  --og-row-hover-bg:             #0f424c;   /* r4 타이포그래피(R-5): 제16조ⓐ 추가행과 0.03 -> 4.38 (청록 성격은 유지) */   /* oklch(0.336 0.055 214) */
+  --og-row-color:                #d6e6ed;   /* oklch(0.915 0.020 226) */
+  --og-row-selected-bg:          #156573;   /* §3.9 — 선택-수정 1.52 -> 3.32 */
+  --og-row-selected-color:       #d5f5fd;   /* oklch(0.950 0.035 214) */
+  --og-row-added-bg:             #183921;   /* r4 타이포그래피(R-5): 위와 한 세트 — hover 자리를 내줬다. 제8조 인접 8.70/6.12 */   /* oklch(0.334 0.059 151) */
+  --og-row-added-color:          #beecc6;   /* oklch(0.901 0.070 150) */
+  --og-row-edited-bg:            #594219;   /* oklch(0.395 0.065  79) */
+  --og-row-edited-color:         #f7dda7;   /* oklch(0.906 0.075  85) */
+  --og-row-removed-bg:           #7b4544;   /* oklch(0.455 0.075  22) */
+  --og-row-removed-color:        #ffe6e5;   /* oklch(0.945 0.028  20) */
+  --og-group-bg:                 #143642;   /* r4 타이포그래피(R-5): r5 — C* 13.7 (14.0 이 반올림에서 걸렸다). 색상각 235 청록 유지 */   /* r4 타이포그래피(R-5): ★ r5 핵심 — 청록을 살린다. 색상각 233 (r4 는 263 남색이었다). C* 13.5 */   /* r4 타이포그래피(R-5): 제5조 C* 16.3 -> 12.1 · 색상각 222 -> 263 (혼자 청록이라 편차 50도를 만들었다) */   /* oklch(0.310 0.054 214) */
+  --og-group-color:              #a4dce9;   /* oklch(0.860 0.060 214) */
+  --og-group-border:             #17505b;   /* oklch(0.400 0.060 213) */
+  --og-tree-toggle-color:        #76c9dc;   /* oklch(0.790 0.085 214) */
+  --og-tree-line-color:          #2d4a69;   /* oklch(0.401 0.063 251) */
+  --og-tree-folder-color:        #e6b55d;   /* oklch(0.800 0.120  80) */
+  --og-tree-file-color:          #8e9dae;   /* oklch(0.690 0.030 252) */
+  --og-tree-indent-guide:        #243f5c;   /* oklch(0.360 0.060 251) */
+  --og-merge-bg:                 #123a4a;   /* §3.9 — 청사진 계열에서 갈색은 이물 */
+  --og-merge-border:             #b48b40;   /* oklch(0.661 0.105  80) */
+  --og-border-color:             #2d4a58;   /* r4 타이포그래피(R-5): r5 — 색상각 241, C* 13.4 */   /* r4 타이포그래피(R-5): 제5조 C* 21.9 -> 13.1 (크롬 최대치였다) */   /* oklch(0.395 0.064 253) */
+  --og-focus-border:             #76c9dc;   /* oklch(0.790 0.085 214) */
+  --og-pagination-bg:            #031f2a;   /* r4 타이포그래피(R-5): r5 — 가족 색상각 241 */   /* r4 타이포그래피(R-5): 제5조 C* 14.8 -> 12.5 */   /* oklch(0.227 0.044 253) */
+  --og-pagination-btn-bg:        #15313d;   /* r4 타이포그래피(R-5): r5 — 가족 색상각 240 */   /* r4 타이포그래피(R-5): 제5조 C* 18.9 -> 11.5 */   /* oklch(0.300 0.056 253) */
+  --og-pagination-btn-color:     #cfdef0;   /* oklch(0.895 0.030 253) */
+  --og-input-bg:                 #03232f;   /* r4 타이포그래피(R-5): r5 — 가족 색상각 240 */   /* r4 타이포그래피(R-5): 제5조 C* 16.8 -> 12.3 */   /* oklch(0.240 0.050 253) */
+  --og-input-color:              #cfdef0;   /* oklch(0.895 0.030 253) */
+  --og-input-border:             #76c9dc;   /* oklch(0.790 0.085 214) */
+  --og-filter-bg:                #0c2a36;   /* r4 타이포그래피(R-5): r5 — 가족 색상각 240 */   /* r4 타이포그래피(R-5): 제5조 C* 19.9 -> 12.0 */   /* oklch(0.269 0.059 253) */
+  --og-filter-color:             #cfdef0;   /* oklch(0.895 0.030 253) */
+  /* 선택 */
+  --og-tree-folder-closed-color: #748292;   /* oklch(0.601 0.029 252) */
+  --og-tree-hover-bg:            rgba(180,215,255,0.10);
+  --og-spinner-track:            rgba(200,225,255,0.18);
+  /* 신규 — 정렬 헤더 (§3.9) */
+  --og-header-sorted-bg:         #083140;   /* r4 타이포그래피(R-5): r5 — 가족 색상각 240 */   /* r4 타이포그래피(R-5): 제16조ⓔ 12.99 -> 10.37 */
+  /* [결정문누락] --og-row-alt-bg 는 표면 변경 후 재산출분 hex 가 없다(§3.9 근거없음) */
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.62 */
+  --og-rownum-color:              #cad9e1;
+}
+[data-og-theme="blueprint"] .og-empty-message { color: #7e8792; }
+[data-og-theme="blueprint"] .og-loading-mask  { background: rgba(15,39,66,0.80); }
+
+/* ── nocturne  (채택: CSS) ── */
+[data-og-theme="nocturne"] {
+  --og-primary:                  #ebab72;   /* oklch(0.789 0.105  62) */
+  --og-primary-light:            #4c2904;   /* oklch(0.320 0.070  61) */
+  --og-primary-dark:             #ca8c54;   /* oklch(0.690 0.105  62) */
+  --og-header-bg:                #221b14;   /* oklch(0.228 0.017  67) */
+  --og-header-color:             #e9dac3;   /* oklch(0.895 0.041  79) */
+  --og-header-hover-bg:          #352d24;   /* oklch(0.291 0.020  70) */
+  --og-header-sort-color:        #ebab72;   /* oklch(0.789 0.105  62) */
+  --og-row-bg:                   #2e251b;   /* oklch(0.272 0.022  70) */
+  --og-row-alt-bg:               #35291f;   /* §3.9 — 줄무늬 방향 뒤집기(제7조) */
+  --og-row-hover-bg:             #54381e;   /* oklch(0.336 0.055  62) */
+  --og-row-color:                #e3d7c5;   /* oklch(0.885 0.035  79) */
+  --og-row-selected-bg:          #532e11;   /* §3.9 — 선택-수정 ΔL* 0.23 -> 3.19 */
+  --og-row-selected-color:       #fdeed6;   /* oklch(0.955 0.036  80) */
+  --og-row-added-bg:             #233b1e;   /* oklch(0.324 0.058 140) */
+  --og-row-added-color:          #c2e8c2;   /* oklch(0.894 0.065 145) */
+  --og-row-edited-bg:            #5a4316;   /* oklch(0.399 0.068  81) */
+  --og-row-edited-color:         #f7dda7;   /* oklch(0.906 0.075  85) */
+  --og-row-removed-bg:           #814847;   /* oklch(0.470 0.078  22) */
+  --og-row-removed-color:        #ffe6e5;   /* oklch(0.945 0.028  20) */
+  --og-group-bg:                 #413022;   /* oklch(0.309 0.055  61) */
+  --og-group-color:              #eec9a9;   /* oklch(0.860 0.060  63) */
+  --og-group-border:             #5f4024;   /* oklch(0.400 0.060  62) */
+  --og-tree-toggle-color:        #ebab72;   /* oklch(0.789 0.105  62) */
+  --og-tree-line-color:          #51453a;   /* oklch(0.399 0.024  65) */
+  --og-tree-folder-color:        #e6b55d;   /* oklch(0.800 0.120  80) */
+  --og-tree-file-color:          #a89888;   /* oklch(0.689 0.030  67) */
+  --og-tree-indent-guide:        #453b30;   /* oklch(0.359 0.023  70) */
+  --og-merge-bg:                 #483614;   /* oklch(0.345 0.055  81) */
+  --og-merge-border:             #b48b40;   /* oklch(0.661 0.105  80) */
+  --og-border-color:             #4f4439;   /* oklch(0.395 0.023  67) */
+  --og-focus-border:             #ebab72;   /* oklch(0.789 0.105  62) */
+  --og-pagination-bg:            #221b14;   /* oklch(0.228 0.017  67) */
+  --og-pagination-btn-bg:        #352c23;   /* oklch(0.300 0.020  67) */
+  --og-pagination-btn-color:     #ead9c8;   /* oklch(0.895 0.030  67) */
+  --og-input-bg:                 #251e16;   /* oklch(0.241 0.018  71) */
+  --og-input-color:              #ead9c8;   /* oklch(0.895 0.030  67) */
+  --og-input-border:             #ebab72;   /* oklch(0.789 0.105  62) */
+  --og-filter-bg:                #2e251b;   /* oklch(0.272 0.022  70) */
+  --og-filter-color:             #ead9c8;   /* oklch(0.895 0.030  67) */
+  /* 선택 */
+  --og-tree-folder-closed-color: #8d7d6d;   /* oklch(0.600 0.031  67) */
+  --og-tree-hover-bg:            rgba(240,200,120,0.09);
+  --og-spinner-track:            rgba(240,225,195,0.16);
+  /* 신규 — 정렬 헤더 (§3.9) */
+  --og-header-sorted-bg:         #403225;
+  /* [결정문누락] --og-row-color 채도(C* 13.3 -> 6.4) 교정 hex 없음(§3.9 근거없음) */
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.61 */
+  --og-rownum-color:              #dccdb7;
+}
+[data-og-theme="nocturne"] .og-empty-message { color: #8f847a; }
+[data-og-theme="nocturne"] .og-loading-mask  { background: rgba(46,37,27,0.80); }
+
+/* ── graphite-dark  (채택: 디자인시스템) ── */
+[data-og-theme="graphite-dark"] {
+  --og-primary:                   #7fb2e6;
+  --og-primary-light:             #14243a;
+  --og-primary-dark:              #a8cdf2;
+  --og-header-bg:                 #171e21;
+  --og-header-color:              #e6e6e6;
+  --og-header-hover-bg:           #2f2f2f;   /* r4 CSS(R-5) — 제16조ⓒ — 헤더hover/행hover 0.33→0.97 */
+  --og-header-sort-color:         #7fb2e6;
+  --og-row-bg:                    #1e2428;
+  --og-row-alt-bg:                #242a2f;   /* r4 CSS(R-5) — 제16조ⓐ — hover 가 수정행(1.33)에 붙어 있었다. 상태색은 안 건드리고 줄무늬·hover 를 같이 내려 벌린다 */
+  --og-row-hover-bg:              #31373c;   /* r4 CSS(R-5) — 제16조ⓐ — hover vs 수정 1.33→3.14, hover vs 줄무늬 5.94→6.01 */
+  --og-row-color:                 #e4e4e4;
+  --og-row-selected-bg:           #2f4863;
+  --og-row-selected-color:        #d7e8fa;
+  --og-row-added-bg:              #19351e;
+  --og-row-added-color:           #a3c1a6;
+  --og-row-edited-bg:             #4b3b18;
+  --og-row-edited-color:          #c7b593;
+  --og-row-removed-bg:            #68403f;
+  --og-row-removed-color:         #f2dedc;   /* 3차 반영(시각규칙) — §7.1 삭제행 opacity .75 겹침 3.41 → 4.90. 배경 #68403f 불변이라 제7·8조 사다리 그대로. 후보 6개 중 가장 높은 값(CSS/모션 4.82 · 디자인시스템 4.81 · 인터랙션 4.75 · 테이블패턴 4.66) */
+  --og-group-bg:                  #2c3237;   /* r4 CSS(R-5) — 제12조 — 내려온 hover 와 1.5 이상 벌린다(2.29). 그룹 ΔL* 6.64 로 제2조 유지 */
+  --og-group-color:               #cfcfcf;
+  --og-group-border:              #444c50;
+  --og-tree-toggle-color:         #9e9e9e;
+  --og-tree-line-color:           #3c3c3c;
+  --og-tree-folder-color:         #8d8378;
+  --og-tree-file-color:           #909090;
+  --og-tree-indent-guide:         #333333;
+  --og-merge-bg:                  #1e3247;
+  --og-merge-border:              #9a9a9a;
+  --og-border-color:              #3c4247;
+  --og-focus-border:              #7fb2e6;
+  --og-pagination-bg:             #1a1a1a;
+  --og-pagination-btn-bg:         #232323;
+  --og-pagination-btn-color:      #e4e4e4;
+  --og-input-bg:                  #1a1a1a;
+  --og-input-color:               #e4e4e4;
+  --og-input-border:              #7fb2e6;
+  --og-filter-bg:                 #232323;
+  --og-filter-color:              #e4e4e4;
+  --og-tree-folder-closed-color:  #7a7a7a;
+  /* §3.9 디자인시스템 전면 교정 — 신규분 */
+  --og-header-sorted-bg:          #242a2f;
+  --og-tree-hover-bg:             rgba(255,255,255,0.08);
+  --og-spinner-track:             rgba(255,255,255,0.18);
+  --og-shadow-sm:                 0 1px 2px rgba(0,0,0,0.45);
+  --og-shadow-md:                 0 4px 12px rgba(0,0,0,0.55);
+  /* --og-header-focus-color 는 안 넣는다 — 헤더/행 ΔL* 3.07 로 극성 반전(>40)이 아니다 */
+  /* [결정문누락] pagination/input/filter 배경은 표를 재산출했는데도 hex 가 안 나왔다 — 옛 값 유지 */
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.60 */
+  --og-rownum-color:              #babcbd;
+}
+[data-og-theme="graphite-dark"] .og-empty-message { color: #858d92; }   /* 바탕 위 4.65 */
+[data-og-theme="graphite-dark"] .og-loading-mask  { background: rgba(30,36,40,0.80); }
+
+/* ── sentinel  (채택: 모션) ── */
+[data-og-theme="sentinel"] {
+  --og-primary:                     #4fc3d9;
+  --og-primary-light:               #193b45;
+  --og-primary-dark:                #7ad8e8;
+  --og-header-bg:#171d22;   /* r4 테이블패턴: 제2조 헤더 ΔL* +4.32→-3.30 (헤더가 본문보다 밝았다) ← #262d32 */
+  --og-header-color:                #dfe8ee;
+  --og-header-hover-bg:#010e14;   /* r4 테이블패턴: 제16조ⓒ 0.66→0.98. hover 가 어두워지는 이 칸의 논리를 헤더도 따른다 ← #2e373c */
+  --og-header-sort-color:           #4fc3d9;
+  --og-row-bg:                      #1d2428;
+  --og-row-alt-bg:                  #282e33;
+  /* 규칙 7 예외: 야간 관제에서 밝은 호버는 어둠에 익숙해진 눈을 때린다. 의도된 역방향이다. */
+  --og-row-hover-bg:#121619;   /* r5 테이블패턴: 원본 복귀 — 규칙이 요구하지 않았다 */   /* r4 테이블패턴: 어두운 hover 유지. 바탕/줄무늬에서 7.17/12.04 ← #121619 */
+  --og-row-color:                   #ccd6dd;
+  --og-row-selected-bg:             #23515d;
+  --og-row-selected-color:          #e8fcff;
+  --og-row-added-bg:#02381b;   /* r4 테이블패턴: 제7조 — 삭제가 가장 멀도록 3층을 다시 쌓음 ← #0f4224 */   /* 3차 반영(CSS) — 제8조 인접 4.88 → 5.34 (후보 넷 중 최고) */
+  --og-row-added-color:             #7ce095;
+  --og-row-edited-bg:#493a08;   /* r4 테이블패턴: 제8조h 97°→91° ← #504512 */   /* 3차 반영(CSS) — 위와 한 벌 */
+  --og-row-edited-color:            #f0d066;
+  --og-row-removed-bg:#723638;   /* r4 테이블패턴: 제7조 삭제가 가장 멀다 (4.8→17.0) ← #521a1e */   /* ▸ [미정] 여기는 두 요구가 부딪쳐서 하나를 못 고쳤다.
+       모션 이 #724447 을 냈다 — 삭제행이 바탕에서 **가장 가까웠던**(18.5) 제7조 순서 위반을 34.3 으로 고치는 값이다.
+       그런데 실브라우저로 다시 재 보니 그 밝은 배경 위에서 **행번호 열이 4.26 으로 떨어진다**(하한 4.5).
+       §7.2 로 방금 고친 것을 도로 깨는 셈이라 못 받았다. 삭제행 배경에서 4.5 를 넘기는 행번호 hex 는
+       3차 산출 여섯 벌(CSS·시각규칙·디자인시스템·인터랙션·테이블패턴·모션) 어디에도 없다 → 지어내지 않고 남긴다.
+       선택지: ⓐ 지금대로(제8조 5.34 통과 · 제7조 순서 위반 유지 · 행번호 4.62)
+               ⓑ 모션 #724447 + #ffe2e5(제7조·제8조 둘 다 통과 · 행번호 4.26 미달) */
+  --og-row-removed-color:#fdd8dc;   /* r4 테이블패턴: 삭제α 3.63→4.98 ← #f7a3ab */
+  --og-group-bg:#2d353b;   /* r4 테이블패턴: 제12조 alt/group 1.26→3.09 ← #293137 */
+  --og-group-color:                 #b0c0ca;
+  --og-group-border:                #37424a;
+  --og-tree-toggle-color:           #4fc3d9;
+  --og-tree-line-color:             #3a454c;
+  --og-tree-folder-color:           #d9a83c;
+  --og-tree-file-color:             #8d9da9;
+  --og-tree-indent-guide:           #303a41;
+  --og-merge-bg:                    #3b3315;
+  --og-merge-border:                #b8912c;
+  --og-border-color:                #333d44;
+  --og-focus-border:                #4fc3d9;
+  --og-pagination-bg:               #1d2428;
+  --og-pagination-btn-bg:#262d32;   /* r5 테이블패턴: 원본 복귀 — 규칙이 요구하지 않았다 */   /* r4 테이블패턴: 헤더와 같은 층 ← #262d32 */
+  --og-pagination-btn-color:        #ccd6dd;
+  --og-input-bg:                    #141a1d;
+  --og-input-color:                 #e4ecf1;
+  --og-input-border:                #4fc3d9;
+  --og-filter-bg:#262d32;   /* r5 테이블패턴: 원본 복귀 — 규칙이 요구하지 않았다 */   /* r4 테이블패턴: 헤더와 같은 층 ← #262d32 */
+  --og-filter-color:                #ccd6dd;
+  /* --- 선택 토큰 --- */
+  --og-tree-folder-closed-color:    #606e76;
+  --og-tree-hover-bg:               #293137;
+  --og-spinner-track:               rgba(255,255,255,0.14);
+  /* --- 신규 제안: 실시간 플래시 + 신선도 (전부 색 → assertColorOnly 통과) --- */
+  --og-flash-up-bg:                 #166136;
+  --og-flash-up-color:              #8df7bd;
+  --og-flash-down-bg:               #832931;
+  --og-flash-down-color:            #ffb5bc;
+  --og-flash-neutral-bg:            #196170;
+  --og-flash-neutral-color:         #a8eefb;
+  --og-stale-veil:                  rgba(29,36,40,0.55);
+  /* 신규 — 정렬 헤더 (§3.9) */
+  --og-header-sorted-bg:#1f2b35;   /* r4 테이블패턴: 제16조ⓔ 6.49 ← #33404a */
+  /* [결정문누락] .og-empty-message 3.70(12칸 최하) 교정 hex 없음(§3.9 근거없음) */
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.62 */
+  --og-rownum-color:              #b4bec5;
+}
+[data-og-theme="sentinel"] .og-empty-message { color: #6e7d87; }
+[data-og-theme="sentinel"] .og-loading-mask  { background: rgba(29,36,40,0.78); }
+
+/* ── ticker  (채택: 테이블패턴) ── */
+[data-og-theme="ticker"] {
+  --og-primary:                  #7aa5f0;
+  --og-primary-light:            #18243A;
+  --og-primary-dark:             #9CC3FF;
+  --og-header-bg:                #0e1014;
+  --og-header-color:             #A6AEB9;
+  --og-header-hover-bg:          #21242b;
+  --og-header-sort-color:        #6BA5FF;
+  --og-row-bg:                   #16181C;
+  --og-row-alt-bg:               #1E2229;
+  --og-row-hover-bg:             #2A2F38;
+  --og-row-color:                #DDE1E7;
+  --og-row-selected-bg:          #29405f;
+  --og-row-selected-color:       #E8EEF7;
+  --og-row-added-bg:             #294a38;
+  --og-row-added-color:          #CCE6D8;
+  --og-row-edited-bg:            #403515;
+  --og-row-edited-color:         #EEDFB4;
+  --og-row-removed-bg:           #6e474c;
+  --og-row-removed-color:        #fcdae0;
+  --og-group-bg:                 #21262e;
+  --og-group-color:              #B8C0CC;
+  --og-group-border:             #2E343E;
+  --og-tree-toggle-color:        #6BA5FF;
+  --og-tree-line-color:          #333944;
+  --og-tree-folder-color:        #C2A25A;
+  --og-tree-file-color:          #7C8494;
+  --og-tree-indent-guide:        #2A3038;
+  --og-merge-bg:                 #1F2530;
+  --og-merge-border:             #48566B;
+  --og-border-color:             #2e333c;
+  --og-focus-border:             #8CBBFF;
+  --og-pagination-bg:            #101216;
+  --og-pagination-btn-bg:        #1E2229;
+  --og-pagination-btn-color:     #C8CED8;
+  --og-input-bg:                 #101216;
+  --og-input-color:              #E2E6EC;
+  --og-input-border:             #6BA5FF;
+  --og-filter-bg:                #1E2229;
+  --og-filter-color:             #DDE1E7;
+  /* 선택 */
+  --og-tree-folder-closed-color: #5C6472;
+  --og-tree-hover-bg:            #2A2F38;
+  --og-spinner-track:            rgba(255,255,255,0.12);
+  --og-shadow-sm:                0 1px 3px rgba(0,0,0,0.60);
+  --og-shadow-md:                0 4px 14px rgba(0,0,0,0.68);
+  /* 신규 — 실시간 플래시 (§3.9, CSS 세트). 제브라와 무관, 코어 클래스는 별건 */
+  --og-flash-up-bg:              #14472e;
+  --og-flash-up-color:           #9BE8BC;
+  --og-flash-down-bg:            #5c2129;
+  --og-flash-down-color:         #F7B4BD;
+  --og-flash-neutral-bg:         #1c3550;
+  --og-flash-neutral-color:      #AFCDF0;
+  --og-stale-veil:               rgba(22,24,28,0.55);
+  /* 신규 — 정렬 헤더 (§3.9) */
+  --og-header-sorted-bg:         #232833;
+  /* 3차 반영 §7.2 — 행번호 열. base.css:421 이 color:#999 리터럴을 박아 테마를 안 따라온다.
+     값 출처 시각규칙. 재측정: 그 열이 앉는 배경 7종(바탕·줄무늬·hover·선택·신규·수정·삭제) 최악 4.61 */
+  --og-rownum-color:              #b7bbc0;
+}
+[data-og-theme="ticker"] .og-empty-message { color: #6E7684; }
+[data-og-theme="ticker"] .og-loading-mask  { background: rgba(22,24,28,0.84); }

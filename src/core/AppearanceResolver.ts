@@ -9,7 +9,7 @@
 //   to what the render code emits today (a `var(--og-*, <existing fallback>)` where a token
 //   exists, otherwise today's literal), so the 15 color themes render unchanged. Host-isolation
 //   forced-inline stays: the resolver supplies **values only**, and the render layer still writes
-//   them inline to beat host CSS. HANMS honesty hard rules are pre-seeded as invariants but are
+//   them inline to beat host CSS. UX-review honesty hard rules are pre-seeded as invariants but are
 //   no-ops under the current (skin-less) theme: focusRing() clamps `<2px`/`none` to at least
 //   `2px solid` (visible focus is non-negotiable), and a state border is always solid (G-ST2).
 // ------------------------------------------------------------
@@ -27,7 +27,7 @@
 //   * host-isolation 강제-인라인 메커니즘은 그대로다 — resolver 는 **값만** 공급하고,
 //     렌더 레이어가 그 값을 여전히 인라인으로 써서 호스트 CSS 를 이긴다.
 //
-// HANMS 정직성 하드룰(item3 `91_hanms_verdict.md` §2/§7, item2 R-5f)을 **강제 불변식**으로
+// UX 검토의 정직성 하드룰(item3 `UX 판정 문서` §2/§7, item2 R-5f)을 **강제 불변식**으로
 //   미리 심는다 — 단, 아직 스킨이 없으므로 현 테마에서는 전부 no-op(출력 불변):
 //   * focusRing(): `<2px` 또는 `none` 을 최소 `2px solid` 로 클램프(가시 포커스 비협상).
 //   * border({state:true}): 상태 보더는 스킨과 무관하게 항상 solid(G-ST2).
@@ -269,8 +269,8 @@ export class AppearanceResolver {
   focusRing(opts?: FocusRingOptions): string {
     let width = opts?.width ?? 2;
     let style = opts?.style ?? 'solid';
-    if (width < 2) width = 2;            // HANMS: 최소 2px
-    if (style === 'none') style = 'solid'; // HANMS: none 거부 → solid
+    if (width < 2) width = 2;            // UX 검토: 최소 2px
+    if (style === 'none') style = 'solid'; // UX 검토: none 거부 → solid
     const color = opts?.color ?? 'var(--og-focus-border,var(--og-primary,#1976d2))';
     // 스킨 활성 + opts 미지정: focus width/style 을 토큰으로 승격(스킨의 focus form 도달).
     //   토큰 자체는 SkinRegistry 가 정의 시점에 <2px/none 을 클램프하므로 가시 포커스가 보장된다.

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "lib": ["ES2022", "DOM"],
+    "declaration": true,
+    "strict": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "skipLibCheck": true,
+    "importHelpers": true,
+    "baseUrl": ".",
+    "paths": { "open-grid": ["../dist/types/index.d.ts"] }
+  },
+  "angularCompilerOptions": {
+    "compilationMode": "partial",
+    "strictTemplates": true
+  },
+  "include": ["src/**/*.ts"]
+}

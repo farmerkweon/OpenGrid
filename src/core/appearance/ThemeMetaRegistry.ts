@@ -15,6 +15,7 @@
 import { FORM_TOKENS } from '../SkinRegistry.js';
 import { DENSITY_TOKENS } from './DensityRegistry.js';
 import { TEXTURE_TOKENS } from './TextureRegistry.js';
+import { TYPOGRAPHY_TOKENS } from './TypographyRegistry.js';
 import type { AxisId, AxisResolution, IAppearanceAxis, TokenDelta, AxisDefineResult } from './AppearanceAxis.js';
 import { DEFAULT_AXIS_VALUE, EMPTY_RESOLUTION } from './AppearanceAxis.js';
 
@@ -42,11 +43,13 @@ export interface ThemeMeta {
   readonly delta?: TokenDelta;
 }
 
-/** 색 축이 소유하지 않는(=거부 대상) shape 토큰 denylist. FORM ∪ DENSITY ∪ TEXTURE-shape. / Shape-token denylist for the color axis. */
+/** 색 축이 소유하지 않는(=거부 대상) 토큰 denylist. FORM ∪ DENSITY ∪ TEXTURE-shape ∪ TYPOGRAPHY. / Denylist for the color axis. */
 const NON_COLOR_TOKENS: ReadonlySet<string> = new Set<string>([
   ...FORM_TOKENS,
   ...DENSITY_TOKENS,
   ...TEXTURE_TOKENS,
+  // SPEC §2.4 4축 대칭: 타이포 토큰이 색 델타로 밀수되는 구멍을 봉합한다(서체는 data-og-typography 축).
+  ...TYPOGRAPHY_TOKENS,
 ]);
 
 /**
@@ -137,21 +140,61 @@ export class ThemeMetaRegistry implements IAppearanceAxis {
   }
 }
 
-// ─── 내장 테마 메타 (조합 판정용 대표 집합 — 전체 15테마 중 dark/textured 판정에 필요한 것) ───
-// 색 값은 themes.css 소유. 여기서는 dark 짝·질감성만 선언(validate 규칙의 객관 근거).
+// ─── 내장 테마 메타 (조합 판정용 — dark/textured/짝 선언) ───
+// 색 값은 themes.css 소유. 여기서는 dark 짝·질감성·감정온도만 선언(validate 규칙의 객관 근거).
+// `temperature` 는 판정에 쓰이지 않는 서술 메타다 — 대표색(--og-primary)의 지배 색상으로 매긴다.
+// `textured` 는 CSS 사실이 아니라 **의도 선언**이다(themes.css 에는 --og-texture-* 가 한 개도 없다):
+//   "이 테마는 질감 축과 짝지어 쓰라고 설계됐다" 를 뜻하며 TEXTURE_META_MISMATCH 판정 근거가 된다.
 
-/** 내장 테마 메타 카탈로그(대표). / Built-in theme meta catalog (representative). */
+/** 내장 테마 메타 카탈로그. / Built-in theme meta catalog. */
 export const BUILTIN_THEME_METAS: ReadonlyArray<ThemeMeta> = [
+  // ── 기존 ──
   { id: 'default', dark: false, textured: false, temperature: 'cool', darkPair: 'dark' },
   { id: 'dark', dark: true, textured: false, temperature: 'cool' },
-  { id: 'ocean', dark: false, textured: false, temperature: 'cool', darkPair: 'ocean-dark' },
-  { id: 'ocean-dark', dark: true, textured: false, temperature: 'cool' },
-  { id: 'linen', dark: false, textured: true, textureZone: 'chrome', temperature: 'warm' },
-  { id: 'washi', dark: false, textured: true, textureZone: 'chrome', temperature: 'warm' },
-  { id: 'blueprint', dark: true, textured: true, textureZone: 'chrome', temperature: 'cool' },
+  // ★ ocean 의 darkPair 를 **뺐다** (2026-08-08 결정 D-7 로 ocean-dark 삭제 → 개발자 판단).
+  //
+  //   왜 다른 어두운 칸으로 옮기지 않고 없앴나 — 근거 3가지를 실측으로 적는다.
+  //   ① **끊긴 연결이 아니다. 원래 이어진 적이 없다.**
+  //      `git show ea07458:src/styles/themes.css`(2026-07-12) 에는 테마가 고전 15종뿐이고
+  //      `ocean-dark` 블록이 **없다**. 그런데 같은 커밋의 이 파일에는 이미
+  //      `darkPair: 'ocean-dark'` 가 있었다. 즉 npm 1.4.0(2026-07-17 발행)에 나간 것은
+  //      **가리키는 대상이 없는 짝**이다. 사용자가 그 짝으로 전환하면 CSS 블록이 없어
+  //      무테마 렌더로 떨어진다 — 야간 전환은 **어느 배포본에서도 작동한 적이 없다.**
+  //      그래서 여기서 빼는 것은 배포된 동작을 깨는 것이 아니라 **선존 유령 참조를 없애는 것**이다.
+  //   ② `high-contrast-dark` 로 옮기는 것은 **없는 설계를 지어내는 것**이다.
+  //      그 칸은 디자인시스템 가 `high-contrast` 의 AAA(7:1) 짝으로 낸 것이고 이미
+  //      `high-contrast.darkPair` 가 그것을 가리킨다. ocean(시원한 하늘색)의 어두운 판을
+  //      설계한 사람은 아무도 없다. 짝을 이어 붙이면 "성격은 그대로 명암만 뒤집는다"는
+  //      darkPair 의 계약이 거짓말이 된다.
+  //   ③ `darkPair` 는 선택 필드(`darkPair?`)이고, 고전 15종 중 13종이 원래 없다.
+  //      없는 것이 이 카탈로그의 정상 상태이며, 없음 = "짝이 없다"는 **사실 그대로의 표기**다.
+  //
+  //   ⚠ 나중에 ocean 의 어두운 짝을 만들려면 **먼저 themes.css 에 그 칸을 만들고**
+  //      여기에 darkPair 를 적어라. 순서가 반대면 위 ①의 유령 참조가 다시 생긴다.
+  { id: 'ocean', dark: false, textured: false, temperature: 'cool' },
   { id: 'executive', dark: true, textured: false, temperature: 'neutral' },
-  { id: 'graphite', dark: false, textured: false, temperature: 'neutral' },
-  { id: 'high-contrast', dark: false, textured: false, temperature: 'neutral' },
+  // 'linen' 테마 메타는 제거했다 — themes.css 에 실물 블록이 없는 유령 메타였다(SPEC §1.1).
+  //   ※ 질감 축의 'linen' 값(TextureRegistry)과는 다른 것이다. 그쪽은 그대로 살아 있다.
+
+  // ── 신규 12종(색 CSS = themes.css) — 2026-08-08 파이널 시안으로 값 갱신 ──
+  //    신설 3종  plain · field · high-contrast-dark
+  //    갱신 9종  나머지는 id 는 같고 값이 5라운드 동안 바뀌었다(메타는 그대로)
+  //    삭제 3종  ledger · daylight · ocean-dark — 결정 D-7 로 메타까지 지웠다
+  //              (themes.css 블록도 같은 커밋에서 삭제. 어느 배포본에도 나간 적 없다)
+  //    ※ 타이포 프리셋 'ledger'(TypographyRegistry)는 **다른 축의 다른 값**이다. 이름만 같고
+  //      그쪽은 손대지 않았다 — 내장 7종 중 하나이며 typography.css 에 그대로 살아 있다
+  { id: 'graphite', dark: false, textured: false, temperature: 'neutral', darkPair: 'graphite-dark' },
+  { id: 'graphite-dark', dark: true, textured: false, temperature: 'neutral' },
+  { id: 'high-contrast', dark: false, textured: false, temperature: 'neutral', darkPair: 'high-contrast-dark' },
+  { id: 'high-contrast-dark', dark: true, textured: false, temperature: 'cool' },
+  { id: 'washi', dark: false, textured: true, textureZone: 'chrome', temperature: 'warm' },
+  { id: 'plain', dark: false, textured: false, temperature: 'cool' },
+  { id: 'field', dark: false, textured: false, temperature: 'cool' },
+  { id: 'clinical', dark: false, textured: false, temperature: 'cool' },
+  { id: 'blueprint', dark: true, textured: true, textureZone: 'chrome', temperature: 'cool' },
+  { id: 'nocturne', dark: true, textured: false, temperature: 'warm' },
+  { id: 'sentinel', dark: true, textured: false, temperature: 'cool' },
+  { id: 'ticker', dark: true, textured: false, temperature: 'cool' },
 ];
 
 /** 프로세스 전역 기본 테마 메타 레지스트리(내장 부트스트랩). / Process-global default theme-meta registry. */

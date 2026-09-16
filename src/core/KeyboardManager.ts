@@ -135,7 +135,7 @@ export class KeyboardManager<T extends Record<string, any> = any> {
 
     const rangeHooks = this._d.getRangeHooks?.() ?? null;
 
-    // M-3(HANMS-02/C9): Ctrl+D/Ctrl+R 키보드 채우기 — 'cells' 모드 + 편집 비활성일 때만.
+    // M-3(UX-REVIEW-02/C9): Ctrl+D/Ctrl+R 키보드 채우기 — 'cells' 모드 + 편집 비활성일 때만.
     if ((e.ctrlKey || e.metaKey) && rangeHooks?.isEnabled() && (e.key === 'd' || e.key === 'D')) {
       e.preventDefault();
       rangeHooks.ctrlFill('down');

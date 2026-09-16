@@ -1671,7 +1671,7 @@ export interface EditorDef {
 
 /**
  * 컬럼 한 개를 어떻게 보이고 동작하게 할지 담는 설정 뭉치입니다. 그리드는 `columns` 배열에 담긴 이
- * 정의들을 왼쪽부터 순서대로 그립니다. 최소한 `field`(어떤 데이터를 보여줄지)와 `header`(머리글 글자)만
+ * 정의들을 왼쪽부터 순서대로 그립니다. 최소한 `field`(어떤 데이터를 보여줄지)와 `header`(헤더 글자)만
  * 있으면 되고, 나머지는 필요할 때만 켜는 선택 항목입니다.
  *
  * The settings bundle for a single column — what it shows and how it behaves. The grid draws the
@@ -1708,7 +1708,7 @@ export interface ColumnDef<T = any> {
    */
   field: string;
   /**
-   * 머리글에 보일 글자. 문자열 안의 '\n' 은 두 줄로 나뉩니다.
+   * 헤더에 보일 글자. 문자열 안의 '\n' 은 두 줄로 나뉩니다.
    *
    * The caption shown in the header. A '\n' inside splits into two lines.
    *
@@ -1884,7 +1884,7 @@ export interface ColumnDef<T = any> {
   headerStyle?: CSSProperties;
 
   /**
-   * 이 컬럼 머리글을 클릭하면 정렬되게 할지. 특정 컬럼만 정렬을 막거나 허용할 때 씁니다.
+   * 이 컬럼 헤더를 클릭하면 정렬되게 할지. 특정 컬럼만 정렬을 막거나 허용할 때 씁니다.
    *
    * Whether clicking this header sorts. Use it to allow/deny sorting per column.
    *
@@ -1904,7 +1904,7 @@ export interface ColumnDef<T = any> {
    */
   filterable?: boolean;
   /**
-   * 머리글 경계를 드래그해 폭을 조절하게 할지.
+   * 헤더 경계를 드래그해 폭을 조절하게 할지.
    *
    * Whether the user can drag the header edge to resize.
    *
@@ -1944,7 +1944,7 @@ export interface ColumnDef<T = any> {
    */
   wrap?: boolean;
   /**
-   * 헤더(컬럼 머리글) 줄바꿈: true 면 헤더 텍스트가 잘리지 않고 여러 줄로 줄바꿈된다.
+   * 컬럼 헤더 줄바꿈: true 면 헤더 텍스트가 잘리지 않고 여러 줄로 줄바꿈된다.
    * (셀 본문용 wrap 과 별개로 헤더에만 적용. header 문자열의 '\n' 은 headerWrap 여부와 무관하게 항상 줄바꿈됨)
    * 줄바꿈된 헤더에 맞춰 헤더 행 높이가 자동으로 늘어난다.
    *
@@ -2516,7 +2516,7 @@ export interface ExportOptions {
    */
   sheetName?: string;
   /**
-   * 머리글 행을 포함할지. 기본 true.
+   * 헤더 행을 포함할지. 기본 true.
    *
    * Whether to include the header row. Default true.
    *
@@ -2704,7 +2704,7 @@ export interface GridOptions<T = any> {
    */
   rowHeight?: number;
   /**
-   * 머리글(헤더) 행의 높이(px). 여러 줄 헤더면 자동으로 늘어나므로 보통은 생략.
+   * 헤더 행의 높이(px). 여러 줄 헤더면 자동으로 늘어나므로 보통은 생략.
    *
    * Header row height (px). Grows automatically for multi-line headers, so usually omitted.
    *
@@ -2914,7 +2914,7 @@ export interface GridOptions<T = any> {
 
   // 정렬/필터 / sort & filter
   /**
-   * 머리글 클릭 정렬을 그리드 전체에서 켤지. 컬럼별 sortable 로 예외를 둘 수 있습니다.
+   * 헤더 클릭 정렬을 그리드 전체에서 켤지. 컬럼별 sortable 로 예외를 둘 수 있습니다.
    *
    * Turn header-click sorting on grid-wide. Per-column sortable can override.
    *
@@ -3316,7 +3316,7 @@ export interface GridOptions<T = any> {
   calcPrecision?: number;
 
   /**
-   * 머리글을 드래그해 컬럼 순서를 바꾸게 할지.
+   * 헤더를 드래그해 컬럼 순서를 바꾸게 할지.
    *
    * Whether headers can be dragged to reorder columns.
    *

@@ -106,7 +106,7 @@ describe('RecalcCoordinator — 삭제 무효화 #REF(F3-R13/R28 P0)', () => {
   });
 });
 
-// ── f3.range.dirtyonsort (MCCONNELL-03 P0) ──────────────────
+// ── f3.range.dirtyonsort (QA-REVIEW-03 P0) ──────────────────
 describe('RecalcCoordinator — 정렬/필터 후 범위 재해소(F3-R13 범위/§3.5 P0)', () => {
   let g: MockGridAccessor;
   beforeEach(() => {

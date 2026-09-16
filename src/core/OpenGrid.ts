@@ -746,7 +746,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    * OpenGrid.defineSkin('round', { '--og-radius-md': '14px' });
    * grid.setSkin('round');
    */
-  // R12b(item3 §6.2): defaultOverride 와 동형의 프로세스 전역 스킨 등록 정책. HANMS §1.3 접근성 가드레일(포커스 <2px/none 클램프) 포함.
+  // R12b(item3 §6.2): defaultOverride 와 동형의 프로세스 전역 스킨 등록 정책. UX 판정 §1.3 접근성 가드레일(포커스 <2px/none 클램프) 포함.
   static defineSkin(name: string, delta: SkinTokenDelta): typeof OpenGrid {
     skinRegistry.define(name, delta);
     return OpenGrid;
@@ -1644,13 +1644,17 @@ export class OpenGrid<T extends Record<string, any> = any>
   }
 
   /**
-   * 모든 워크시트를 다중 시트 엑셀로 내보낸다.
+   * 모든 워크시트를 다중 시트 엑셀로 내보낸다. 시트마다 exportExcel 과 같은 테마 스타일(머리글 배경·줄무늬·테두리·숫자 서식)을 입히고,
+   * 지금 보고 있는 시트는 화면에서 고친 내용까지 담는다.
    *
-   * Export all worksheets as a multi-sheet Excel file.
+   * Export all worksheets as a multi-sheet Excel file. Each sheet gets the same theme styling as exportExcel
+   * (header fill, banding, borders, number formats), and the active sheet includes edits made on screen.
    *
-   * すべてのワークシートを複数シートの Excel として書き出します。
+   * すべてのワークシートを複数シートの Excel として書き出します。各シートに exportExcel と同じテーマのスタイル
+   * (見出しの背景・縞模様・罫線・数値書式)を付け、表示中のシートは画面で編集した内容も含めます。
    *
-   * 把所有工作表导出为多工作表的 Excel。
+   * 把所有工作表导出为多工作表的 Excel。每个工作表都套用与 exportExcel 相同的主题样式(表头底色、斑马纹、边框、数字格式),
+   * 当前正在查看的工作表还会包含在界面上所做的修改。
    */
   exportSheetsExcel(filename?: string): void { this._exportMgr.exportSheetsExcel(filename); }
 
@@ -2476,7 +2480,7 @@ export class OpenGrid<T extends Record<string, any> = any>
   // ── Phase 0 인프라 / Phase 0 infrastructure ──────────────────────────────────────
 
   /**
-   * 화면상의 행 위치(flat/visual index)와 실제 데이터 행을 서로 변환해 주는 리졸버를 돌려준다. 그룹 머리글·
+   * 화면상의 행 위치(flat/visual index)와 실제 데이터 행을 서로 변환해 주는 리졸버를 돌려준다. 그룹 헤더·
    * 트리 자식·상세 패널 같은 의사(pseudo) 행이 섞여 index 와 데이터가 어긋날 때, "이 index 가 진짜 데이터 행인가,
    * 몇 번 rowId 인가"를 물어보는 단일 창구다. 범위 선택+채우기·수식·차트 기능이 좌표를 해석할 때 모두 이 모델을 거친다.
    *
@@ -2746,7 +2750,7 @@ export class OpenGrid<T extends Record<string, any> = any>
   /**
    * 여러 셀을 한 번에 쓴다. 내부에서 배치로 묶어 처리하므로 렌더·이벤트가 셀마다 터지지 않고 끝에서 한 번만
    * 일어나, 수백 셀을 갱신할 때 낱개 `writeCell` 반복보다 훨씬 빠르다. 각 rowIndex 는 화면 기준 위치(flat
-   * index)이며, 대상이 실제 데이터 행이 아니라 그룹 머리글·트리·상세 같은 의사(pseudo) 행이면 데이터 훼손을
+   * index)이며, 대상이 실제 데이터 행이 아니라 그룹 헤더·트리·상세 같은 의사(pseudo) 행이면 데이터 훼손을
    * 막기 위해 그 셀은 조용히 건너뛴다. 건너뛴 셀 수를 돌려주고, 1건이라도 있으면 스크린리더 안내와
    * 'writeCellsSkip' 이벤트로 알린다.
    *
@@ -3484,13 +3488,13 @@ export class OpenGrid<T extends Record<string, any> = any>
   resetFilter(field?: string): void { this._sfMgr.resetFilter(field); this._recalcRangeBearingFormulas(); }
 
   /**
-   * F3-R13/MCCONNELL-03(P0): 정렬/필터 후 범위-보유(hasRangeRef) 수식 전부 dirty(§3.5).
+   * F3-R13/REVIEW-03(P0): 정렬/필터 후 범위-보유(hasRangeRef) 수식 전부 dirty(§3.5).
    *
-   * F3-R13/MCCONNELL-03 (P0): after sort/filter, mark every range-bearing (hasRangeRef) formula dirty (§3.5).
+   * F3-R13/REVIEW-03 (P0): after sort/filter, mark every range-bearing (hasRangeRef) formula dirty (§3.5).
    *
-   * F3-R13/MCCONNELL-03(P0): ソート/フィルター後、範囲を保持する(hasRangeRef)数式をすべて dirty にします(§3.5)。
+   * F3-R13/REVIEW-03(P0): ソート/フィルター後、範囲を保持する(hasRangeRef)数式をすべて dirty にします(§3.5)。
    *
-   * F3-R13/MCCONNELL-03(P0): 排序/筛选后,把持有范围的(hasRangeRef)公式全部置为 dirty(§3.5)。
+   * F3-R13/REVIEW-03(P0): 排序/筛选后,把持有范围的(hasRangeRef)公式全部置为 dirty(§3.5)。
    */
   private _recalcRangeBearingFormulas(): void {
     this._formula.recalcRangeBearingFormulas();
@@ -4067,9 +4071,10 @@ export class OpenGrid<T extends Record<string, any> = any>
   }
 
   /**
-   * i18n: 이 인스턴스의 UI 로케일을 전환한다. setSkin 진영 — 데이터 불변 + 크롬/가시창 부분 재렌더.
-   * `lang` 속성을 로케일 Intl 태그로 갱신(스크린리더 발음 전환), 상주 크롬(페이지네이션/찾기)의
-   * 라벨을 새로 그리고, 캐시된 필터 패널을 무효화한 뒤 헤더+가시창을 1회 재렌더한다.
+   * i18n: 이 인스턴스의 UI 로케일을 전환한다. setSkin 진영 — 데이터 불변 + 표의 틀(헤더·페이지네이션·
+   * 찾기 막대)과 보이는 영역만 부분 재렌더. `lang` 속성을 로케일 Intl 태그로 갱신(스크린리더 발음 전환),
+   * 늘 떠 있는 페이지네이션·찾기 막대의 라벨을 새로 그리고, 캐시된 필터 패널을 무효화한 뒤
+   * 헤더+보이는 영역을 1회 재렌더한다.
    * 미등록 로케일은 throw 하지 않고 폴백 유지(never-throw). 전환 후 `localeChange` 이벤트 발화.
    *
    * i18n: switch this instance's UI locale. setSkin camp — data-immutable + partial chrome/viewport

@@ -77,7 +77,7 @@ export interface CommitSpec {
  * **동작 불변**으로 옮긴 것. `OpenGrid` 는 얇은 위임 공개 메서드만 남긴다(공개 API 불변).
  *
  * 스트랭글러 원칙(A2): DataLayer 는 여전히 `OpenGrid` 가 소유하며, 여기에는 `*Deps`
- * 클로저 역전 패턴으로 **주입**만 된다. **서비스는 렌더를 직접 모른다**(Yourdon I/O 분리):
+ * 클로저 역전 패턴으로 **주입**만 된다. **서비스는 렌더를 직접 모른다**(구조설계 I/O 분리):
  * render 는 주입된 `doRenderWindow`/`doRenderFull` 콜백으로만 유발한다. 값(vs/pagination/recalc
  * 등)은 늦은-null / 재할당(worksheet 전환)을 견디도록 전부 getter 클로저로 읽는다.
  * 배치 코얼레싱(`_batchDepth`/`_batchDirty`) 시맨틱은 R4 와 1:1 동일하다(회귀 0).
@@ -88,7 +88,7 @@ export interface CommitSpec {
  *
  * Strangler principle (A2): `DataLayer` is still owned by `OpenGrid`; it is only **injected**
  * here via the `*Deps` closure-inversion pattern. **The service has no direct knowledge of
- * rendering** (Yourdon I/O separation): render is only triggered through the injected
+ * rendering** (구조설계 I/O separation): render is only triggered through the injected
  * `doRenderWindow`/`doRenderFull` callbacks. Values (vs/pagination/recalc, etc.) are all read
  * through getter closures so they tolerate late-null / reassignment (worksheet switching).
  * Batch coalescing semantics (`_batchDepth`/`_batchDirty`) are 1:1 identical to R4 (zero
@@ -287,7 +287,7 @@ export class MutationService<T extends Record<string, any> = any> {
     ctx.extra = { rows: idxArr.map(i => dl.getRowByIndex(i)) };
     if (!trigMgr.exec('before:deleteRow', ctx)) return;
     const idxs = idxArr.sort((a, b) => b - a);
-    // F3-R28/MCCONNELL-02(P0): 삭제되는 rowId 를 먼저 확보(제거 후엔 flat index 로 되짚을 수 없다) →
+    // F3-R28/REVIEW-02(P0): 삭제되는 rowId 를 먼저 확보(제거 후엔 flat index 로 되짚을 수 없다) →
     // 삭제 완료 후 그 rowId 를 deps 로 가진 수식들을 #REF 로 무효화(자연 귀결, invalidateRow).
     const removedRowIds = idxs
       .map(i => this._deps.getRowIdAt(i))

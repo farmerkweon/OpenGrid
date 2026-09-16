@@ -83,7 +83,7 @@ describe('DataExtractor — FR-1: 4소스 동일 ChartDataModel', () => {
   });
 });
 
-describe('DataExtractor — §7 F1 부재 graceful fallback (HANMS-04)', () => {
+describe('DataExtractor — §7 F1 부재 graceful fallback (UX-REVIEW-04)', () => {
   it('range 소스인데 getRangeRows/getActiveRange 없음 → selection 으로 강등', () => {
     const { model, rangeFallback } = extractChartData({ kind: 'range' }, baseDeps());
     expect(rangeFallback).toBe(true);

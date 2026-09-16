@@ -3,14 +3,14 @@
 // ------------------------------------------------------------
 // 설계 근거(Why):
 //   item3 §6.2 `defineSkin(name, delta)` + item2 §3.1 C14 `SkinRegistry.define(id, tokenSet)`.
-//   스킨은 **색⊥형태 직교성**(item3 §1.1~1.2, HANMS §4)의 물리적 강제자다: 어떤 스킨 델타에도
+//   스킨은 **색⊥형태 직교성**(item3 §1.1~1.2, UX 판정 §4)의 물리적 강제자다: 어떤 스킨 델타에도
 //   색 리터럴이 들어가면 **런타임 거부**한다(Rule 2). COLOR 는 data-og-theme, FORM 은 data-og-skin.
 //
 // 계약:
-//   * `define(id, delta)` — FORM-only 검증(색 리터럴 거부) + HANMS 가드레일 클램프 후 등록.
+//   * `define(id, delta)` — FORM-only 검증(색 리터럴 거부) + UX 검토 가드레일 클램프 후 등록.
 //       사용자 스킨은 런타임 `<style>` 주입으로 CSS 전달. 내장 스킨은 skins.css(정적 번들)가 소유하므로
 //       `registerBuiltin` 으로 **주입 없이** 델타만 기록(카탈로그/검증/list 용).
-//   * 내장 스킨은 HANMS 91_hanms_verdict.md §1/§3 판정 반영:
+//   * 내장 스킨은 UX 판정 문서 §1/§3 판정 반영:
 //       Sharp/Rounded/Stitch/Flat/HighContrast/Material 6종. **Neumorph 는 기본 카탈로그에서 컷**
 //       (defineSkin 레시피 + allowLowContrastSkins 옵트인으로만 생존, §1.3).
 // ============================================================
@@ -241,12 +241,12 @@ export function applyGuardrails(id: string, delta: SkinTokenDelta): SkinDefineRe
     const px = parseFloat(String(fw));
     if (!Number.isNaN(px) && px < 2) {
       out['--og-focus-width'] = '2px';
-      warnings.push(`focus-width ${fw} → 2px (가시 포커스 최소 2px, HANMS)`);
+      warnings.push(`focus-width ${fw} → 2px (가시 포커스 최소 2px, 접근성 가드레일)`);
     }
   }
   if (out['--og-focus-style'] === 'none') {
     out['--og-focus-style'] = 'solid';
-    warnings.push(`focus-style none → solid (가시 포커스 비협상, HANMS)`);
+    warnings.push(`focus-style none → solid (가시 포커스 비협상, 접근성 가드레일)`);
   }
 
   return { delta: out, warnings };
@@ -419,8 +419,8 @@ export class SkinRegistry {
   }
 }
 
-// ─── 내장 스킨 델타 (HANMS 승인 5 + Material 대체 = 6) — item3 §3, HANMS §1/§3 ───
-// 값은 item3 §3.1~§3.6 + HANMS §3(Material) 의 구체 토큰. density 행은 **권장 밀도 힌트**
+// ─── 내장 스킨 델타 (UX 검토 승인 5 + Material 대체 = 6) — item3 §3, UX 판정 §1/§3 ───
+// 값은 item3 §3.1~§3.6 + UX 판정 §3(Material) 의 구체 토큰. density 행은 **권장 밀도 힌트**
 // (실제 relayout 은 data-og-density 축 소유, item4 C1 — setSkin 은 무비용).
 
 // 계약 추적: item3 §3.1. / Contract ref: item3 §3.1.

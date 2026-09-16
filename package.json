@@ -1,32 +1,69 @@
 {
   "name": "open-grid",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "초경량·제로 의존성 데이터 그리드 — React·Vue·Angular·jQuery·Vanilla 어디서나. 가상 스크롤·인라인 편집·다국어(i18n), MIT 라이선스, AI 친화 override 가이드. / Ultra-light data grid with a zero-dependency core — works with React, Vue, Angular, jQuery, or vanilla JS. Virtual scroll, inline editing, i18n. MIT-licensed, endlessly customizable, with an AI-friendly override guide.",
   "type": "module",
   "main": "dist/open-grid.cjs",
   "module": "dist/open-grid.js",
   "types": "dist/types/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "vue": [
+        "./dist/types/vue/index.d.ts"
+      ],
+      "react": [
+        "./dist/types/react/index.d.ts"
+      ],
+      "angular": [
+        "./dist/angular/index.d.ts"
+      ],
+      "typography": [
+        "./dist/types/typography/index.d.ts"
+      ],
+      "header": [
+        "./dist/types/header/index.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/open-grid.js",
-      "require": "./dist/open-grid.cjs",
-      "types": "./dist/types/index.d.ts"
+      "require": "./dist/open-grid.cjs"
     },
     "./vue": {
+      "types": "./dist/types/vue/index.d.ts",
       "import": "./dist/open-grid-vue.js",
-      "require": "./dist/open-grid-vue.cjs",
-      "types": "./dist/types/vue/index.d.ts"
+      "require": "./dist/open-grid-vue.cjs"
     },
     "./react": {
+      "types": "./dist/types/react/index.d.ts",
       "import": "./dist/open-grid-react.js",
-      "require": "./dist/open-grid-react.cjs",
-      "types": "./dist/types/react/index.d.ts"
+      "require": "./dist/open-grid-react.cjs"
     },
+    "./angular": {
+      "types": "./dist/angular/index.d.ts",
+      "default": "./dist/angular/fesm2022/open-grid-angular.mjs"
+    },
+    "./typography": {
+      "types": "./dist/types/typography/index.d.ts",
+      "import": "./dist/open-grid-typography.js",
+      "require": "./dist/open-grid-typography.cjs"
+    },
+    "./typography.css": "./dist/open-grid-typography.css",
+    "./header": {
+      "types": "./dist/types/header/index.d.ts",
+      "import": "./dist/open-grid-header.js",
+      "require": "./dist/open-grid-header.cjs"
+    },
+    "./header.css": "./dist/open-grid-header.css",
     "./style.css": "./dist/style.css"
   },
   "files": [
     "dist",
     "README.md",
+    "README.ja.md",
+    "README.zh.md",
     "CHANGELOG.md",
     "LICENSE",
     "NOTICE",
@@ -34,25 +71,23 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && vite build --config vite.config.typography.ts && vite build --config vite.config.header.ts && npm run build:angular",
+    "build:angular": "npm --prefix angular install --no-audit --no-fund && npm --prefix angular run build && node -e \"require('fs').rmSync('dist/angular/esm2022',{recursive:true,force:true})\"",
     "build:types": "tsc --emitDeclarationOnly",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
     "docs": "typedoc",
     "size": "node scripts/check-bundle-size.mjs",
     "arch:check": "node scripts/arch-check.mjs",
     "lint": "eslint src --ext .ts,.tsx,.vue",
-    "preview": "vite preview",
-    "build:deploy": "vite build --config vite.config.deploy.ts",
-    "obfuscate": "node scripts/obfuscate.mjs",
-    "deploy": "npm run build && npm run build:deploy && npm run obfuscate"
+    "preview": "vite preview"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0",
-    "vue": ">=3.0.0"
+    "vue": ">=3.0.0",
+    "@angular/core": ">=17.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -63,10 +98,12 @@
     },
     "vue": {
       "optional": true
+    },
+    "@angular/core": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.44.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
@@ -76,7 +113,6 @@
     "@vitest/coverage-v8": "^1.6.1",
     "ajv": "^8.20.0",
     "eslint": "^9.0.0",
-    "javascript-obfuscator": "^5.4.3",
     "jsdom": "^29.1.1",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
@@ -95,6 +131,7 @@
     "table",
     "vue",
     "react",
+    "angular",
     "typescript",
     "virtual-scroll",
     "editable"

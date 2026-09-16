@@ -2,6 +2,107 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.6.0] - 2026-09-16
+
+### Added
+- **Angular(17 이상) 컴포넌트 `open-grid/angular`** / **Angular (17+) component `open-grid/angular`.**
+  `<open-grid>` 스탠드얼론 컴포넌트를 넣었다. React·Vue 래퍼와 같은 입력값(`columns`·`data`·`height`·`editable`·`theme`·`options` …)과
+  출력(`ready`·`cellClick`·`rowClick`·`editEnd`·`sortChange`·`filterChange`·`rowDrop`·`dataChange`)을 쓴다.
+  Angular 는 `peerDependencies` 선택 항목이라 React·Vue·순수 JS 사용자에게는 아무것도 늘지 않는다.
+  Angular 17 과 22 의 새 CLI 앱에서 기본 설정 그대로 운영 빌드(AOT)와 화면 동작을 확인했다.
+  / A standalone `<open-grid>` component with the same inputs and outputs as the React and Vue wrappers.
+  Angular is an optional peer dependency, so nothing changes for other users.
+  Verified with production (AOT) builds of fresh Angular 17 and 22 CLI apps using their default settings.
+
+### Fixed
+- **워크시트 여러 장을 엑셀로 내보낼 때 스타일이 빠지던 문제** / **Multi-sheet Excel export lost all styling.**
+  `exportSheetsExcel()` 은 머리글 배경·줄무늬·테두리·정렬 없이 글자만 내보냈다(`exportExcel()` 은 스타일이 들어갔다).
+  이제 시트마다 `exportExcel()` 과 같은 테마 스타일을 입히고, 컬럼 폭과 숫자 서식(`#,##0` 등)도 옮긴다.
+  / `exportSheetsExcel()` now applies the same theme styling as `exportExcel()` to every sheet, plus column widths and number formats.
+- **지금 보고 있는 워크시트에서 고친 내용이 엑셀에 안 담기던 문제** / **Edits on the active worksheet were missing from the export.**
+  `exportSheetsExcel()` 이 시트를 추가할 때의 원본 데이터를 썼다. 활성 시트는 화면의 최신 데이터로 내보낸다.
+  / The active sheet is now exported from the grid's current data instead of the data it was added with.
+- **`exports` 의 `types` 조건 순서** / **`types` condition order in `exports`.**
+  `types` 가 `import`/`require` 뒤에 있어 번들러가 경고를 냈다. 맨 앞으로 옮기고, 옛 방식(`moduleResolution: node`)에서도
+  하위 경로(`open-grid/react`·`open-grid/vue`·`open-grid/angular` …)의 타입을 찾도록 `typesVersions` 를 넣었다.
+  / `types` now comes first in every `exports` entry, and `typesVersions` lets `moduleResolution: node` projects resolve subpath types.
+
+## [1.5.2] - 2026-08-09
+
+### Fixed
+- **CSS 주석에 남아 있던 사람 이름을 걷어냈다** / **Removed personal names left in CSS comments.**
+  `open-grid-themes.css` 와 `open-grid-header.css` 의 설계 주석에 사람 이름 41건이
+  남아 1.5.0·1.5.1 로 발행됐다. 역할 라벨로 바꿨다.
+  **코드는 한 글자도 안 바뀐다** — 두 파일에서 주석을 걷어내고 비교하면 1.5.1 과 완전히 같다.
+  / Only comments changed; stripping comments from both files yields a byte-identical stream to 1.5.1.
+  No behaviour, no selectors, no values.
+
+  경위를 적어 둔다. 1.5.0 에서 이름 148건이 실려 나가 1.5.1 로 걷어냈는데, 그때 쓴
+  치환 목록이 **하이픈 붙은 전체 이름만** 담고 있어 짧은 이름은 그대로 남았다.
+  발행 뒤 검증도 **같은 목록**을 썼기 때문에 「0건」이라고 답했다 — 자기 자신을 검사한 셈이다.
+  이제 목록은 `scripts/check-names.mjs` 한 곳에 있고, 소스와 `dist/` 를 함께 본다.
+  / The 1.5.1 scrub and its verification shared one incomplete pattern list, so the check
+  validated itself. The list now lives in a single script that also scans the built output.
+
+## [1.5.1] - 2026-08-08
+
+### Fixed
+- **발행물에서 내부 인명 표기 제거** / **Internal reviewer names removed from shipped files.**
+  소스 주석에 설계·리뷰 참여자 표기가 남아 있어 배포 파일에 실려 나갔다. 전부 역할 라벨로 바꿨다
+  (예: 테마 블록의 채택자 표기 → 역할명, 리뷰 지적 ID 의 인명 접두어 → REVIEW-).
+  **코드·값·동작은 한 줄도 바뀌지 않았다 — 주석만 바뀐다.**
+  1.4.0 이전 릴리스에도 일부 표기가 있었으며 이번에 함께 정리했다.
+  / Comments only. No code, values, or behaviour changed.
+
+## [1.5.0] - 2026-08-08
+
+### Added
+- **헤더 축 신설 (제6축)** / **New header axis (6th).** 머리글의 **형태**를 색·형태(스킨)·밀도·
+  질감·조판에 이은 여섯 번째 축으로 세운다. 지금까지 머리글 모양은 테마 27종이 색만 갈아끼울 뿐
+  **하나뿐**이었다.
+  - 프리셋 5종 — `default`(오늘과 동일) · `rule`(색면 없이 아래 선 하나) · `quiet`(색면은 두고
+    세로 칸막이만 걷음) · `band`(굵은 밑줄, 멀리서·저시력) · `pill`(정렬된 컬럼만 배지로 떠오름).
+  - 별도 엔트리 `open-grid/header` — import 하지 않으면 **1바이트도 배송되지 않는다.**
+    조판 축(`open-grid/typography`)과 같은 구조다.
+  - `applyHeader()` · `defineHeader()` · `HEADER_PRESETS`. 프리셋 본체 CSS 는 `open-grid/header.css`.
+  - **이 축은 색을 소유하지 않는다.** `--og-header-*` 이름이 실제로 세 축에 걸쳐 있어
+    (색 = 테마 축 · 조판 = 타이포 축 · 형태 = 헤더 축), 헤더 축이 가진 것은 **형태 토큰 8개뿐**이다.
+    색은 CSS 가 테마 토큰에서 `var()` 로 유도하므로 **이 축을 통해 새 색이 들어올 자리가 없다.**
+  - / The header axis owns **shape only** — 8 tokens. Colours are derived from theme tokens via
+    `var()`, so no new hex can enter through this axis. Ship zero bytes unless you import it.
+
+- **신규 테마 12종 확정** / **12 new themes finalised.** 내장 테마는 **27종**이 된다.
+  ```
+  밝은 6    graphite · high-contrast · washi · plain · field · clinical
+  어두운 6  high-contrast-dark · blueprint · nocturne · graphite-dark · sentinel · ticker
+  ```
+
+### Fixed
+- **hover 막대와 스피너가 테마를 안 따라오던 문제** / **Accent bar and spinner ignored the theme.**
+  `:root` 안에서 `--og-row-accent-color: var(--og-primary)` 로 선언하면 **그 자리에서 값이 확정**되어
+  확정값이 상속된다. 그래서 테마가 뒤에서 `--og-primary` 를 바꿔도 따라오지 않았고, 결과적으로
+  행 hover 좌측 막대와 로딩 스피너가 **테마 27종 전부에서 같은 파랑**이었다.
+  `.og-container` 에서 다시 선언해 그 요소의 테마 색으로 재확정한다.
+  **13종이 대비 미달에서 통과로 올라간다.** 기본 테마는 값이 같아 렌더가 안 바뀐다.
+  / Custom properties resolve where they are declared. Re-declaring them on `.og-container`
+  lets the theme win. 13 themes move from failing to passing contrast; the default theme is unchanged.
+
+### Changed
+- **하드코딩된 색·반경을 토큰으로** / **Hardcoded colours and radii are now tokens.**
+  행번호 열 글자(`#999`)와 여러 `border-radius` 리터럴을 `var(--토큰, 오늘값)` 으로 연다.
+  **폴백이 오늘 값이라 기본 렌더는 그대로다.** 형태 축의 `sharp` 를 골랐을 때 이제 실제로 각진다.
+  / Fallbacks keep today's values, so the default render is byte-identical. The `sharp` skin now
+  actually squares off the corners it previously missed.
+
+- **테마 3종 제거** / **Three themes removed.** `ledger` · `daylight` · `ocean-dark` 는 1.4.0 이후
+  저장소에만 있던 미발행 중간 산출로 **한 번도 배포된 적이 없다.** 최종 명단에서 각각
+  `plain` · `field` · `high-contrast-dark` 로 대체됐다. `ocean` 의 다크 짝 표기도 함께 지웠다.
+  / They were never published — no consumer action is required.
+
+- **API 문서에 축 플러그인 두 개가 나온다** / **Both axis plugins now appear in the API docs.**
+  `open-grid/typography` 와 `open-grid/header` 가 TypeDoc 진입점에 없어 문서에서 빠져 있었다.
+  주석은 한국어·영어·일본어로 병행 제공된다.
+
 ## [1.4.0] - 2026-07-17
 
 ### Added

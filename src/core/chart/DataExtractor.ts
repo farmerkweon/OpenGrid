@@ -98,7 +98,7 @@ export interface ChartExtractConfig {
 export interface ChartExtractResult {
   /** 산출된 차트 데이터 모델. / The produced chart data model. */
   model: ChartDataModel;
-  /** true 면 kind='range' 요청이 selection 으로 강등됐다(F1 부재/range 미해소, §7 HANMS-04). / true when a kind='range' request was downgraded to selection (F1 absent/range unresolved, §7). */
+  /** true 면 kind='range' 요청이 selection 으로 강등됐다(F1 부재/range 미해소, §7 UX-REVIEW-04). / true when a kind='range' request was downgraded to selection (F1 absent/range unresolved, §7). */
   rangeFallback: boolean;
 }
 
@@ -185,7 +185,7 @@ function resolveRows(source: ChartSource, deps: ChartExtractDeps): {
     case 'range': {
       const range = source.range ?? deps.getActiveRange?.() ?? null;
       if (!range || !deps.getRangeRows) {
-        // §7 graceful fallback: F1 부재/range 미해소 → selection 강등(하드에러 금지, HANMS-04).
+        // §7 graceful fallback: F1 부재/range 미해소 → selection 강등(하드에러 금지, UX-REVIEW-04).
         return { rows: deps.getSelectedRows(), effectiveKind: 'selection', rangeFallback: true };
       }
       return { rows: deps.getRangeRows(range), effectiveKind: 'range', rangeFallback: false };

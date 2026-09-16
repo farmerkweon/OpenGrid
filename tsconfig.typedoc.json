@@ -4,5 +4,5 @@
     "noEmit": true,
     "emitDeclarationOnly": false
   },
-  "include": ["src/index.ts", "src/core", "src/styles"]
+  "include": ["src/index.ts", "src/core", "src/styles", "src/typography", "src/header"]
 }

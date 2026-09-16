@@ -61,7 +61,7 @@ describe('FormulaEvaluator — A1 참조(F3-R03/C1)', () => {
     const out = run('=B2*2', g);
     expect(displayString(out.value)).toBe('12');
   });
-  it('숨김 열은 A1 열문자 계산에서 제외된다(MCCONNELL-09/C1)', () => {
+  it('숨김 열은 A1 열문자 계산에서 제외된다(QA-REVIEW-09/C1)', () => {
     const g = baseGrid();
     g.hideColumn('a'); // visibleFields = [b, c] → A=b, B=c
     const out = run('=A1', g); // row1(flat0)=r1, A→b → r1.b=5
@@ -194,7 +194,7 @@ describe('FormulaEvaluator — 논리/조건 함수', () => {
   });
 });
 
-// ── 정밀도(F3-R20/R34 + 발주자 추가요구: 부동소수점 완전지원) ─
+// ── 정밀도(F3-R20/R34 + 추가 요구: 부동소수점 완전지원) ─
 describe('FormulaEvaluator — OGDecimal 정밀도(부동소수점 완전지원)', () => {
   it('=0.1+0.2 → 0.3 (IEEE 오차 없음)', () => {
     expect(displayString(run('=0.1+0.2', baseGrid()).value)).toBe('0.3');
@@ -226,8 +226,8 @@ describe('FormulaEvaluator — OGDecimal 정밀도(부동소수점 완전지원)
   });
 });
 
-// ── 근사 표식(HANMS-17/C11) ──────────────────────────────────
-describe('FormulaEvaluator — SQRT 근사(_approx, HANMS-17)', () => {
+// ── 근사 표식(UX-REVIEW-17/C11) ──────────────────────────────────
+describe('FormulaEvaluator — SQRT 근사(_approx, UX-REVIEW-17)', () => {
   it('=SQRT(2) → approx=true, 유한 근사값', () => {
     const out = run('=SQRT(2)', baseGrid());
     expect(out.approx).toBe(true);

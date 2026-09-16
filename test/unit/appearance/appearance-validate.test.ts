@@ -60,8 +60,11 @@ describe('DD-11 §2.2·§3.5 validate — 위험/불가 객관 판정(테마 메
   it('TEXTURE_META_MISMATCH — 질감 × 비질감 테마 = risky', () => {
     const f = new Appearance('ocean', 'sharp', 'default', 'linen').validate(reg);
     expect(f.some((x) => x.code === 'TEXTURE_META_MISMATCH')).toBe(true);
-    // 질감 테마(linen)에는 미발화
-    expect(new Appearance('linen', 'sharp', 'default', 'linen').validate(reg).some((x) => x.code === 'TEXTURE_META_MISMATCH')).toBe(false);
+    // 질감 테마에는 미발화. (SPEC §1.1 로 유령 메타 'linen' 테마를 제거했으므로 실물 질감 테마
+    //  washi 로 검증한다 — 'linen' 을 그대로 쓰면 "메타 미등록이라 미발화" 라는 다른 경로를
+    //  통과해 이 케이스가 조용히 무의미해진다.)
+    expect(themeMetaRegistry.meta('washi')?.textured).toBe(true);
+    expect(new Appearance('washi', 'sharp', 'default', 'linen').validate(reg).some((x) => x.code === 'TEXTURE_META_MISMATCH')).toBe(false);
   });
 
   it('MATERIAL_GRAMMAR_CONFLICT — material(광택) × 무광 질감 = risky(재질 문법 충돌)', () => {

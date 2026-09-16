@@ -5,7 +5,7 @@
  * 계약 근거: 11_design_F1_v2.md §2(범위 MODEL), §3.1~3.3(드래그/Shift 확장), §2.5(재투영, C0.5).
  * / Contract basis: 11_design_F1_v2.md §2 (range MODEL), §3.1–3.3 (drag / Shift extension), §2.5 (reprojection, C0.5).
  *
- * YOURDON 원칙(§0): 포인터/키보드 I/O는 이 클래스 밖(배선 단계)에서 좌표(ri,ci)로 환원해 호출하고,
+ * 구조설계 원칙(§0): 포인터/키보드 I/O는 이 클래스 밖(배선 단계)에서 좌표(ri,ci)로 환원해 호출하고,
  * 이 클래스는 anchor/focus/identity/rects만 순수하게 갱신한다. DOM 렌더는 이 모델의 투영일 뿐이다.
  * / Structured-analysis principle (§0): pointer/keyboard I/O is reduced to coordinates (ri,ci) outside this class
  * (in the wiring layer) before calling in; this class purely updates only anchor/focus/identity/rects. DOM rendering

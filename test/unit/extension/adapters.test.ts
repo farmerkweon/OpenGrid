@@ -29,7 +29,7 @@ describe('adaptRegistry: 임의 브리지 → IRegistry 계약', () => {
     expect(store.has('a')).toBe(false);
   });
 
-  it('원본에 직등록된 내장 키(어댑터 메타 없음)도 protect-builtin 으로 보호(QA-FOWLER)', () => {
+  it('원본에 직등록된 내장 키(어댑터 메타 없음)도 protect-builtin 으로 보호(QA-REVIEW)', () => {
     // 실제 시나리오: SkinRegistry/FormatterRegistry 는 부트스트랩에서 원본 store 에 직접 내장을
     // 심는다(어댑터를 거치지 않음). 어댑터 meta 는 그 키를 모르지만 entries() 는 builtin 으로 라벨한다.
     // register 도 동일하게 코어 보호를 적용해야 결정론(REQ-T4-802)이 성립한다.

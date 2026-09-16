@@ -1183,7 +1183,7 @@ export class GridRenderer {
       `top:${top}px;width:${totalColWidth}px;height:${height}px;`,
       'box-sizing:border-box;',
       'overflow-y:auto;overflow-x:auto;',
-      'overscroll-behavior:contain;', // HANMS-07: 중첩 스크롤 체이닝 차단
+      'overscroll-behavior:contain;', // UX-REVIEW-07: 중첩 스크롤 체이닝 차단
       'background:var(--og-detail-bg,#fff);',
       `border:0;border-bottom:${this._ap.divider()};`,
       'z-index:var(--og-z-detail,2);',

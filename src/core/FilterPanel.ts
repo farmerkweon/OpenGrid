@@ -33,7 +33,7 @@ export class FilterPanel {
     this._el.style.cssText = `
       position:absolute;z-index:1000;min-width:200px;max-width:280px;
       background:var(--og-row-bg,#fff);border:1px solid var(--og-border-color,#e0e0e0);
-      border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,0.15);
+      border-radius:var(--og-radius-md,4px);box-shadow:0 4px 16px rgba(0,0,0,0.15);
       padding:10px;box-sizing:border-box;display:none;font-size:13px;
     `;
     container.appendChild(this._el);
@@ -61,7 +61,7 @@ export class FilterPanel {
     condRow.style.cssText = 'display:flex;gap:4px;margin-bottom:6px;';
 
     const condSel = document.createElement('select');
-    condSel.style.cssText = `flex:1;padding:3px 4px;border:1px solid var(--og-border-color,#e0e0e0);border-radius:3px;font-size:12px;`;
+    condSel.style.cssText = `flex:1;padding:3px 4px;border:1px solid var(--og-border-color,#e0e0e0);border-radius:var(--og-radius-md,3px);font-size:12px;`;
     const conditions: Array<{ label: string; value: FilterItem['operator'] }> = [
       { label: this._t('filter.opContains'), value: 'contains' },
       { label: this._t('filter.opEq'), value: '=' },
@@ -90,7 +90,7 @@ export class FilterPanel {
     valueInput.value = currentFilters[0]?.value ?? '';
     valueInput.style.cssText = `
       width:100%;padding:4px 6px;border:1px solid var(--og-border-color,#e0e0e0);
-      border-radius:3px;font-size:12px;box-sizing:border-box;margin-bottom:8px;
+      border-radius:var(--og-radius-md,3px);font-size:12px;box-sizing:border-box;margin-bottom:8px;
       outline:none;
     `;
     valueInput.addEventListener('keydown', (e) => {
@@ -107,7 +107,7 @@ export class FilterPanel {
     clearBtn.textContent = this._t('filter.clear');
     clearBtn.style.cssText = `
       padding:3px 10px;border:1px solid var(--og-border-color,#e0e0e0);
-      border-radius:3px;background:#fff;cursor:pointer;font-size:12px;color:#666;
+      border-radius:var(--og-radius-md,3px);background:#fff;cursor:pointer;font-size:12px;color:#666;
     `;
     clearBtn.addEventListener('click', () => {
       this._onClear(this._field);
@@ -118,7 +118,7 @@ export class FilterPanel {
     applyBtn.textContent = this._t('filter.apply');
     applyBtn.style.cssText = `
       padding:3px 10px;border:1px solid var(--og-primary,#1976d2);
-      border-radius:3px;background:var(--og-primary,#1976d2);
+      border-radius:var(--og-radius-md,3px);background:var(--og-primary,#1976d2);
       color:#fff;cursor:pointer;font-size:12px;
     `;
     applyBtn.addEventListener('click', () => {

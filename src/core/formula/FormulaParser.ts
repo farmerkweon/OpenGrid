@@ -286,7 +286,7 @@ class _Parser {
       this.pos++;
       while (!this.eof() && /[0-9]/.test(this.peekChar())) this.pos++;
     }
-    // 과학표기 지수부(1e-5, 2.5E3, §2.2 확장 — 발주자 추가요구: 부동소수점 완전지원).
+    // 과학표기 지수부(1e-5, 2.5E3, §2.2 확장 — 추가요구: 부동소수점 완전지원).
     if ((this.peekChar() === 'e' || this.peekChar() === 'E')) {
       const save = this.pos;
       this.pos++;

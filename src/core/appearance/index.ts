@@ -34,6 +34,24 @@ export {
   TEXTURE_GRAPH,
 } from './TextureRegistry.js';
 
+// ── 타이포그래피 축(제5축, 신설) ──
+// 런타임 진입점은 별도 플러그인 엔트리 `open-grid/typography` 다(SPEC §0 D-3).
+export {
+  TypographyRegistry,
+  typographyRegistry,
+  TYPOGRAPHY_TOKENS,
+  TYPOGRAPHY_ATTR,
+  assertTypographyOnly,
+  BUILTIN_TYPOGRAPHIES,
+  TYPOGRAPHY_UI,
+  TYPOGRAPHY_LEDGER,
+  TYPOGRAPHY_TERMINAL,
+  TYPOGRAPHY_DENSE_SCAN,
+  TYPOGRAPHY_HUMANIST,
+  TYPOGRAPHY_HANGUL_FIRST,
+  TYPOGRAPHY_CJK_DOC,
+} from './TypographyRegistry.js';
+
 // ── 테마 메타 축(신설) + 색⊥형태 대칭 강제 ──
 export type { ThemeMeta, EmotionalTemperature } from './ThemeMetaRegistry.js';
 export {

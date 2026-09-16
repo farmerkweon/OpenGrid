@@ -3,7 +3,7 @@
  *
  * 검증:
  *  1) [byte-identical] 스킨 미설정(default)에서 resolver 는 R12a 와 동일 문자열을 반환(회귀 0).
- *  2) [FORM 토큰] 내장 스킨(HANMS 6종)이 자신의 form 토큰을 담고, Neumorph 는 기본 카탈로그에 없다.
+ *  2) [FORM 토큰] 내장 스킨(UX 검토 6종)이 자신의 form 토큰을 담고, Neumorph 는 기본 카탈로그에 없다.
  *  3) [FORM-only 검증] 스킨 델타에 색 리터럴이 있으면 define/registerBuiltin 이 throw(색⊥형태).
  *  4) [가드레일] focus <2px/none 클램프, 상태 보더는 스킨과 무관하게 solid(G-ST2), 텍스처 존 제한(G-ST1).
  *  5) [축 배선] setSkin/getSkin 이 data-og-skin 을 설정하고 resolver 컨텍스트를 갈아끼운다.
@@ -67,8 +67,8 @@ describe('R12b — 스킨 활성 → form 토큰 var() 로 승격', () => {
   });
 });
 
-// ─── 3) 내장 카탈로그 (HANMS 6종, Neumorph 컷) ───────────────
-describe('R12b — 내장 스킨 카탈로그(HANMS 판정)', () => {
+// ─── 3) 내장 카탈로그 (UX 검토 6종, Neumorph 컷) ───────────────
+describe('R12b — 내장 스킨 카탈로그(UX 판정)', () => {
   it('기본 카탈로그 = Sharp/Rounded/Stitch/Flat/High-Contrast/Material 6종', () => {
     const ids = skinRegistry.list();
     for (const id of ['sharp', 'rounded', 'stitch', 'flat', 'high-contrast', 'material']) {
@@ -76,7 +76,7 @@ describe('R12b — 내장 스킨 카탈로그(HANMS 판정)', () => {
     }
     expect(BUILTIN_SKINS.length).toBe(6);
   });
-  it('Neumorph 는 기본 카탈로그에서 컷(HANMS §1.3)', () => {
+  it('Neumorph 는 기본 카탈로그에서 컷(UX 판정 §1.3)', () => {
     expect(skinRegistry.has('neumorph')).toBe(false);
     expect(skinRegistry.list()).not.toContain('neumorph');
   });
@@ -118,7 +118,7 @@ describe('R12b — FORM-only 검증(색⊥형태 직교성)', () => {
 });
 
 // ─── 5) 가드레일 (focus 클램프 · 상태보더 solid · 텍스처 존) ──
-describe('R12b — HANMS 가드레일(불변식)', () => {
+describe('R12b — UX 검토 가드레일(불변식)', () => {
   it('focus-width < 2px 는 2px 로 클램프 + 경고', () => {
     const { delta, warnings } = applyGuardrails('x', { '--og-focus-width': '1px' });
     expect(delta['--og-focus-width']).toBe('2px');

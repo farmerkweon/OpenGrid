@@ -16,9 +16,17 @@
 // ============================================================
 
 /** 외관 축 식별자. 이름공간(prefix)이 물리 직교의 열쇠. / Appearance axis id; the token prefix is the key to physical orthogonality. */
-export type AxisId = 'theme' | 'skin' | 'density' | 'texture' | 'icon';
+export type AxisId = 'theme' | 'skin' | 'density' | 'texture' | 'icon' | 'typography' | 'header';
 
-/** 한 축의 CSS 변수 델타(자기 이름공간만). / A CSS-var delta for one axis (own namespace only). */
+/**
+ * 한 축의 CSS 변수 델타(자기 이름공간만).
+ *
+ * A CSS-var delta for one axis (own namespace only).
+ *
+ * 一つの軸の CSS 変数デルタ(自分の名前空間だけ)。
+ *
+ * 一个轴的 CSS 变量增量(只含自己的命名空间)。
+ */
 export type TokenDelta = Readonly<Record<string, string>>;
 
 /** 컨테이너에 붙일 data-* 속성. / A data-* attribute to place on the container. */
@@ -40,7 +48,15 @@ export interface AxisResolution {
   readonly requiresRelayout?: boolean;
 }
 
-/** 축 정의 결과 — 등록된(가드레일 반영) 델타 + 경고. / Axis-definition result — registered (clamped) delta + warnings. */
+/**
+ * 축 정의 결과 — 등록된(가드레일 반영) 델타 + 경고.
+ *
+ * Axis-definition result — registered (clamped) delta + warnings.
+ *
+ * 軸の定義結果 — 登録された(ガードレール反映後の)デルタ + 警告。
+ *
+ * 轴的定义结果 — 注册后(经护栏钳制)的增量 + 警告。
+ */
 export interface AxisDefineResult {
   readonly delta: TokenDelta;
   readonly warnings: string[];
@@ -53,15 +69,47 @@ export interface AxisDefineResult {
  */
 export interface IAppearanceAxis {
   readonly id: AxisId;
-  /** 이 축이 소유하는 토큰 이름공간(검증용). / Token namespace this axis owns (for validation). */
+  /**
+   * 이 축이 소유하는 토큰 이름공간(검증용).
+   *
+   * Token namespace this axis owns (for validation).
+   *
+   * この軸が所有するトークンの名前空間(検証用)。
+   *
+   * 这个轴所有的令牌命名空间(供校验使用)。
+   */
   readonly namespace: ReadonlySet<string>;
   /** 값 등록(사용자 확장). 축 오염·정직성 위반 시 throw 또는 클램프+경고. / Register a value; throws on axis-pollution, clamps+warns on honesty violations. */
   define(id: string, delta: TokenDelta): AxisDefineResult;
-  /** 등록 여부. / Whether registered. */
+  /**
+   * 등록 여부.
+   *
+   * Whether registered.
+   *
+   * 登録されているか。
+   *
+   * 是否已注册。
+   */
   has(id: string): boolean;
-  /** 축값 → 해소(토큰·속성·relayout 플래그). 미등록/default → 빈 델타. / Value id → resolution; unknown/default → empty delta. */
+  /**
+   * 축값 → 해소(토큰·속성·relayout 플래그). 미등록/default → 빈 델타.
+   *
+   * Value id → resolution; unknown/default → empty delta.
+   *
+   * 軸の値 → 解決(トークン・属性・relayout フラグ)。未登録/default → 空のデルタ。
+   *
+   * 轴的值 → 解析(令牌、属性、relayout 标志)。未注册/default → 空增量。
+   */
   resolve(valueId: string): AxisResolution;
-  /** 등록된 값 id 목록(카탈로그·인스펙터용). / Registered value ids (for catalog/inspector). */
+  /**
+   * 등록된 값 id 목록(카탈로그·인스펙터용).
+   *
+   * Registered value ids (for catalog/inspector).
+   *
+   * 登録された値 id の一覧(カタログ・インスペクター用)。
+   *
+   * 已注册的值 id 列表(供目录与检查器使用)。
+   */
   list(): string[];
 }
 
@@ -96,7 +144,7 @@ export function assertNamespace(axisId: AxisId, namespace: ReadonlySet<string>, 
     if (!namespace.has(key)) {
       throw new Error(
         `[AppearanceAxis:${axisId}] 토큰 "${key}" 은 ${axisId} 축 이름공간이 아닙니다. ` +
-        `각 축은 자기 이름공간 토큰만 소유합니다(축 오염 금지 — 이름-분리 물리 직교, 불변식 1).`,
+        `각 축은 자기 이름공간 토큰만 소유합니다(축 섞임 금지 — 이름-분리 물리 직교, 불변식 1).`,
       );
     }
   }

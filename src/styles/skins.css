@@ -16,7 +16,7 @@
    토큰이 걸리게 한다. base.css 는 이 FORM 토큰들을 정의하지 않으므로 특정성 경쟁이 없다
    (var 값만 갈아끼우는 방식이라 !important 불필요 — stitch !important 전쟁 은퇴).
 
-   HANMS 91_hanms_verdict.md 판정 반영:
+   UX 판정 문서 반영:
      Sharp/Rounded/Stitch/Flat/High-Contrast/Material 6종.
      Neumorph 는 기본 카탈로그에서 컷(§1.3) — OpenGrid.defineSkin 레시피로만 제공.
    density-* 행은 **권장 밀도 힌트**(실제 relayout 은 data-og-density 축 소유, item4 C1).
@@ -97,7 +97,7 @@
   --og-icon-size: 18px; --og-icon-fill: 1; --og-icon-stroke-width: 2; --og-icon-corner: miter;
 }
 
-/* ── Material/Elevated — Neumorph 대체 (HANMS §3, APPROVE): 정직한 그림자 엘리베이션 ── */
+/* ── Material/Elevated — Neumorph 대체 (UX 판정 §3, APPROVE): 정직한 그림자 엘리베이션 ── */
 [data-og-skin="material"] {
   --og-radius-sm: 2px; --og-radius-md: 4px; --og-radius-lg: 8px; --og-container-radius: 8px;
   --og-radius-control: 4px; --og-radius-widget: 4px;

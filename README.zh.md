@@ -81,6 +81,7 @@ Angular、jQuery，或纯 JavaScript，装上就能用。采用 MIT 许可，商
 | 扩展注册表 —— `TypedRegistry`，返回 `added`/`replaced`/`kept`/`rejected` 处理结果，保留前缀 `og:` 防护，`protect-builtin` | ✅ |
 | Vue 3 组件 | ✅ |
 | React 18 组件 | ✅ |
+| Angular 组件（17 及以上） | ✅ |
 
 ## 安装
 
@@ -162,6 +163,44 @@ function App() {
       onDataChange={setData}
     />
   );
+}
+```
+
+### Angular（17 及以上）
+
+来自 `open-grid/angular` 的独立（standalone）组件。样式表请加到 `angular.json` 的 `styles` 中：
+`node_modules/open-grid/dist/open-grid-base.css`、`node_modules/open-grid/dist/open-grid-themes.css`。
+
+```ts
+import { Component } from '@angular/core';
+import { OpenGridComponent } from 'open-grid/angular';
+import type { OpenGridInstance } from 'open-grid';
+
+@Component({
+  selector: 'app-orders',
+  standalone: true,
+  imports: [OpenGridComponent],
+  template: `
+    <open-grid
+      [columns]="columns"
+      [data]="rows"
+      [editable]="true"
+      [height]="500"
+      [options]="{ rowNumber: true }"
+      (ready)="grid = $event"
+      (cellClick)="onCellClick($event)"
+      (editEnd)="onEditEnd($event)">
+    </open-grid>`,
+})
+export class OrdersComponent {
+  columns = [
+    { field: 'name',  header: '이름', width: 120 },
+    { field: 'price', header: '금액', width: 100, type: 'number', align: 'right' },
+  ];
+  rows = myData;
+  grid?: OpenGridInstance;
+  onCellClick(e: any) { console.log(e.field, e.value); }
+  onEditEnd(e: any) { console.log(e.oldValue, '→', e.newValue); }
 }
 ```
 

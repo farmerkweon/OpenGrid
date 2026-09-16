@@ -14,7 +14,7 @@
  *    principle), C5.2 (event names `<subject><Verb>` camelCase)
  *
  * 책임 경계: 이 파일은 **펼침 상태(Set<rowId>)와 규칙**만 다룬다. DOM/서브그리드 생명주기는
- * SubgridCache, flat 배열 스플라이스는 DetailSplice 가 담당한다(관심사 분리, Booch 경계).
+ * SubgridCache, flat 배열 스플라이스는 DetailSplice 가 담당한다(관심사 분리, 객체설계 경계).
  * / Responsibility boundary: this file handles **only the expansion state (Set<rowId>) and its rules**. DOM /
  * subgrid lifecycle belongs to SubgridCache; flat-array splicing belongs to DetailSplice (separation of concerns).
  *

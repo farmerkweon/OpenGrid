@@ -398,7 +398,7 @@ export class ChartManager {
       panel.style.cssText = basePanel + 'position:absolute;top:12px;right:12px;z-index:20;box-shadow:0 4px 16px rgba(0,0,0,0.18);';
       container.appendChild(panel);
     } else {
-      // docked(default): 그리드 컨테이너 하단에 형제로 append(HANMS-12).
+      // docked(default): 그리드 컨테이너 하단에 형제로 append(UX-REVIEW-12).
       panel.style.cssText = basePanel + 'width:100%;margin-top:8px;';
       container.appendChild(panel);
     }

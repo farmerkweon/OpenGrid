@@ -118,6 +118,9 @@
 .og-container {
   font-family: var(--og-font-family);
   font-size:   var(--og-font-size);
+  /* 셀 웨이트 — 타이포 축(제5축)이 쥔다. 기본값 400 은 오늘 렌더와 동일하고,
+     동시에 호스트가 body 에 건 굵기(예: font-weight:500)가 데이터에 새는 것도 막는다. */
+  font-weight: var(--og-font-weight, 400);
   color:       var(--og-row-color);
   /* host isolation: 호스트(WordPress 등) 테마의 line-height(1.7~1.9) 상속을
      차단한다. 모든 후손(행·셀·헤더 <th> 포함)으로 normal이 cascade되어,
@@ -127,13 +130,28 @@
      letter-spacing·word-spacing 이 상속되면 셀 텍스트가 "김 민 준"처럼 벌어지고(부모 div 오염),
      text-transform/text-indent/font-style/font-variant 도 데이터 표시를 왜곡한다. 컨테이너에서
      normal/기본으로 못박아 전 후손에 cascade — 특정 요소(헤더 letter-spacing·uppercase 등)는
-     자기 규칙으로 명시 재지정하므로 영향받지 않는다. */
-  letter-spacing: normal;
+     자기 규칙으로 명시 재지정하므로 영향받지 않는다.
+
+     ⚠ 격리는 그대로 두되 타이포 축이 쥘 두 속성만 var() 로 연다.
+     - letter-spacing: 기본값이 normal 이므로 축 미사용 시 오늘과 완전히 같다.
+       호스트의 상속값은 여전히 이 선언에 막힌다(상속 < 자기 선언).
+     - font-variant: 숏핸드를 걷어내고 longhand 로 분해했다. 숏핸드는 지정하지 않은
+       하위 속성까지 전부 리셋하므로 font-variant-numeric 이 항상 normal 로 깔려
+       tabular-nums·slashed-zero 를 축이 구조적으로 넣을 수 없었다. caps/ligatures/
+       east-asian/alternates/position 은 계속 normal 로 못박아 격리를 유지하고,
+       **numeric 만** 축에 넘긴다 — 숫자 자형은 데이터 가독성의 문제라 축의 소관이고,
+       small-caps 같은 나머지는 호스트가 데이터를 왜곡하는 통로라 계속 막아야 한다. */
+  letter-spacing: var(--og-letter-spacing, normal);
   word-spacing:   normal;
   text-transform: none;
   text-indent:    0;
   font-style:     normal;
-  font-variant:   normal;
+  font-variant-caps:       normal;
+  font-variant-ligatures:  normal;
+  font-variant-east-asian: normal;
+  font-variant-alternates: normal;
+  font-variant-position:   normal;
+  font-variant-numeric:    var(--og-font-variant-numeric, normal);
   display:     flex;
   flex-direction: column;
   overflow:    hidden;
@@ -142,6 +160,34 @@
   border-radius: var(--og-container-radius);
   background:    var(--og-row-bg);
   box-shadow:    var(--og-shadow-sm);
+
+  /* ── D-1 (2026-08-08 결정, 27종 전부) — `#1976d2` 누수 고침 ─────────────
+     :root 에서 `--og-row-accent-color: var(--og-primary)` 를 선언하면 그 var() 는
+     **:root 의 --og-primary(=#1976d2)** 로 계산되어 값으로 굳는다. 테마 속성은
+     .og-container 에 붙으므로, 테마가 --og-primary 를 바꿔도 이미 굳은 값은 안 따라온다.
+     그래서 hover 좌측 강조 막대와 로딩 스피너가 27종 전부에서 머티리얼 블루였다.
+     테마 속성이 붙는 **바로 그 요소**에서 다시 선언해 재확정한다(:root 선언은 하위호환으로 남긴다 —
+     .og-container 가 더 가까운 조상이므로 그리드 내부에서는 이쪽이 이긴다).
+     전수 재계산: 13종이 미달→통과, 회귀 0. */
+  --og-row-accent-color: var(--og-primary);
+  --og-spinner-color:    var(--og-primary);
+}
+
+/* ── D-1 안전판 (모션 r4 §3) — 고전 11종에서 막대가 사라지는 것을 막는다 ──────────
+   위 고침의 부작용이다. 아래 11종은 `--og-row-selected-bg` 가 `--og-primary` 와 **같은 hex** 라
+   선택된 행에서 막대와 배경이 같은 색이 되어 대비 1.00 = 완전 소실이다.
+   막대가 배경과 같아지는 그 상태에서만, 그 행의 **글자색**으로 물러선다.
+   글자색은 그 배경 위 4.5:1 을 통과하려고 고른 값이고 막대는 비텍스트라 3:1 이면 되므로,
+   **글자가 읽히는 테마면 막대는 자동으로 보인다** — 새 hex 를 한 개도 만들지 않는 이유다.
+   CSS 는 두 색이 같은지 물을 수 없어 이름을 적는 수밖에 없다. 여기 없는 16종과
+   축 미지정(테마 없음)은 이 규칙을 아예 만나지 않는다(기본값 불변).
+   실측(하한 3:1): 소실 10칸 전부 복구 · 회귀 0 · 잔여 미달 2칸(amber 2.04 · forest 4.12→2.47)은
+   그 테마의 선존 결함이다(선택 배경 위 흰 글자가 이미 4.5 미달). */
+:is([data-og-theme="ocean"],   [data-og-theme="purple"],  [data-og-theme="indigo"],
+    [data-og-theme="amber"],   [data-og-theme="forest"],  [data-og-theme="sunset"],
+    [data-og-theme="rose"],    [data-og-theme="teal"],    [data-og-theme="slate"],
+    [data-og-theme="crimson"], [data-og-theme="stitch"]) .og-row.og-selected {
+  --og-row-accent-color: var(--og-row-selected-color);
 }
 
 /* ============================================================
@@ -191,6 +237,9 @@
   border-left:     0;
   font-weight:     var(--og-header-font-weight);
   letter-spacing:  var(--og-header-letter-spacing);
+  /* 헤더 서체 — 기본값은 컨테이너와 같은 --og-font-family 라 오늘 렌더와 동일하다.
+     타이포 축의 humanist 프리셋만 헤더 서체를 분리한다("헤더는 데이터가 아니다"). */
+  font-family:     var(--og-header-font-family, var(--og-font-family));
   transition:      background var(--og-transition-fast), color var(--og-transition-fast);
 }
 .og-header-cell:hover      { background: var(--og-header-hover-bg); }
@@ -228,7 +277,7 @@
 }
 .og-body-wrapper::-webkit-scrollbar        { width: 8px; height: 8px; }
 .og-body-wrapper::-webkit-scrollbar-track  { background: transparent; }
-.og-body-wrapper::-webkit-scrollbar-thumb  { background: rgba(0,0,0,0.18); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+.og-body-wrapper::-webkit-scrollbar-thumb  { background: rgba(0,0,0,0.18); border-radius: var(--og-radius-lg, 8px); border: 2px solid transparent; background-clip: content-box; }
 .og-body-wrapper::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.30); border: 2px solid transparent; background-clip: content-box; }
 .og-body-wrapper::-webkit-scrollbar-corner { background: transparent; }
 
@@ -349,7 +398,7 @@
 .og-range-fill-handle {
   width: 10px; height: 10px;
   margin-left: -5px; margin-top: -5px;
-  border-radius: 1px;
+  border-radius: var(--og-radius-sm, 1px);
   box-shadow: 0 0 0 1px #fff;
 }
 @media (pointer: coarse) {
@@ -376,7 +425,7 @@
   background:  var(--og-input-bg);
   color:       var(--og-input-color);
   box-sizing:  border-box;
-  border-radius: 2px;
+  border-radius: var(--og-radius-sm, 2px);
 }
 
 /* 숫자·체크박스 정렬 */
@@ -397,7 +446,10 @@
   justify-content: center;
   padding:         0;
   font-size:       11px;
-  color:           #999;
+  /* C-1 — 행번호 글자가 리터럴이라 테마를 안 따라왔다. 재측정(그 열이 실제로 앉는 배경 7종
+     = 바탕·줄무늬·hover·선택·신규·수정·삭제의 최악값, 하한 4.5): **신규 12칸 전부 미달 1.17~3.14**.
+     폴백이 오늘값이라 --og-rownum-color 를 선언하지 않은 테마·무테마는 한 픽셀도 안 바뀐다. */
+  color:           var(--og-rownum-color, #999);
 }
 .og-col-check {
   width:           36px;
@@ -445,7 +497,9 @@
 .og-group-row:hover  { filter: brightness(0.96); }
 .og-group-arrow { margin-right: 4px; font-size: 11px; color: var(--og-primary, #1976d2); }
 .og-group-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.og-group-sum   { text-align: right; padding: 0 8px; font-size: 11px; color: #555; flex-shrink: 0; }
+/* C-3 — 그룹 합계 글자도 같은 계열이다. 다크 테마에서 실측 1.29~1.78:1 로 사실상 안 읽힌다.
+   폴백 #555 는 오늘값이므로 토큰 미선언 시 불변. */
+.og-group-sum   { text-align: right; padding: 0 8px; font-size: 11px; color: var(--og-group-sum-color, #555); flex-shrink: 0; }
 
 /* ============================================================
    트리 — 탐색기(Explorer) / Git Tree 스타일
@@ -557,7 +611,7 @@
   justify-content: center;
   width:       18px;
   height:      18px;
-  border-radius: 3px;
+  border-radius: var(--og-radius-md, 3px);
   font-size:   11px;
   line-height: 1;
   transition:  background 0.12s, color 0.12s;
@@ -628,7 +682,7 @@
 }
 .og-tree-node-icon--toggle:focus-visible {
   outline:        2px solid var(--og-focus-border, #1976d2);
-  border-radius:  2px;
+  border-radius:  var(--og-radius-sm, 2px);
   outline-offset: 2px;
 }
 
@@ -663,7 +717,7 @@
   background: var(--og-filter-bg);
   color:      var(--og-filter-color);
   border:     1px solid var(--og-border-color);
-  border-radius: 4px;
+  border-radius: var(--og-radius-md, 4px);
   box-shadow: var(--og-shadow-md);
   padding:    10px;
   min-width:  200px;
@@ -673,7 +727,7 @@
   background: var(--og-input-bg);
   color:      var(--og-input-color);
   border:     1px solid var(--og-border-color);
-  border-radius: 3px;
+  border-radius: var(--og-radius-md, 3px);
   padding:    3px 6px;
   font-size:  12px;
 }
@@ -746,7 +800,7 @@
   height:          28px;
   padding:         0 9px;
   border:          1px solid transparent;
-  border-radius:   6px;
+  border-radius:   var(--og-radius-lg, 6px);
   background:      transparent;
   color:           var(--og-pagination-btn-color);
   cursor:          pointer;
@@ -772,12 +826,12 @@
   flex: 1;
   height: 10px;
   background: #e0e0e0;
-  border-radius: 5px;
+  border-radius: var(--og-radius-md, 5px);
   overflow: hidden;
 }
 .og-progress-fill {
   height: 100%;
-  border-radius: 5px;
+  border-radius: var(--og-radius-md, 5px);
   transition: width 0.3s ease;
 }
 
@@ -786,7 +840,7 @@
   display: inline-block;
   width: 34px;
   height: 18px;
-  border-radius: 9px;
+  border-radius: var(--og-radius-lg, 9px);
   background: #bdbdbd;
   position: relative;
   transition: background 0.2s;
@@ -804,7 +858,7 @@
   padding: 12px;
   background: #f9f9f9;
   border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border-radius: var(--og-radius-lg, 6px);
   margin-bottom: 10px;
 }
 .og-pivot-field-group {
@@ -823,7 +877,7 @@
 .og-pivot-field-group select {
   padding: 4px 8px;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: var(--og-radius-md, 4px);
   font-size: 13px;
   background: #fff;
 }
@@ -931,7 +985,7 @@
 .og-filter-select-sel {
   padding:      3px 6px;
   border:       1px solid var(--og-border-color, #e0e0e0);
-  border-radius: 3px;
+  border-radius: var(--og-radius-md, 3px);
   font-size:    12px;
   font-family:  inherit;
   background:   var(--og-input-bg, #fff);
@@ -951,7 +1005,7 @@
 .og-filter-select-reset {
   padding:      3px 10px;
   border:       1px solid var(--og-border-color, #e0e0e0);
-  border-radius: 3px;
+  border-radius: var(--og-radius-md, 3px);
   font-size:    12px;
   font-family:  inherit;
   background:   var(--og-row-bg, #fff);
@@ -1120,7 +1174,7 @@
   background:     var(--og-input-bg);
   color:          var(--og-input-color);
   border:         1px solid var(--og-border-color);
-  border-radius:  4px;
+  border-radius:  var(--og-radius-md, 4px);
   font-family:    inherit;
   font-size:      inherit;
   outline:        none;
@@ -1147,7 +1201,7 @@
   height:         24px;
   background:     transparent;
   border:         none;
-  border-radius:  4px;
+  border-radius:  var(--og-radius-md, 4px);
   color:          var(--og-header-color);
   font-size:      16px;
   cursor:         pointer;
@@ -1197,7 +1251,7 @@
 }
 
 .og-sheet-tabs::-webkit-scrollbar        { height: 4px; }
-.og-sheet-tabs::-webkit-scrollbar-thumb  { background: var(--og-tab-border); border-radius: 2px; }
+.og-sheet-tabs::-webkit-scrollbar-thumb  { background: var(--og-tab-border); border-radius: var(--og-radius-sm, 2px); }
 .og-sheet-tabs::-webkit-scrollbar-track  { background: transparent; }
 
 .og-sheet-tab {
@@ -1213,7 +1267,7 @@
   cursor:         pointer;
   white-space:    nowrap;
   transition:     background 0.12s, border-color 0.12s, color 0.12s;
-  border-radius:  3px 3px 0 0;
+  border-radius:  var(--og-radius-md, 3px) var(--og-radius-md, 3px) 0 0;
   margin-top:     3px;
 }
 
@@ -1234,7 +1288,7 @@
   background:   var(--og-input-bg);
   color:        var(--og-input-color);
   border:       1px solid var(--og-focus-border);
-  border-radius:3px;
+  border-radius:var(--og-radius-md, 3px);
   font-family:  inherit;
   font-size:    inherit;
   outline:      none;
@@ -1250,7 +1304,7 @@
   margin:       auto 0 auto 4px;
   background:   transparent;
   border:       1px solid transparent;
-  border-radius:4px;
+  border-radius:var(--og-radius-md, 4px);
   color:        var(--og-tab-add-color);
   font-size:    18px;
   line-height:  1;
@@ -1295,7 +1349,7 @@
 .og-orgchart-node {
   position:       absolute;
   border:         1.5px solid var(--og-border-color, #e0e0e0);
-  border-radius:  8px;
+  border-radius:  var(--og-radius-lg, 8px);
   background:     var(--og-row-bg, #fff);
   box-shadow:     0 1px 4px rgba(0,0,0,0.08);
   display:        flex;
@@ -1453,10 +1507,19 @@
 
 /* ── UX-1: 셀 타입 CSS 클래스 완성 ──────────────────────────── */
 
-/* 숫자 셀: 탭뷸러 정렬 (자릿수 정렬, 천단위 가독성 향상) */
+/* 숫자 셀: 탭뷸러 정렬 (자릿수 정렬, 천단위 가독성 향상)
+   기본값은 셋 다 오늘과 같은 결과를 낸다 — 축 미사용 시 렌더 변화 0.
+   - font-family: 미지정(inherit) 이 오늘 상태. 축의 ledger/terminal 프리셋만
+     숫자에 별도 모노 서체를 물린다.
+   - font-feature-settings 를 "tnum" 에서 normal 로 내린 이유: 이 속성은 병합이 아니라
+     **덮어쓰기**라, 축이 font-variant-numeric 에 slashed-zero 를 넣어도 여기 "tnum" 이
+     피처 집합을 통째로 갈아치워 zero 피처를 지워버린다. tabular 정렬은
+     font-variant-numeric: tabular-nums 만으로 이미 보장되므로(둘 다 OpenType tnum 을
+     켠다) 중복 선언을 걷어내는 쪽이 안전하다 — 실측상 정렬 결과는 동일하다. */
 .og-cell-number {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+  font-family:           var(--og-num-font-family, inherit);
+  font-variant-numeric:  var(--og-font-variant-numeric, tabular-nums);
+  font-feature-settings: normal;
 }
 
 /* 텍스트/날짜: 클래스 기반 overflow 처리 */
@@ -1481,7 +1544,7 @@
 .og-cell-btn {
   padding:      2px 10px;
   border:       1px solid var(--og-primary, #1976d2);
-  border-radius: 4px;
+  border-radius: var(--og-radius-md, 4px);
   background:   var(--og-row-bg, #fff);
   color:        var(--og-primary, #1976d2);
   cursor:       pointer;
@@ -1542,7 +1605,7 @@
   bottom:     25%;
   width:      2px;
   background: var(--og-border-color, #e0e0e0);
-  border-radius: 1px;
+  border-radius: var(--og-radius-sm, 1px);
   transition: background var(--og-transition-fast),
               top var(--og-transition-fast),
               bottom var(--og-transition-fast),
@@ -1594,7 +1657,7 @@
   display:        inline-block;
   width:          34px;
   height:         18px;
-  border-radius:  9px;
+  border-radius:  var(--og-radius-lg, 9px);
   position:       relative;
   transition:     background 0.2s;
   cursor:         pointer;
@@ -1642,7 +1705,7 @@
   font-family:    var(--og-font-family);
   line-height:    1.45;
   padding:        5px 10px;
-  border-radius:  5px;
+  border-radius:  var(--og-radius-md, 5px);
   white-space:    normal;
   word-break:     break-word;
   pointer-events: none;
@@ -1668,7 +1731,7 @@
   opacity:   0.32;
 }
 
-/* F2(11_design_F2_v2.md §11, HANMS-16): 디테일 패널 인트로 — 높이 애니는 정수슬롯 제약상
+/* F2(11_design_F2_v2.md §11, UX-REVIEW-16): 디테일 패널 인트로 — 높이 애니는 정수슬롯 제약상
    불가하나(MVP), 패널 등장 자체는 opacity+translateY 로 손맛을 준다. load-bearing 레이아웃
    속성은 GridRenderer 가 인라인으로 고정하므로(NFR-3) 이 클래스는 순수 연출용. */
 .og-detail-panel-intro {
@@ -1682,7 +1745,7 @@
   .og-detail-panel-intro { animation: none; }
 }
 .og-detail-expander {
-  border-radius: 3px;
+  border-radius: var(--og-radius-md, 3px);
   color: var(--og-primary, #1976d2);
   font-size: 13px;
 }

@@ -102,7 +102,7 @@ export class FooterManager<T extends Record<string, any> = any> {
       .map((def: any) => {
         const field  = def.field!;
         const op     = def.op!;
-        // C11/HANMS-10(P0): 수식 에러 셀(#REF 등)은 집계에서 '제외'(0 아님) — 오염 차단.
+        // C11/UX-REVIEW-10(P0): 수식 에러 셀(#REF 등)은 집계에서 '제외'(0 아님) — 오염 차단.
         const nums   = allData
           .map((r: any) => r[field])
           .filter((v: any) => v !== null && v !== undefined && v !== '' && !isErrorToken(v));

@@ -47,7 +47,7 @@ describe('DD-05 §3 UC-1 데이터바 — 평가⟂적용 왕복', () => {
     expect(s.ariaSummary).toContain('음수');
   });
 
-  // 발주자 지적 시정: 음수는 색+방향 이중부호가 성립하도록 양수와 다른 데이터색(--og-cf-bar-neg=graphite).
+  // 지적 시정: 음수는 색+방향 이중부호가 성립하도록 양수와 다른 데이터색(--og-cf-bar-neg=graphite).
   it('음수/양수 데이터바는 다른 색 — 색+방향 이중부호(danger 재사용 아님)', () => {
     const rule: CFRule = { id: 'bar', when: { type: 'compare', op: '!=', a: NaN }, encode: { kind: 'bar', axis: 'zero' }, scope: { columnId: 'amt' }, priority: 0 };
     const eng = new CFEngine(new CFRuleStore([rule]));

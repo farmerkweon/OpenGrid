@@ -1,0 +1,19 @@
+{
+  "name": "open-grid-angular",
+  "private": true,
+  "description": "open-grid/angular 빌드 전용 작업 공간. 결과물은 ../dist/angular 로 나가며 이 폴더 자체는 npm 에 안 실린다.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json -c tsconfig.lib.json"
+  },
+  "devDependencies": {
+    "@angular/common": "~17.3.12",
+    "@angular/compiler": "~17.3.12",
+    "@angular/compiler-cli": "~17.3.12",
+    "@angular/core": "~17.3.12",
+    "ng-packagr": "~17.3.0",
+    "rxjs": "~7.8.1",
+    "tslib": "^2.6.2",
+    "typescript": "~5.4.5",
+    "zone.js": "~0.14.4"
+  }
+}

@@ -1,0 +1,386 @@
+/* ============================================================
+   헤더 축(제6축) — 머리글 「형태」 프리셋 4종 + default
+   / Header axis (6th) — four header-form presets plus default.
+   ------------------------------------------------------------
+   값은 실브라우저 렌더로 검증한 뒤 옮겼다 (2026-08-08).
+   속성 = data-og-header. 프리셋 = rule · quiet · band · pill.
+
+   ★ default 는 이 파일에 규칙이 한 줄도 없다.
+     「축을 켜도 아무 일이 없다」를 논증이 아니라 **사실**로 보증하기 위해서다.
+     규칙이 생기는 순간 보증이 논증으로 바뀌고, 논증은 틀릴 수 있다.
+
+   ★ 축 오염(불변식 1)에 대한 정직 고지 — 이 파일은 예외다. 왜 그래도 되는가.
+     이 파일은 색 축(theme) 소유 토큰(--og-header-bg · --og-header-color ·
+     --og-header-hover-bg · --og-header-sort-color · --og-primary-light)을 **재선언**한다.
+     그러나 **새 값을 만들지 않는다** — 전부 var(--og-row-bg) · var(--og-row-alt-bg) ·
+     var(--og-primary) 처럼 **테마 토큰으로부터 유도**한다. hex 가 한 개도 없다.
+     즉 헤더 축은 「색을 칠하는 축」이 아니라 「색 토큰을 다시 배선하는 축」이다.
+     그래서 테마를 바꾸면 헤더 프리셋도 따라 바뀌고, 「기존 hex 불변」이 구조적으로 지켜진다.
+     ⚠ 이 예외를 다른 축 파일이 따라 하지 마라. 여기서만 성립하는 이유가 위 문단이다.
+     (형태 토큰 8개의 소유권은 HeaderRegistry.ts 의 HEADER_TOKENS 가 갖는다.)
+
+   ★ 인라인 스타일과 싸우는 3단 규칙(T1/T2/T3).
+     렌더러가 헤더 감싸개·테이블·칸에 background/color 를 **인라인**으로 박는다.
+     인라인은 어떤 셀렉터보다 강하므로 아래처럼 층을 갈라 이긴다:
+       T1  인라인이 토큰을 참조한다  → 그 요소에서 **토큰을 재정의**한다(!important 불필요)
+       T2  인라인이 리터럴이라 토큰이 없다 → longhand + !important (폭·좌표는 안 건드린다)
+       T3  인라인 목록 밖이다 → 그냥 쓴다(::after · ::before · box-shadow · opacity)
+   ============================================================ */
+
+/* ============================================================
+   헤더 축 (다섯 번째 축) — 시안
+   사용법: <div data-og-header="rule">  ·  기본값은 속성 없음
+
+   ⚠ default(속성 미지정)는 오늘 렌더와 **바이트 단위로 같아야** 한다.
+      그래서 이 파일에는 [data-og-header] 가 붙은 규칙만 들어간다.
+      속성이 없는 요소를 건드리는 규칙은 한 줄도 쓰지 않는다. (금지선 2)
+
+   출처: 디자인 결정문 (2026-08).
+         §4.3 !important 우회 · §4.4 프리셋 CSS 5종 · §4.5 12칸 기본 짝짓기
+   이 파일에 hex 는 0 이다. 색은 전부 테마 토큰에서 끌어온다. (§1.5-⑦)
+   ============================================================ */
+
+
+/* ============================================================
+   §4.3  걸림돌 해제 — 공통 블록
+   named 프리셋 전부가 상속한다. 속성이 없으면(=오늘) 한 줄도 안 걸린다.
+
+   3단 규칙 (인터랙션 정리본)
+     T1  인라인·!important 가 **토큰을 참조**한다  -> 그 요소에서 토큰 재정의 (!important 불필요)
+     T2  리터럴이라 토큰이 없다                    -> longhand + !important (폭은 안 건드린다)
+     T3  인라인 19개 목록에 **없는** 속성          -> 그냥 쓴다 (::after · box-shadow · opacity)
+   ============================================================ */
+
+/* base.css:1545 의 !important 를 건드리지 않고 이긴다 — 그 선언이 읽는 토큰을 갈아끼운다 */
+
+/* ★ 3차 반영 (테이블패턴) — 아래 정렬셀 블록의 글자색 줄이 **자기 자신을 참조**하고 있었다.
+   `--og-header-color: var(--og-header-sorted-color, var(--og-header-color))` 는 같은 요소에서
+   같은 이름을 되짚으므로 CSS 사양상 순환이고, 그 커스텀 속성은 계산 시점에 무효가 된다.
+   그러면 인라인 `color: var(--og-header-color)`(GridRenderer) 가 폴백 없이 실패해
+   정렬 헤더 글자색이 통째로 상속값으로 떨어진다. 이름을 하나 더 둬서 고리를 끊는다.
+   ※ `-now` 는 반드시 **조상(테이블)** 에 둔다. 같은 요소에 두면 두 이름이 서로를 물어 다시 순환이다.
+      채움을 비우는 프리셋용 `-now` 는 파일 끝 「극성 전환」 블록에 짝으로 있다. */
+[data-og-header] .og-header-table { --og-header-color-now: var(--og-header-color); }
+
+[data-og-header] .og-header-cell.og-sorted {
+  --og-primary-light: var(--og-header-sorted-bg, var(--og-header-bg));
+  --og-header-color:  var(--og-header-sorted-color, var(--og-header-color-now));
+}
+/* base 의 :hover{filter:brightness(.96)} 는 다크 헤더에서 "더 어두워짐"이라 뒤집힌다.
+   정렬셀 hover 도 다른 셀과 같은 --og-header-hover-bg 로 통일한다. */
+[data-og-header] .og-header-cell.og-sorted:hover {
+  --og-primary-light: var(--og-header-sorted-hover-bg, var(--og-header-hover-bg));
+  filter: none;
+}
+
+/* 정렬 가능 힌트 — 지금은 눌러보기 전에는 정렬 가능한지 알 수 없다. T3 (::after 는 인라인 목록에 없다)
+
+   ★ 3차 반영 — 이 규칙은 **한 픽셀도 그려진 적이 없었다.**
+     코어가 `og-sortable` 클래스를 아예 안 붙인다(GridRenderer.ts:463 은 `og-sorted` 만 붙인다).
+     CSS 는 시안 헤더셀 184개 전수에서 0개, 인터랙션 는 420조합 전부에서 0건을 실측했다.
+     base.css:218 `.og-header-cell.og-sortable{cursor:pointer}` 도 같은 이유로 죽어 있다.
+     코어가 대신 인라인으로 `cursor: pointer` 를 쓴다(GridRenderer.ts:434).
+     금지선(코어 JS 수정 0)이라 클래스를 붙일 수 없으므로 **살아 있는 인라인 값을 직접 읽는다**(인터랙션).
+
+   ▸ [미정] 본 구현에서 제대로 고치려면 코어 JS 한 줄이다 —
+       GridRenderer.ts  if (sortable) th.classList.add('og-sortable');
+     그 한 줄을 허용하면 아래 `[style*=...]` 수법은 필요 없어지고 base.css:218 도 같이 살아난다.
+     허용 안 하면 이 수법으로 남는다. 선택지 둘 다 화면은 같다. */
+[data-og-header] .og-header-cell[style*="cursor: pointer"]::after {
+  content: '\21C5';
+  position: absolute;
+  right: var(--og-header-hint-inset, 9px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--og-header-color);
+  /* 0.32 는 12칸 × 두 면 24개 전부에서 WCAG 1.4.11(비문자 3:1)을 못 넘는다(인터랙션 실측 1.80~2.67).
+     24면 전탐색 최소 공통값이 0.55 다(0.50 이면 5/24 미달). */
+  opacity: var(--og-header-hint-opacity, 0.55);
+  pointer-events: none;
+  transition: opacity var(--og-transition-fast);
+}
+[data-og-header] .og-header-cell[style*="cursor: pointer"]:hover::after { opacity: 0.7; }
+[data-og-header] .og-header-cell.og-sorted::after { content: none; }
+
+/* 리사이즈 손잡이 — base 는 본문용 --og-border-color 를 쓴다. 헤더 극성이 본문과 다른 테마에서
+   대비 1.0~1.6 으로 사라진다. 헤더 자신의 글자색에서 끌어온다. (손잡이는 별도 div 라 인라인 경쟁 없음)
+
+   ★ 결정 D-3 (2026-08-08) — "헤더 세로 라인에 칸마다 바가 하나씩 뜨는 게 헤더 디자인을 방해한다. 빼줘."
+     시각규칙 가 3차에서 같은 것을 독립으로 찾았다: 네 프리셋이 전부 border-right 를 투명으로
+     지워 「세로 칸막이를 걷는다」고 해 놓고, 바로 그 자리에 이 손잡이가 원래 격자보다
+     46% 진한 막대(graphite 1.24 → 1.65)를 다시 그리고 있었다. 그래서 프리셋을 바꿔도 세로선이 남았다.
+     쉴 때는 0 으로 내린다. 기능은 안 죽인다 — 손잡이 div(폭 5px)와 드래그는 그대로고,
+     헤더에 마우스가 들어오면 0.22 로 떠서 「여기를 끌 수 있다」가 남는다.
+     (variants/시각규칙-system 에서 실제로 렌더·검증된 형태 그대로.) */
+[data-og-header] .og-resize-handle::after {
+  background: var(--og-header-color);
+  opacity: var(--og-header-grip-opacity, 0);
+  transition: opacity var(--og-transition-fast);
+}
+/* ★ 4차 모션 (모션 담당) — D-3 은 「쉴 때 안 보인다」까지는 됐다. 실크롬으로 재 보니 두 가지가 남았다.
+   ① `.og-header:hover` 때문에 **헤더에 마우스가 들어가기만 하면 그 그리드 손잡이 7개가 한꺼번에** 0.22 로 떴다.
+      D-3 이 빼라고 한 세로 바가 통째로 돌아오는 것이고, opacity 0.12s 전이가 일곱 줄에 동시에 걸려
+      헤더에 들어설 때마다 가로로 훑는 깜박임이 생겼다. (실측 ②: 칸이 아닌 헤더 여백에 올려도 7/7 이 0.22)
+   ② `.og-resize-handle:hover` 규칙(opacity 1 · 색 --og-header-sort-color)이 **한 번도 안 떴다.**
+      손잡이는 `th.og-header-cell` **안**에 있다(조상사슬 실측). 그래서 칸 규칙 (0,4,0) 이
+      손잡이 규칙 (0,3,0) 을 이겨서, 손잡이에 마우스를 올려도 0.22 에 머문다.
+      D-3 이 「올리면 나온다」로 남겨두기로 한 그 신호가 화면에 안 나오고 있었다.
+   고침 — 뜨는 범위를 **가리킨 칸 하나**로 좁히고(모션이 1줄로 줄어든다),
+          손잡이 규칙의 특이도를 칸 규칙과 맞춰 뒤에 둔다(같은 (0,4,0), 나중 것이 이긴다).
+   새 hex 0개 · 폭 조절 기능 무변경 · `[data-og-header]` 없는 default 는 이 규칙을 안 만난다.
+   (테이블패턴 도 ②를 독립으로 찾아 셀렉터 셋을 얹는 안을 냈다. 같은 자리를 고치므로 겹치지 않게
+    더 넓게 답한 모션 안 하나만 넣는다 — 테이블패턴 안은 ①(헤더 전역 hover)을 안 건드린다.) */
+[data-og-header] .og-header-cell:hover .og-resize-handle::after { opacity: 0.22; }
+[data-og-header] .og-header-cell .og-resize-handle:hover::after {
+  background: var(--og-header-sort-color);
+  opacity: 1;
+}
+
+/* ★ 3차 반영 (CSS) — 여벌칸(행번호·상태·체크 머리) 글자가 인라인 `#999` 리터럴로 굳어 있다.
+   GridRenderer.ts:317 이 그 <th> 에 color:'#999' 를 인라인으로 박는다. 토큰이 없어 T1 이 안 통하고
+   특이도로도 못 이긴다 → T2(!important) 자리다.
+   실측(헤더 배경 위, 하한 4.5 / AAA 7): graphite 2.47 · washi 2.23 · plain 2.58 · field 2.33 ·
+   high-contrast-dark 2.85 — 밝은 헤더 넷과 hcd 가 미달이다.
+   폴백을 헤더 글자색으로 두면 12칸 전부가 게이트 「헤더」 항목의 보증(4.5 / AAA 7)을 그대로 받는다.
+   본 구현 고침은 한 글자다 — GridRenderer.ts:317 을 var(--og-header-rownum-color,#999) 로. */
+[data-og-header] .og-header-cell.og-extra-col {
+  color: var(--og-header-rownum-color, var(--og-header-color)) !important;
+}
+
+/* 필터 아이콘도 헤더 극성을 따르게 */
+[data-og-header] .og-filter-icon { color: var(--og-header-color); }
+[data-og-header] .og-filter-icon:hover,
+[data-og-header] .og-filter-icon--active { color: var(--og-header-sort-color) !important; }
+
+
+/* ============================================================
+   §4.4  프리셋 CSS 5종
+   ============================================================ */
+
+/* ── rule  선 헤더 — 색면을 버리고 아래 선 하나로 세운다. 분석·대시보드·읽기 위주 ── */
+/* ★★ 3차 최대 발견 — `.og-header` 가 셀렉터에서 빠져 있었다. 4인(CSS·테이블패턴·인터랙션·디자인시스템)이
+   서로 안 보고 같은 자리를 찾았고, 타이포그래피 는 값을 다르게 냈다.
+     코어가 헤더 **감싸개**에도 인라인으로 background:var(--og-header-bg,#f5f5f5) 를 박는다.
+     커스텀 속성은 선언한 요소와 그 아래로만 가므로 테이블·셀에 준 값이 부모에 닿을 리가 없다.
+     그래서 색면은 남은 채로 파일 끝 「극성 전환」이 글자만 본문색으로 뒤집어, 같은 극성 둘이 만난다.
+     실측(도커 미러·실크롬): high-contrast **1.00** · high-contrast-dark **1.00** · clinical **1.33**
+     — 헤더 글자가 통째로 사라진다. clinical × rule 은 §4.5 가 정한 기본 짝이라 기본 조합이 깨져 있었다.
+     영향 범위 인터랙션 실측 168/420 조합 · CSS 실측 36/360 미달.
+
+   ▸ 값이 갈렸다: transparent (CSS·테이블패턴·인터랙션·디자인시스템) vs var(--og-row-bg) (타이포그래피).
+     재측정으로 타이포그래피 를 택한다 — `.og-container` 에는 background 선언이 없어서(base.css:118)
+     transparent 로 두면 **호스트 페이지 배경이 그대로 비쳐** 헤더 글자 대비를 우리가 못 정한다.
+     시안 페이지는 바탕이 밝아 넷의 측정이 통과로 나왔을 뿐, 다크 테마를 밝은 호스트에 얹으면 깨진다.
+     row-bg 로 칠하면 뒤집힌 글자색(--og-row-color)이 정의상 본문 대비(10.6~21)를 그대로 갖는다.
+     「색면을 버린다」는 표방도 지켜진다 — 헤더가 본문과 같은 면이 되므로 띠가 사라진다. */
+[data-og-header="rule"] .og-header { --og-header-bg: var(--og-row-bg); }
+[data-og-header="rule"] .og-header-table,
+[data-og-header="rule"] .og-header-cell {
+  --og-header-bg: transparent;              /* T1 — 인라인 background:var(--og-header-bg) 를 통과한다 */
+}
+[data-og-header="rule"] .og-header-cell {
+  --og-header-hover-bg: var(--og-row-alt-bg);   /* primary-light 는 극성이 깨져 있어 안 쓴다 */
+  border-right-color:  transparent !important;  /* T2 — 인라인 숏핸드는 longhand 로 이긴다. 폭 불변 */
+  border-bottom-color: transparent !important;  /* T2 */
+  box-shadow: inset 0 calc(-1 * var(--og-header-rule-width, 2px)) 0 var(--og-border-color);  /* T3 */
+}
+[data-og-header="rule"] .og-header-cell.og-sorted {
+  box-shadow: inset 0 calc(-1 * var(--og-header-sorted-rule-width, 3px)) 0 var(--og-header-sort-color);
+}
+[data-og-header="rule"] .og-header { border-bottom: 0; }
+/* §4.7 — 가운데 정렬 -> 왼쪽.
+   ★ 3차 정정 (타이포그래피) — 원 주석의 "사용자가 col.headerAlign 을 지정한 컬럼은 안 건드린다" 는
+     사실이 아니었다. 코어가 `col.headerAlign ?? 'center'` 로 쓰므로 사용자 지정 center 와
+     코어 기본 center 의 인라인 문자열이 한 글자도 다르지 않아 CSS 로는 구분할 수 없다.
+     그리고 여벌칸(행번호 44px·상태 24px·드래그 18px·체크 36px)의 머리까지 왼쪽으로 밀려
+     머리는 왼쪽, 숫자는 가운데(base.css:419)로 어긋난다. 그 열들을 뺀다. */
+[data-og-header="rule"] .og-header-cell:not(.og-extra-col)[style*="text-align: center"] { text-align: left !important; }
+
+/* ── quiet  조용한 채움 — 색면은 남기고 세로 칸막이만 걷는다. 오래 보는 화면 ── */
+[data-og-header="quiet"] .og-header-cell {
+  border-right-color: transparent !important;                      /* T2 */
+  box-shadow: inset var(--og-header-divider-width, 0px) 0 0 transparent;  /* T3 */
+}
+[data-og-header="quiet"] .og-header-cell.og-sorted {
+  box-shadow: inset 0 calc(-1 * var(--og-header-sorted-rule-width, 3px)) 0 var(--og-header-sort-color);
+}
+/* ★ R4 디자인시스템 — quiet 을 진짜 5번째로 만든다.
+   D-3(세로 바 제거) 뒤 다시 재니 default↔quiet 이 3배 확대 픽셀 차 2.69% 다. 나머지 실제 쌍의
+   가장 가까운 것(quiet↔band 10.47%)보다 한 자릿수 아래다. 세로 바가 사라진 만큼은 좋아졌지만
+   (1.84% → 2.69%) quiet 은 여전히 '세로선 뺀 default' 였다. 자기 이름값이 없다.
+   그래서 quiet 에 **선을 전부 없앤다** — 색면만 남는다. 다섯이 겹치지 않는 표가 된다.
+       default  색면○ 세로선○ 밑줄 1px
+       quiet    색면○ 세로선✕ 밑줄 ✕      ← 여기
+       band     색면○ 세로선✕ 밑줄 3px
+       rule     색면✕ 세로선✕ 밑줄 1px
+       pill     색면✕ 세로선✕ 정렬칸만 배지
+   밑줄을 빼도 머리와 몸의 경계는 제2조가 이미 보증한다(헤더 ΔL* 5~6). 선은 그 위에 덧댄 것이라
+   quiet 에서는 뺄 수 있다. 대비 6항목은 하나도 안 건드린다(선 색은 글자·배경 어느 쪽도 아니다).
+   정렬된 칸의 3px 만 남으므로 **quiet 에서 선이 보이면 그건 정렬됐다는 뜻** 하나가 된다. */
+[data-og-header="quiet"] .og-header {
+  border-bottom-width: 0;
+}
+[data-og-header="quiet"] .og-header-cell {
+  border-bottom-color: transparent !important;                     /* T2 */
+}
+
+/* ── band  띠 — quiet 과 같은 길에 굵은 밑줄. 멀리서도 표의 머리를 찾는다. 관제·저시력 ── */
+/* ★ slab / slab-invert / rule-strong / block / plate / boxed 를 전부 흡수했다.
+     "굵다"는 font-weight 가 아니라 아래 테두리 두께로 낸다(축이 안 겹치게). */
+[data-og-header="band"] .og-header-cell {
+  border-right-color: transparent !important;                      /* T2 */
+  border-bottom-color: transparent !important;                     /* T2 */
+  /* 레이아웃 높이를 안 먹는 방식으로 밑줄을 그린다 — compact 밀도(28px)에서도 안 잘린다 (모션) */
+  /* ★ 3차 반영 (테이블패턴·모션 이 같은 결함을 각자 찾았다) — 밑줄 색을 --og-border-color 에서
+     헤더 자신의 글자색으로 옮긴다. --og-border-color 는 본문 격자 하네선용 토큰이라 헤더 면 위
+     실측 대비가 1.00~1.81 뿐이고(high-contrast 는 1.00 — 저시력 테마에서 밑줄이 아예 사라진다),
+     3px 로 굵혀도 안 보인다. 그 결과 **quiet 과 band 의 300조합 지문이 완전히 붙어 있었다**(테이블패턴).
+     헤더 글자색은 헤더 면 위에서 4.5:1(AAA칸 7:1)이 이미 보증된 값이라 hex 를 새로 안 만든다.
+     경계 실측 5.70 → 13.99. 테마가 세기를 정하고 싶으면 --og-header-band-color 로 덮는다. */
+  box-shadow: inset 0 calc(-1 * var(--og-header-rule-width, 3px)) 0
+              var(--og-header-band-color, var(--og-header-color));  /* T3 */
+}
+[data-og-header="band"] .og-header-cell.og-sorted {
+  box-shadow: inset 0 calc(-1 * var(--og-header-rule-width, 3px)) 0 var(--og-header-sort-color);
+}
+/* rounded 스킨과의 곱셈 안전판 — 컨테이너 모서리를 프리셋이 직접 존중한다 (테이블패턴 8-3).
+   sharp 스킨에서는 --og-radius-* 가 0 이라 inherit 값이 0 이 되어 아무 일도 안 일어난다. */
+[data-og-header="band"] .og-header-cell:first-child { border-top-left-radius:  inherit; }
+[data-og-header="band"] .og-header-cell:last-child  { border-top-right-radius: inherit; }
+
+/* ── pill  알약 — 정렬된 컬럼만 둥근 배지로 떠오른다. 컬럼이 적고 여백이 넉넉한 표 ── */
+/* 감싸개 `.og-header` — rule 과 같은 자리, 같은 사유. 위 rule 블록의 긴 주석을 보라. */
+[data-og-header="pill"] .og-header { --og-header-bg: var(--og-row-bg); }
+[data-og-header="pill"] .og-header-table,
+[data-og-header="pill"] .og-header-cell {
+  --og-header-bg: transparent;                                     /* T1 */
+}
+[data-og-header="pill"] .og-header-cell {
+  /* ★ 3차 반영 (테이블패턴) — 알약 면을 --og-header-sorted-bg 에서 --og-row-alt-bg 로 옮긴다.
+     --og-header-sorted-bg 는 테마가 「채운(어두운) 헤더」를 전제로 고른 값이다
+     (clinical #2E4761 · high-contrast #1f1f1f · high-contrast-dark #d4d4d4).
+     pill 은 헤더 채움을 버려 글자가 본문 극성인데 알약 면만 헤더 극성으로 칠하면 둘이 부딪친다
+     — 실측 pill/clinical 1.79 · pill/high-contrast-dark 1.48 (제16조ⓔ 하한 4.5).
+     줄무늬 표면은 제7조 후단이 본문 대비 ΔL* 2~6 으로 묶어 놔서 글자 대비가 사실상 안 흔들린다. */
+  --og-header-pill-bg: var(--og-row-alt-bg);
+  border-right-color:  transparent !important;                     /* T2 */
+  border-bottom-color: transparent !important;                     /* T2 */
+  isolation: isolate;        /* ::before 를 이 셀 안에 가둔다 */
+}
+[data-og-header="pill"] .og-header-cell::before {                  /* T3 */
+  content: '';
+  position: absolute;
+  inset: var(--og-header-pill-inset, 5px) 3px;
+  border-radius: var(--og-radius-pill, 999px);
+  background: transparent;
+  transition: background var(--og-transition-fast), box-shadow var(--og-transition-fast);
+  z-index: -1;
+}
+[data-og-header="pill"] .og-header-cell:hover::before {
+  background: var(--og-header-pill-bg);
+}
+/* ★ 글자색을 뒤집지 않는다. 알약 면은 hover 와 같은 한 걸음(글자 대비 유지)이고,
+   "지금 정렬 중"은 테두리(정렬색)가 나른다. 12종 어디서도 글자가 안 사라진다. */
+[data-og-header="pill"] .og-header-cell.og-sorted::before {
+  background: var(--og-header-pill-bg);
+  box-shadow: inset 0 0 0 var(--og-header-pill-ring-width, 2px) var(--og-header-sort-color);
+}
+
+/* ══ 5. default — 블록이 없다 ═════════════════════════════════
+   data-og-header="default" 를 겨냥한 규칙은 한 줄도 쓰지 않는다.
+   선언이 존재하지 않아야 오늘 렌더와 바이트가 같다(금지선 2).
+   (셀렉터 꼴로 적으면 build-proto.mjs 가 프리셋으로 세므로 대괄호 없이 적는다.) */
+
+
+/* ============================================================
+   §4.3 (이어서)  채움을 비우는 프리셋 공통 — 극성 전환
+   헤더 배경을 비우면 헤더 글자는 이제 본문 배경 위에 놓인다. 그런데 --og-header-color 는
+   헤더 배경 극성에 맞춰 고른 값이라, 헤더가 어두운 테마에서 그대로 두면 흰 글자가 흰 배경 위에
+   놓여 통째로 사라진다(실측 1.02~1.16:1). 그래서 본문 극성을 따라가게 토큰을 갈아끼운다.
+   ※ 이 규칙만 파일 끝에 둔다 — 위에 두면 build-proto.mjs 가 프리셋 순서를 rule·pill·quiet·band
+      로 읽는다. CSS 결과는 같다(대상 속성이 겹치지 않는다).
+   ============================================================ */
+[data-og-header="rule"] .og-header-cell,
+[data-og-header="pill"] .og-header-cell {
+  --og-header-color:      var(--og-header-color-plain, var(--og-row-color));
+  --og-header-sort-color: var(--og-primary);
+}
+/* ★ 3차 반영 (테이블패턴·CSS 가 각자 찾았다) — 위 극성 전환이 **정렬셀에는 안 닿는다.**
+   공통블록이 정렬셀의 글자색·면을 --og-header-sorted-color / --og-header-sorted-bg 로 갈아끼우는데
+   그 둘은 「채운 헤더」 극성으로 고른 값이라, 채움을 버린 프리셋에서는 반대로 뒤집힌다.
+   실측(고치기 전): rule/high-contrast 1.00 · pill/clinical 1.79 · pill/high-contrast-dark 1.48.
+   채움 없는 프리셋에서는 정렬셀도 평상시 글자색을 쓰고 셀 면은 안 칠한다 —
+   「지금 정렬 중」은 rule 은 3px 정렬색 선이, pill 은 알약 테두리가 이미 나른다. */
+/* 순환 고리를 끊는 `-now` 의 짝 — 채움을 비운 프리셋에서는 평상시 글자색도 본문 극성이다.
+   (조상인 테이블에 둬야 한다. 위 §4.3 공통블록의 주석 참조.) */
+[data-og-header="rule"] .og-header-table,
+[data-og-header="pill"] .og-header-table {
+  --og-header-color-now: var(--og-header-color-plain, var(--og-row-color));
+}
+[data-og-header="rule"] .og-header-cell.og-sorted,
+[data-og-header="pill"] .og-header-cell.og-sorted {
+  --og-header-color:  var(--og-header-color-now);
+  --og-primary-light: transparent;
+}
+
+
+/* ============================================================
+   §2.2  stitch 스킨 구멍 — 헤더셀에 점선이 안 닿는다
+   타이포그래피 가 찾고 CSS 가 같은 값을 냈다(두 사람 hex·셀렉터 완전 일치).
+     AppearanceResolver.border() 는 스킨 컨텍스트가 안 켜져 있으면
+     `1px solid var(--og-border-color,#e0e0e0)` 처럼 **solid 를 문자열에 박아** 돌려주고,
+     GridRenderer 가 그 문자열을 헤더셀 인라인에 쓴다. 인라인 숏핸드라
+     [data-og-skin="stitch"] 의 --og-border-style:dashed 가 헤더에 못 닿는다.
+   폭·색은 그대로 두고 **style 롱핸드만** 되돌린다(T2). 폴백이 solid 라 스킨이 style 을
+   선언 안 하면 오늘과 같고, [data-og-skin] 이 붙어 있을 때만 걸린다(금지선 2).
+   ※ 인터랙션·시각규칙 은 `grid.setSkin()` 경로에서는 60/60 점선이 닿는다고 실측했다.
+      두 관측이 다 맞다 — 속성만 거는 경로에서만 막힌다. 이 줄은 그 경로를 메운다.
+   ============================================================ */
+[data-og-skin] .og-header-cell {
+  border-right-style:  var(--og-border-style,  solid) !important;
+  border-bottom-style: var(--og-divider-style, solid) !important;
+}
+
+
+/* ============================================================
+   §4.5  12칸 기본 헤더 짝짓기 — **기본값 추천이지 강제 결합이 아니다**
+
+     graphite            rule
+     high-contrast       band  + --og-header-rule-width: 3px   (테마 블록이 3px 를 준다)
+     washi               rule
+     plain               rule
+     field               band    ← §4.5 5번 행의 조건절이 발동했다. 그 행은 atrium 을 전제로 rule 을
+                                   골랐고 "§2.3 이 field 로 뒤집히면 band 로 돌아간다" 고 적어 뒀다.
+                                   결정 D-2 로 field 가 됐으므로 band 다. (인터랙션 r3 §9 의 slab 도
+                                   §4.1 흡수 경로대로 band + --og-header-rule-width 다)
+     clinical            band    ← 3차 반영. 테이블패턴 제안, 근거를 확인하고 받았다.
+                                   근거 셋 중 ①「rule 에서 못 읽는다(1.33)」는 위 감싸개 고침으로
+                                   해소됐으므로 채택 사유가 아니다. ②③ 이 남는다 —
+                                   ② 이 칸의 헤더 극성은 결정문 §3.8 이 아직 [미정] 으로 남긴
+                                      미결이다. 미결에 기대는 짝을 기본값으로 둘 수 없다.
+                                   ③ 실측 |L*(header-bg) − L*(row-bg)| = 79.5 로 clinical 은
+                                      제11조 「극성 반전 부류」다(하한 40). 같은 부류인
+                                      high-contrast(100.0)·high-contrast-dark(100.0)에 band 를 준
+                                      근거와 같다. 같은 이유는 같은 결론이어야 한다.
+                                   ▸ 되돌리는 값도 남긴다 — §3.8 이 「clinical 헤더를 밝게」로 확정되면
+                                     이 칸은 극성 반전 부류에서 빠지므로 rule 로 되돌아간다.
+     high-contrast-dark  band  + --og-header-rule-width: 3px   (제14조ⓒ, 짝은 헤더도 같다)
+     blueprint           rule    [이 파일에서 정함] — edge 가 3차에서 블록을 갖추면 이 칸이 첫 자리
+     nocturne            pill    [이 파일에서 정함]
+     graphite-dark       rule
+     sentinel            band
+     ticker              quiet
+     분포: rule 5 · band 5 · quiet 1 · pill 1 · default 0
+           (D-2 로 atrium(rule) → field(band) · 3차에서 clinical(rule) → band)
+           band 5칸은 전부 「극성 반전 부류」(제11조)이거나 저시력 대상이다 — 부류가 짝을 정했다.
+
+   ▸ 여기에 CSS 로 **못 박지 않은 이유**를 적는다(판단 대기).
+     이 시안에서 헤더 축의 `default` 는 **속성을 지우는 것**으로 구현돼 있다(app.js:210).
+     그래서 `[data-og-theme="X"]:not([data-og-header])` 로 기본 짝을 걸면 CSS 가
+     "사용자가 default 를 골랐다" 와 "아무것도 안 골랐다" 를 구분할 수 없고,
+     시안에서 default 를 눌러도 짝지은 프리셋이 계속 걸려 §4.2 의 보증을 눈으로 못 보게 된다.
+     결정문 §4.5 도 "기본값 추천이지 강제 결합이 아니다" 라고 적었고, 거는 방법(셀렉터)은
+     어디에도 없다 -> [결정문누락]. 위 표를 확정 명단으로 남기고 배선은 미정으로 남긴다.
+   ============================================================ */

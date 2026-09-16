@@ -67,6 +67,85 @@ export class ExportManager<T extends Record<string, any> = any> {
     return h.length === 6 ? h : '';
   }
 
+  /** @internal 엑셀 숫자 서식으로 그대로 옮겨도 안전한 형식(`#,##0.00`, `0%` 등)만 통과시킨다. / Passes only formats that are safe to copy verbatim into an Excel number format. */
+  private _xlsxNumFmt(format: unknown): string | undefined {
+    return typeof format === 'string' && /^[#0,.%]+$/.test(format) ? format : undefined;
+  }
+
+  /**
+   * @internal 시트 한 장에 헤더·줄무늬·테두리·정렬·숫자 서식을 입힌다. `exportExcel` 과 `exportSheetsExcel` 이 함께 쓴다.
+   * / Applies header, banding, borders, alignment and number formats to one sheet. Shared by `exportExcel` and `exportSheetsExcel`.
+   */
+  private _applySheetStyle(
+    utils: any, ws: any, rows: any[][], cols: any[], includeHeader: boolean, styleMode: string,
+  ): void {
+    let hdrBgRgb  = '1565C0', hdrFgRgb  = 'FFFFFF';
+    let rowBgRgb  = 'FFFFFF', rowAltRgb = 'EEF2FF';
+    let rowFgRgb  = '212121', borderRgb = 'BDBDBD';
+    let fontSize  = 10;
+
+    if (styleMode === 'theme') {
+      const toRgb = (v: string) => this._hexToXlsxRgb(v);
+      hdrBgRgb  = toRgb(this._readCssVar('--og-header-bg'))    || hdrBgRgb;
+      hdrFgRgb  = toRgb(this._readCssVar('--og-header-color'))  || hdrFgRgb;
+      rowBgRgb  = toRgb(this._readCssVar('--og-row-bg'))        || rowBgRgb;
+      rowAltRgb = toRgb(this._readCssVar('--og-row-alt-bg'))    || rowAltRgb;
+      rowFgRgb  = toRgb(this._readCssVar('--og-row-color'))     || rowFgRgb;
+      borderRgb = toRgb(this._readCssVar('--og-border-color'))  || borderRgb;
+      const fsStr = this._readCssVar('--og-font-size');
+      if (fsStr) fontSize = Math.max(8, Math.round(parseFloat(fsStr) * 0.75));
+    }
+
+    const noStyle = styleMode === 'none';
+    // i18n: Excel 헤더/데이터 폰트를 활성 로케일 meta.exportFont 로(ko='맑은 고딕', byte-identical).
+    const exportFont = this._d.getMeta?.().exportFont ?? '맑은 고딕';
+    const S = {
+      hdrFont:   noStyle ? {} : { bold: true, color: { rgb: hdrFgRgb }, sz: fontSize, name: exportFont },
+      dataFont:  noStyle ? {} : { sz: fontSize, color: { rgb: rowFgRgb }, name: exportFont },
+      hdrFill:   noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: hdrBgRgb } },
+      evenFill:  noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: rowBgRgb } },
+      oddFill:   noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: rowAltRgb } },
+      hdrBorder: noStyle ? {} : {
+        top:    { style: 'medium', color: { rgb: hdrBgRgb } },
+        bottom: { style: 'medium', color: { rgb: hdrBgRgb } },
+        left:   { style: 'thin',   color: { rgb: hdrBgRgb } },
+        right:  { style: 'thin',   color: { rgb: hdrBgRgb } },
+      },
+      dataBorder: noStyle ? {} : {
+        top:    { style: 'thin', color: { rgb: borderRgb } },
+        bottom: { style: 'thin', color: { rgb: borderRgb } },
+        left:   { style: 'thin', color: { rgb: borderRgb } },
+        right:  { style: 'thin', color: { rgb: borderRgb } },
+      },
+    };
+
+    rows.forEach((row, ri) => {
+      const isHdr  = includeHeader && ri === 0;
+      const dataRi = includeHeader ? ri - 1 : ri;
+      const isEven = dataRi % 2 === 0;
+
+      row.forEach((_v, ci) => {
+        const addr = utils.encode_cell({ r: ri, c: ci });
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+
+        const col = cols[ci]!;
+        const isNum  = col.type === 'number' || col.align === 'right';
+        const hAlign = isHdr ? 'center' : isNum ? 'right' : (col.align ?? 'left');
+
+        const numFmt = isHdr ? undefined : this._xlsxNumFmt(col.format);
+        if (numFmt && ws[addr].t === 'n') ws[addr].z = numFmt;
+
+        ws[addr].s = {
+          font:      isHdr ? S.hdrFont : S.dataFont,
+          fill:      isHdr ? S.hdrFill : (isEven ? S.evenFill : S.oddFill),
+          border:    isHdr ? S.hdrBorder : S.dataBorder,
+          alignment: { horizontal: hAlign, vertical: 'center', wrapText: false },
+          ...(numFmt ? { numFmt } : {}),
+        };
+      });
+    });
+  }
+
   /**
    * 현재 그리드 데이터를 스타일이 적용된 `.xlsx` 로 내보낸다. / Export the current grid data as a styled `.xlsx` file.
    *
@@ -124,68 +203,7 @@ export class ExportManager<T extends Record<string, any> = any> {
       }));
       ws['!rows'] = rows.map((_, ri) => ({ hpx: ri === 0 && includeHeader ? 22 : 19 }));
 
-      const styleMode = opts.styleMode ?? 'theme';
-      let hdrBgRgb  = '1565C0', hdrFgRgb  = 'FFFFFF';
-      let rowBgRgb  = 'FFFFFF', rowAltRgb = 'EEF2FF';
-      let rowFgRgb  = '212121', borderRgb = 'BDBDBD';
-      let fontSize  = 10;
-
-      if (styleMode === 'theme') {
-        const toRgb = (v: string) => this._hexToXlsxRgb(v);
-        hdrBgRgb  = toRgb(this._readCssVar('--og-header-bg'))    || hdrBgRgb;
-        hdrFgRgb  = toRgb(this._readCssVar('--og-header-color'))  || hdrFgRgb;
-        rowBgRgb  = toRgb(this._readCssVar('--og-row-bg'))        || rowBgRgb;
-        rowAltRgb = toRgb(this._readCssVar('--og-row-alt-bg'))    || rowAltRgb;
-        rowFgRgb  = toRgb(this._readCssVar('--og-row-color'))     || rowFgRgb;
-        borderRgb = toRgb(this._readCssVar('--og-border-color'))  || borderRgb;
-        const fsStr = this._readCssVar('--og-font-size');
-        if (fsStr) fontSize = Math.max(8, Math.round(parseFloat(fsStr) * 0.75));
-      }
-
-      const noStyle = styleMode === 'none';
-      // i18n: Excel 헤더/데이터 폰트를 활성 로케일 meta.exportFont 로(ko='맑은 고딕', byte-identical).
-      const exportFont = this._d.getMeta?.().exportFont ?? '맑은 고딕';
-      const S = {
-        hdrFont:   noStyle ? {} : { bold: true, color: { rgb: hdrFgRgb }, sz: fontSize, name: exportFont },
-        dataFont:  noStyle ? {} : { sz: fontSize, color: { rgb: rowFgRgb }, name: exportFont },
-        hdrFill:   noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: hdrBgRgb } },
-        evenFill:  noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: rowBgRgb } },
-        oddFill:   noStyle ? {} : { patternType: 'solid' as const, fgColor: { rgb: rowAltRgb } },
-        hdrBorder: noStyle ? {} : {
-          top:    { style: 'medium', color: { rgb: hdrBgRgb } },
-          bottom: { style: 'medium', color: { rgb: hdrBgRgb } },
-          left:   { style: 'thin',   color: { rgb: hdrBgRgb } },
-          right:  { style: 'thin',   color: { rgb: hdrBgRgb } },
-        },
-        dataBorder: noStyle ? {} : {
-          top:    { style: 'thin', color: { rgb: borderRgb } },
-          bottom: { style: 'thin', color: { rgb: borderRgb } },
-          left:   { style: 'thin', color: { rgb: borderRgb } },
-          right:  { style: 'thin', color: { rgb: borderRgb } },
-        },
-      };
-
-      rows.forEach((row, ri) => {
-        const isHdr  = includeHeader && ri === 0;
-        const dataRi = includeHeader ? ri - 1 : ri;
-        const isEven = dataRi % 2 === 0;
-
-        row.forEach((_v, ci) => {
-          const addr = utils.encode_cell({ r: ri, c: ci });
-          if (!ws[addr]) ws[addr] = { t: 's', v: '' };
-
-          const col = cols[ci]!;
-          const isNum  = col.type === 'number' || col.align === 'right';
-          const hAlign = isHdr ? 'center' : isNum ? 'right' : (col.align ?? 'left');
-
-          ws[addr].s = {
-            font:      isHdr ? S.hdrFont : S.dataFont,
-            fill:      isHdr ? S.hdrFill : (isEven ? S.evenFill : S.oddFill),
-            border:    isHdr ? S.hdrBorder : S.dataBorder,
-            alignment: { horizontal: hAlign, vertical: 'center', wrapText: false },
-          };
-        });
-      });
+      this._applySheetStyle(utils, ws, rows, cols, includeHeader, opts.styleMode ?? 'theme');
 
       const wb = utils.book_new();
       utils.book_append_sheet(wb, ws, sheetName);
@@ -315,11 +333,14 @@ ${footerHtml}
     import('xlsx-js-style').then(({ utils, writeFile }) => {
       const wb = utils.book_new();
       const opts = this._d.getOptions();
+      const active = wsManager.getActive();
       for (const name of wsManager.getNames()) {
         const state = wsManager.get(name)!;
         const cols  = state.columns.length ? state.columns : opts.columns;
+        // 활성 시트는 화면(DataLayer)이 정본이다 — setData 가 행을 복사하므로 state.data 에는 편집이 없다.
+        const data  = name === active ? this._d.getData() : state.data;
         const rows: any[][] = [cols.map((c: any) => c.header)];
-        for (const row of state.data) {
+        for (const row of data) {
           rows.push(cols.map((c: any) => {
             const v = (row as any)[c.field];
             if (v == null) return '';
@@ -327,7 +348,10 @@ ${footerHtml}
           }));
         }
         const ws = utils.aoa_to_sheet(rows);
-        ws['!cols'] = cols.map(() => ({ wpx: 100 }));
+        ws['!cols'] = cols.map((c: any) => ({ wpx: c.width ?? 100 }));
+        ws['!rows'] = rows.map((_, ri) => ({ hpx: ri === 0 ? 22 : 19 }));
+        // 단일 시트 exportExcel 과 같은 테마 스타일을 시트마다 입힌다(이전엔 무서식으로 나갔다).
+        this._applySheetStyle(utils, ws, rows, cols, true, 'theme');
         utils.book_append_sheet(wb, ws, name);
       }
       writeFile(wb, fname.endsWith('.xlsx') ? fname : fname + '.xlsx', { cellStyles: true } as any);

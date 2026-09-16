@@ -3,7 +3,7 @@
  *
  * Freezes the observable output contract of each mutator so R4 (render pipeline) / R6 (global
  * state) / R9 (single commit chokepoint) cannot silently reorder or drop emissions. The design
- * (90_final_design.md §3.4 Yourdon) flags the exact firing order of the 3 output sinks as an
+ * (90_final_design.md §3.4 data-flow review) flags the exact firing order of the 3 output sinks as an
  * "un-decided runtime-trace blocker"; this test resolves it by observation and pins it.
  *
  * The three output sinks (00_current_architecture.md §2.4-5):
@@ -165,7 +165,7 @@ describe('R0: mutation output ORDER golden (emit / onDataChange / trigger)', () 
   });
 });
 
-describe('R0: does setData render? (Yourdon runtime-trace blocker)', () => {
+describe('R0: does setData render? (data-flow review runtime-trace blocker)', () => {
   it('setData does NOT call the synchronous _doRender tail, but SCHEDULES an async render via VirtualScroll', () => {
     const log: string[] = [];
     const g = makeGrid(log);

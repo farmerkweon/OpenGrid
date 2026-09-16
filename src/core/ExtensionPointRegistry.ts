@@ -317,10 +317,10 @@ export class ExtensionPointRegistry<T = any> {
   // ── 매니페스트(§4.3 R-3d) — 지원 확장점 카탈로그 산출물 ──────
   /**
    * 타입드 확장점 카탈로그. render 훅 항목은 실제 등록분(`renderHooks.ids()`)에서 유도 —
-   * 유령 확장점(등록 없는 카탈로그 엔트리) 금지(DeMarco M9b).
+   * 유령 확장점(등록 없는 카탈로그 엔트리) 금지(측정성 검토 M9b).
    * / The typed extension-point catalog. Render-hook entries are derived from the actual
    * registrations (`renderHooks.ids()`) — no phantom extension points (catalog entries with
-   * no registration) are allowed (DeMarco M9b).
+   * no registration) are allowed (측정성 검토 M9b).
    *
    * @returns 확장점 카탈로그 엔트리 배열 / Array of extension-point catalog entries
    */

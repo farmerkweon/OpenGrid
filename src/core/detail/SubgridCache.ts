@@ -4,11 +4,11 @@
  *
  * 계약 근거:
  *  - docs/design/grid-features-2026-07/11_design_F2_v2.md §3.1(DetailEntry: host/instance/built),
- *    §5(Mount-once + detached 캐시 + 편집중 skip-rebuild — MCCONNELL-04 해소),
+ *    §5(Mount-once + detached 캐시 + 편집중 skip-rebuild — REVIEW-04 해소),
  *    §5(5)(collapse: cache!==true 면 destroy, cache:true 면 host 캐시 유지)
  * / Contract basis:
  *  - 11_design_F2_v2.md §3.1 (DetailEntry: host/instance/built), §5 (mount-once + detached cache +
- *    skip-rebuild while editing — resolves review item MCCONNELL-04), §5(5) (collapse: destroy when cache!==true,
+ *    skip-rebuild while editing — resolves review item REVIEW-04), §5(5) (collapse: destroy when cache!==true,
  *    keep host cached when cache:true)
  *
  * 핵심 의미론(§5 "핵심 통찰"): `_body.innerHTML=''`(GridRenderer 매 렌더 teardown, CON-2)는

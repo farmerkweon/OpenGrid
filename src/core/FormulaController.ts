@@ -336,8 +336,8 @@ export class FormulaController<T extends Record<string, any> = any> {
     return { src: cell.src, error: cell.error, approx: !!cell.approx };
   }
 
-  /** F3-R13/MCCONNELL-03(P0): 정렬/필터 후 범위-보유(hasRangeRef) 수식 전부 dirty(§3.5).
-   * / F3-R13/MCCONNELL-03 (P0): after sort/filter, marks every range-referencing (hasRangeRef)
+  /** F3-R13/REVIEW-03(P0): 정렬/필터 후 범위-보유(hasRangeRef) 수식 전부 dirty(§3.5).
+   * / F3-R13/REVIEW-03 (P0): after sort/filter, marks every range-referencing (hasRangeRef)
    * formula dirty (§3.5). */
   recalcRangeBearingFormulas(): void {
     this.afterRecalc(this._deps.getRecalc().recalcRangeBearing());

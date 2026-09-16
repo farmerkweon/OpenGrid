@@ -168,7 +168,7 @@ describe('buildFillPlan — 수식 합동 3규칙(C3, FR-7)', () => {
     expect(items[0]!.formula).toBe('=SUM(A1:A2)');
   });
 
-  it('규칙2: 소스=값, 대상=수식 → 기본 skip + skippedFormula 카운트(HANMS-05)', () => {
+  it('규칙2: 소스=값, 대상=수식 → 기본 skip + skippedFormula 카운트(UX-REVIEW-05)', () => {
     const ctx = withValues(
       { 0: { a: 5 } },
       { hasCellFormula: (rowId: string) => rowId === 'r1' },

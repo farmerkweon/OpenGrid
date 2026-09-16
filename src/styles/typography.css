@@ -1,0 +1,181 @@
+/* ============================================================
+   OPEN_GRID — 타이포그래피(TYPE 축) 정의  [제5축]
+   사용법: <div data-og-typography="ui"> 또는 플러그인 applyTypography(grid, 'ui')
+   ------------------------------------------------------------
+   색⊥형태⊥밀도⊥타이포 직교성: 이 파일은 **서체(TYPE) 토큰만** 담는다 — 색(hex/rgb/hsl) 0.
+   themes.css 는 COLOR 전용, skins.css 는 FORM 전용, 이 파일은 TYPE 전용이다.
+   네 축은 disjoint name set 이라 어떤 조합도 서로를 흔들지 않는다.
+
+   소유 토큰(9): --og-font-family / --og-font-weight / --og-letter-spacing /
+     --og-header-font-family / --og-header-font-weight / --og-header-letter-spacing /
+     --og-font-variant-numeric / --og-num-font-family / --og-prose-line-height
+   ⚠ --og-font-size 와 --og-line-height 는 **밀도 축 소유**다. 이 파일은 절대 쓰지 않는다
+     ("밀도-타이포 동조" 계약 — 글자 크기와 행 높이는 한 축이 함께 쥐어야 어긋나지 않는다).
+     광학 크기 보정이 필요할 때는 밀도 축을 **읽기만** 한다(복합 셀렉터, dense-scan 참고).
+
+   ⛔ 웹폰트를 내려받지 않는다. @font-face 선언 0, CDN 0, url() 0.
+      시스템에 이미 있는 서체만 기회적으로 잡아 쓰고, 없으면 우아하게 내려앉는다.
+      제로 의존성 라이브러리의 약속을 타이포 축이 깨지 않는다 — 이 파일을 로드해도
+      네트워크 요청은 한 건도 늘지 않는다.
+
+   ⚠ DEFAULT(축 미지정 / data-og-typography="default")는 **오늘과 byte-identical**:
+      이 파일은 named 프리셋에만 토큰을 선언하고 default 는 선언하지 않는다 →
+      토큰 미정의 → base.css 의 var() 폴백(오늘 값과 동일)이 그대로 적용된다.
+
+   ⚠ 이 파일만으로는 아무 일도 일어나지 않는다. 실제 소비는 base.css 가 한다
+      (.og-container 의 font-weight/letter-spacing/font-variant-numeric,
+       .og-header-cell 의 font-family, .og-cell-number 의 font-family).
+      base.css 가 host isolation 때문에 그 속성들을 하드코딩하고 있었으므로,
+      "기본값이 오늘 값과 같은 var()" 로 바꿔 격리는 지키고 축은 살렸다.
+
+   셀렉터 주의: OpenGrid 는 data-og-typography 를 .og-container 자기 자신에 붙인다.
+   따라서 커스텀 프로퍼티는 **속성 셀렉터 [data-og-typography="X"]**(컴파운드 아님)로
+   선언해 컨테이너 자신과 분리 UI(컨텍스트 메뉴 등) 모두에 토큰이 걸리게 한다.
+   ============================================================ */
+
+/* ── ① default — 시스템 기본. 빈 델타. ──
+   플러그인을 로드했지만 고르지 않은 상태. 속성 자체를 붙이지 않는 것이 계약이므로
+   여기에 선언을 두지 않는다. 기존 base.css 스택이 그대로 유효 = 하위호환 보증. */
+
+/* ── ② ui — UI 그로테스크 (권장 기본) ── */
+[data-og-typography="ui"] {
+  --og-font-family:
+    Inter, "Inter Variable", "Inter var",
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    Pretendard, "Pretendard Variable",
+    "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕",
+    "Noto Sans KR", "Nanum Gothic",
+    "Hiragino Sans", "Yu Gothic UI", Meiryo,
+    "Microsoft YaHei", "PingFang SC",
+    sans-serif;
+  --og-font-weight:            400;
+  --og-letter-spacing:         normal;
+  --og-header-font-weight:     600;
+  --og-header-letter-spacing:  0.014em;   /* 0.025em → 한글 헤더가 벌어지던 결함 교정 */
+  --og-font-variant-numeric:   tabular-nums;
+}
+
+/* ── ③ ledger — 회계 원장 ── */
+[data-og-typography="ledger"] {
+  --og-font-family:
+    "IBM Plex Sans", "Source Sans 3", "Source Sans Pro",
+    Inter, "Segoe UI Variable Text", "Segoe UI", system-ui,
+    Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕",
+    "Noto Sans KR", sans-serif;
+  --og-num-font-family:
+    "IBM Plex Mono", "SF Mono", "Cascadia Mono", "Roboto Mono",
+    Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --og-font-weight:            400;
+  --og-letter-spacing:         normal;
+  --og-header-font-weight:     700;
+  --og-header-letter-spacing:  0.02em;
+  --og-font-variant-numeric:   tabular-nums slashed-zero;  /* 0↔O, 0↔8 오독 차단 */
+}
+
+/* ── ④ terminal — 터미널 / 코드 ── */
+[data-og-typography="terminal"] {
+  --og-font-family:
+    "JetBrains Mono", "Cascadia Code", "Cascadia Mono", "SF Mono",
+    Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono",
+    D2Coding, "D2Coding ligature", "Nanum Gothic Coding",
+    "Noto Sans Mono CJK KR", "Noto Sans Mono CJK JP",
+    monospace;
+  --og-font-weight:            400;
+  --og-letter-spacing:         normal;   /* 음수 금지 — D2Coding 한글 음절이 겹친다 */
+  --og-header-font-weight:     600;
+  --og-header-letter-spacing:  0.01em;
+  --og-font-variant-numeric:   tabular-nums slashed-zero;
+}
+
+/* ── ⑤ dense-scan — 고밀도 스캔 (compact 밀도의 짝) ── */
+[data-og-typography="dense-scan"] {
+  --og-font-family:
+    Inter, "Inter Variable",
+    "Segoe UI Variable Small", "Segoe UI", system-ui,
+    -apple-system, BlinkMacSystemFont, Roboto,
+    Pretendard, "Pretendard Variable",
+    "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Noto Sans KR",
+    sans-serif;
+  --og-font-weight:            430;
+  --og-letter-spacing:         0.01em;
+  --og-header-font-weight:     640;
+  --og-header-letter-spacing:  0.028em;
+  --og-font-variant-numeric:   tabular-nums;
+}
+/* 광학 크기 — 밀도 축을 **읽기만** 한다(소유하지 않는다). 작을수록 벌리고 굵힌다. */
+[data-og-typography="dense-scan"][data-og-density="compact"],
+[data-og-typography="dense-scan"][data-og-density="compact-touch"] {
+  --og-font-weight:            460;
+  --og-letter-spacing:         0.014em;
+  --og-header-letter-spacing:  0.034em;
+}
+[data-og-typography="dense-scan"][data-og-density="spacious"],
+[data-og-typography="dense-scan"][data-og-density="gallery"] {
+  --og-font-weight:            400;
+  --og-letter-spacing:         0.002em;
+  --og-header-letter-spacing:  0.018em;
+}
+
+/* ── ⑥ humanist — 휴머니스트 (장시간·저시력) ── */
+[data-og-typography="humanist"] {
+  --og-font-family:
+    Verdana, Tahoma, "DejaVu Sans", "Bitstream Vera Sans",
+    "Lucida Grande", "Segoe UI", system-ui,
+    "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕",
+    "Noto Sans KR", "Nanum Gothic", sans-serif;
+  /* 8종 중 유일하게 헤더 서체를 따로 쓴다 — "헤더는 데이터가 아니다"를 서체로 선언 */
+  --og-header-font-family:
+    "Segoe UI", system-ui, -apple-system,
+    "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --og-font-weight:            400;
+  --og-letter-spacing:         normal;
+  --og-header-font-weight:     600;
+  --og-header-letter-spacing:  0.02em;
+  --og-font-variant-numeric:   tabular-nums;
+  --og-prose-line-height:      1.55;
+}
+
+/* ── ⑦ hangul-first — 한글 우선 ── */
+[data-og-typography="hangul-first"] {
+  --og-font-family:
+    Pretendard, "Pretendard Variable", "Pretendard JP",
+    "Apple SD Gothic Neo",
+    "Noto Sans KR", "Source Han Sans KR",
+    "Malgun Gothic", "맑은 고딕", "Nanum Gothic", Dotum, 돋움,
+    system-ui, sans-serif;
+  --og-font-weight:            400;
+  --og-letter-spacing:         normal;   /* 고정 — 음수 자간은 한글을 뭉갠다 */
+  --og-header-font-weight:     600;
+  --og-header-letter-spacing:  0;        /* 국문 헤더에 트래킹을 주지 않는다 */
+  --og-font-variant-numeric:   tabular-nums;
+}
+
+/* ── ⑧ cjk-doc — CJK 문서 (한·일·중) ── */
+[data-og-typography="cjk-doc"] {
+  --og-font-family:
+    "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR",
+    Pretendard, "Apple SD Gothic Neo", "Malgun Gothic",
+    "Hiragino Sans", "Yu Gothic UI", Meiryo,
+    "Microsoft YaHei", "PingFang SC", "Microsoft JhengHei", "PingFang TC",
+    system-ui, sans-serif;
+  --og-font-weight:            400;
+  --og-letter-spacing:         normal;
+  --og-header-font-weight:     600;
+  --og-header-letter-spacing:  0;
+  --og-font-variant-numeric:   tabular-nums;
+}
+/* 한자 통합(Han unification) — 直·骨·類 는 ko/ja/zh 에서 자형이 다르다.
+   언어 태그가 있을 때만 갈라 그린다. lang 이 없으면 한국어 자형으로 통일된다(예측 가능한 실패). */
+[data-og-typography="cjk-doc"] .og-cell:lang(ja),
+[data-og-typography="cjk-doc"] .og-header-cell:lang(ja) {
+  font-family: "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", Meiryo, "Noto Sans JP", sans-serif;
+}
+[data-og-typography="cjk-doc"] .og-cell:lang(zh-Hans),
+[data-og-typography="cjk-doc"] .og-header-cell:lang(zh-Hans) {
+  font-family: "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+[data-og-typography="cjk-doc"] .og-cell:lang(zh-Hant),
+[data-og-typography="cjk-doc"] .og-header-cell:lang(zh-Hant) {
+  font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+}

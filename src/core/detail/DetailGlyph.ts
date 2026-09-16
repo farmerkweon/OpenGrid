@@ -1,6 +1,6 @@
 /**
- * DetailGlyph — F2 디테일 expander 글리프/aria 정책 (C10 R-DETAIL-GLYPH, HANMS-06 해소).
- * / DetailGlyph — F2 detail-expander glyph / aria policy (C10 R-DETAIL-GLYPH, resolves review item HANMS-06).
+ * DetailGlyph — F2 디테일 expander 글리프/aria 정책 (C10 R-DETAIL-GLYPH, UX-REVIEW-06 해소).
+ * / DetailGlyph — F2 detail-expander glyph / aria policy (C10 R-DETAIL-GLYPH, resolves review item UX-REVIEW-06).
  *
  * 계약 근거:
  *  - docs/design/grid-features-2026-07/15_cross_contracts.md C10 "R-DETAIL-GLYPH": detail expander는
@@ -43,7 +43,7 @@ export const DETAIL_EXPANDER_MIN_HIT_TARGET_PX = 44;
 export interface DetailGlyphInfo {
   /** 화면에 그릴 문자(셰브론 아님, C10). / Character to render (not a chevron, C10). */
   glyph: string;
-  /** expander 자체 aria-label(NFR-5, HANMS-06 — SR 에서 트리 토글과 구분). / The expander's own aria-label (NFR-5, HANMS-06 — distinguished from the tree toggle for screen readers). */
+  /** expander 자체 aria-label(NFR-5, UX-REVIEW-06 — SR 에서 트리 토글과 구분). / The expander's own aria-label (NFR-5, UX-REVIEW-06 — distinguished from the tree toggle for screen readers). */
   ariaLabel: string;
   /** 툴팁 title 속성(C10 "상세 보기" 고정 문구). / Tooltip title attribute (C10 fixed text "View detail"). */
   title: string;

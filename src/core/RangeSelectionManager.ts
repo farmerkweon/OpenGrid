@@ -475,7 +475,7 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     return true;
   }
 
-  // ── autoscroll(HANMS, §3.1) ────────────────────────────────
+  // ── autoscroll(UX 검토 §3.1) ────────────────────────────────
   private _maybeAutoscroll(e: MouseEvent): void {
     const renderer = this._d.getRenderer();
     if (!renderer) return;

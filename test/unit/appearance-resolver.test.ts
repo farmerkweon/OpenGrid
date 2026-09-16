@@ -6,7 +6,7 @@
  *     인라인 `style.cssText` 가 **변경 전(pre-change) 골든과 byte-identical** 인지 검증.
  *     골든 문자열은 리팩터 착수 전 현행 코드에서 그대로 캡처했다(공백·순서 포함). 한 글자라도
  *     달라지면(예: resolver 반환 오탈자) 실패한다 = 15색 테마 시각 회귀 방지 가드.
- *  2) [유닛] resolver 메서드가 오늘의 리터럴과 동일 문자열을 반환하고, HANMS 하드 불변식
+ *  2) [유닛] resolver 메서드가 오늘의 리터럴과 동일 문자열을 반환하고, UX 검토 하드 불변식
  *     (focus 최소 2px, state 보더 solid)이 성립하는지 검증.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -104,7 +104,7 @@ describe('AppearanceResolver — 유닛(리터럴 동치)', () => {
   });
 });
 
-describe('AppearanceResolver — HANMS 하드 불변식(스킨 없어 현재 no-op)', () => {
+describe('AppearanceResolver — UX 검토 하드 불변식(스킨 없어 현재 no-op)', () => {
   const ap = new AppearanceResolver();
 
   it('focusRing(): width<2 는 2px 로 클램프', () => {

@@ -92,7 +92,7 @@ export class DetailManager<T extends Record<string, any> = any> {
   private _cache: SubgridCache<any>;
   /** rowId → 영속 host div(mount-once, renderBody teardown 생존 — §5 핵심 통찰). */
   private _hosts = new Map<string, HTMLElement>();
-  /** FR-9(HANMS-08): collapse 직전 패널 내부에 포커스가 있었는지 rowId 로 기억. */
+  /** FR-9(UX-REVIEW-08): collapse 직전 패널 내부에 포커스가 있었는지 rowId 로 기억. */
   private _focusPendingRestore: string | null = null;
 
   constructor(deps: DetailManagerDeps<T>) {
@@ -207,7 +207,7 @@ export class DetailManager<T extends Record<string, any> = any> {
   collapseRow(ref: DetailRowRef): void {
     const id = this._resolveRowId(ref);
     if (id == null || !this._state.isExpanded(id)) return;
-    // FR-9/HANMS-08: detach 전에 포커스가 패널 내부였는지 기록(afterToggle 이후 렌더 재구성 시 복원).
+    // FR-9/UX-REVIEW-08: detach 전에 포커스가 패널 내부였는지 기록(afterToggle 이후 렌더 재구성 시 복원).
     const host = this._hosts.get(id);
     if (host && document.activeElement && host.contains(document.activeElement)) {
       this._focusPendingRestore = id;
@@ -321,10 +321,10 @@ export class DetailManager<T extends Record<string, any> = any> {
     return { destroy: () => {} };
   }
 
-  /** §5(4) skip-rebuild(FR-8/NFR-2, MCCONNELL-04 → Phase1 승격): renderBody teardown 직전
+  /** §5(4) skip-rebuild(FR-8/NFR-2, REVIEW-04 → Phase1 승격): renderBody teardown 직전
    *  호출된다. 편집 중인 host 는 detach 자체를 회피(document.body 로 hoist, 연결 유지 → blur
    *  없음) 하고, 그 외는 정상 detach(연결 끊음, 참조는 Map 이 쥐고 있어 파괴 아님).
-   * / §5(4) skip-rebuild (FR-8/NFR-2, MCCONNELL-04 → promoted to Phase1): called immediately
+   * / §5(4) skip-rebuild (FR-8/NFR-2, REVIEW-04 → promoted to Phase1): called immediately
    *  before renderBody teardown. A host that is currently being edited avoids detach altogether
    *  (hoisted into document.body, staying connected → no blur); every other host is detached
    *  normally (disconnected, but not destroyed — the Map still holds the reference). */
