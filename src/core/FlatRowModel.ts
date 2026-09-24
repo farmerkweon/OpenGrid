@@ -155,6 +155,19 @@ export class FlatRowModel {
   }
 
   /**
+   * flat index 가 가리키는 데이터 행(트리 노드면 그 노드의 데이터). 그룹 머리·상세 칸·범위 밖이면 null.
+   * / The data row at a flat index (a tree node's data for tree rows); null for group heads, detail slots or out of range.
+   *
+   * @param flatIndex - 합성된 flat 배열의 인덱스 / Index into the composed flat array
+   * @returns 데이터 행 또는 null / The data row or null
+   */
+  rowAt(flatIndex: number): Record<string, any> | null {
+    const item = this._flat()[flatIndex];
+    if (item == null || item._isDetailFiller === true || item._isDetailHead === true || _isGroup(item)) return null;
+    return isTreeNode(item) ? ((item as any).data ?? null) : item;
+  }
+
+  /**
    * rowId → 현재 flat index. 없으면 -1. / rowId → current flat index; -1 if absent.
    *
    * @param rowId - 조회할 stable rowId / Stable rowId to look up

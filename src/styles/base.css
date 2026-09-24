@@ -1777,3 +1777,12 @@
   justify-content: center;
   font-size:       12px;
 }
+
+/* ── 질감 축: 크롬에만 칠함. !important = 인라인 background 단축 속성을 이기려고(header.css T2) */
+.og-container[data-og-texture] .og-header-cell,
+.og-container[data-og-texture] .og-footer,
+.og-container[data-og-texture] .og-footer-bar,
+.og-container[data-og-texture] .og-pagination {
+  background-image: var(--og-texture-bg) !important;
+  background-size:  var(--og-texture-size) !important;
+}

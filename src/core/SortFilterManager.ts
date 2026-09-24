@@ -97,8 +97,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     const sortedItem = this._sortList.find(s => s.field === field);
     const dirLabel = this._d.t(sortedItem ? (sortedItem.dir === 'asc' ? 'sort.asc' : 'sort.desc') : 'sort.none');
     this._d.announce(this._d.t('sort.announce', { field, dir: dirLabel }));
-    this._d.emit('sortChange', { sortList: this._sortList });
-    opts.onSortChange?.({ field, dir: sortedItem?.dir ?? 'asc', sortList: this._sortList });
+    this._emitSortChange(field);
   }
 
   /**
@@ -123,16 +122,35 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     this._d.onReproject?.();
     this._d.renderHeader();
     this._d.doRender();
-    this._d.emit('sortChange', { sortList: this._sortList });
+    this._emitSortChange(Array.isArray(fieldOrList) ? fieldOrList[0]?.field : fieldOrList);
+  }
+
+  /**
+   * `sortChange` 를 모든 길에서 같은 모양으로 낸다: `field` = 방금 바뀐 컬럼, `dir` = 그 컬럼의 새 방향
+   * (그 컬럼 정렬이 풀렸으면 없음), `sortList` = 전체 정렬 목록. 바뀐 컬럼이 없으면(전체 해제) `sortList` 만.
+   * / Emits `sortChange` in one shape on every path: `field` = the column just changed, `dir` = its new
+   * direction (absent when that column's sort was cleared), `sortList` = the whole list; only `sortList`
+   * when no single column changed (everything cleared).
+   */
+  private _emitSortChange(field: string | undefined): void {
+    const evt: { field?: string; dir?: 'asc' | 'desc'; sortList: SortItem[] } = { sortList: this._sortList };
+    if (field != null) {
+      evt.field = field;
+      const item = this._sortList.find(s => s.field === field);
+      if (item) evt.dir = item.dir;
+    }
+    this._d.emit('sortChange', evt);
   }
 
   /** 모든 정렬을 해제한다. / Clear all sorting. */
   resetSort(): void {
+    const hadSort = this._sortList.length > 0;
     this._sortList = [];
     this._d.getData().applySort([]);
     this._d.onReproject?.();
     this._d.renderHeader();
     this._d.doRender();
+    if (hadSort) this._emitSortChange(undefined); // 없던 정렬을 풀 때는 조용히 / silent when nothing was sorted
   }
 
   /**
@@ -162,7 +180,6 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     this._d.renderHeader();
     this._d.doRender();
     this._d.emit('filterChange', { field, filterItems, allFilters: this._filters });
-    this._d.getOptions().onFilterChange?.({ field, filterItems, allFilters: this._filters });
   }
 
   /**

@@ -151,7 +151,6 @@ export class CellEditManager<T extends Record<string, any> = any> {
       row: row as T, column: col as any
     };
     this._d.emit('editStart', startEvt);
-    this._d.getOptions().onEditStart?.(startEvt);
 
     cellEl.classList.add('og-editing');
     // F3(§4.3): 수식 셀 재편집 시 계산값이 아니라 원문("=A1+B2")을 에디터에 채운다.
@@ -210,7 +209,6 @@ export class CellEditManager<T extends Record<string, any> = any> {
       row: row as T, column: col as any
     };
     this._d.emit('editStart', startEvt);
-    opts.onEditStart?.(startEvt);
 
     cellEl.classList.add('og-editing');
     // F3(§4.3): 수식 셀 재편집 시 계산값이 아니라 원문("=A1+B2")을 에디터에 채운다.
@@ -276,30 +274,24 @@ export class CellEditManager<T extends Record<string, any> = any> {
       if (isFormulaInput) {
         this._d.setCellFormula?.(ri, col.field, value);
         const row = this._d.data.getRowByIndex(ri);
-        const opts = this._d.getOptions();
         const evt: EditEvent<T> = {
           type: 'editEnd', rowIndex: ri, columnIndex: ci,
           field: col.field, oldValue: old, newValue: value,
           row: row as T, column: col as any
         };
         this._d.emit('editEnd', evt);
-        opts.onEditEnd?.(evt);
         this._d.emit('dataChange', this._d.data.getData());
-        opts.onDataChange?.(this._d.data.getData());
       } else if (value !== old || hadFormula) {
         if (hadFormula) this._d.clearCellFormula?.(ri, col.field);
         this._d.data.updateCell(ri, col.field, value);
         const row = this._d.data.getRowByIndex(ri);
-        const opts = this._d.getOptions();
         const evt: EditEvent<T> = {
           type: 'editEnd', rowIndex: ri, columnIndex: ci,
           field: col.field, oldValue: old, newValue: value,
           row: row as T, column: col as any
         };
         this._d.emit('editEnd', evt);
-        opts.onEditEnd?.(evt);
         this._d.emit('dataChange', this._d.data.getData());
-        opts.onDataChange?.(this._d.data.getData());
       }
     }
     this._d.doRender();

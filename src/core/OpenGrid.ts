@@ -72,7 +72,7 @@ import type {
 } from './realtime/index.js';
 import type { ICommandCtx } from './command/ICommand.js';
 import type {
-  GridOptions, OpenGridInstance, ColumnDef,
+  GridOptions, OpenGridInstance, ColumnDef, ColumnOrGroup, PrintOptions, GridEventMap,
   SortItem, FilterItem, ExportOptions,
   EditEvent, Position,
   TriggerContext, TriggerHandler, TriggerEvent,
@@ -142,6 +142,66 @@ export interface RealtimeWireOptions {
    * SR 防抖窗口(ms)。默认 500。
    */
   debounceMs?: number;
+}
+
+// 배열에서 그 항목 하나만 뺀다(없으면 아무것도 안 함) — 전역 기본 등록을 되돌릴 때 쓴다.
+// / Removes that one entry from the array (no-op if absent) — used to undo a global default registration.
+function removeEntry<E>(list: E[], entry: E): void {
+  const i = list.indexOf(entry);
+  if (i >= 0) list.splice(i, 1);
+}
+
+// 컨테이너 요소 → 그 위에 살아 있는 그리드들. WeakMap 이라 요소가 버려지면 항목도 함께 사라진다(누수 없음).
+// Set 인 까닭: 같은 요소에 그리드를 두 번 만든 경우도 둘 다 찾아 정리하기 위해.
+// / Container element → grids alive on it. A WeakMap, so the entry goes away with the element (no leak).
+// A Set so that two grids accidentally created on the same element are both found and cleaned up.
+const gridsByContainer = new WeakMap<Element, Set<OpenGrid<any>>>();
+
+// 이벤트 → 옵션 키. 옵션 onX 는 이벤트 x 구독의 줄임말이다 — 이 표가 둘을 잇는 유일한 곳이다.
+// satisfies 가 오른쪽 키가 GridOptions 에 실제로 있는지 컴파일 때 검사한다.
+// / Event → option key. Option onX is shorthand for subscribing to event x — this table is the only
+// place the two are linked. `satisfies` checks at compile time that every key exists in GridOptions.
+const OPTION_EVENTS = {
+  cellClick: 'onCellClick',
+  cellDblClick: 'onCellDblClick',
+  rowClick: 'onRowClick',
+  rowDblClick: 'onRowDblClick',
+  cellMouseOver: 'onCellMouseOver',
+  cellMouseOut: 'onCellMouseOut',
+  cellMouseDown: 'onCellMouseDown',
+  cellMouseUp: 'onCellMouseUp',
+  cellMouseMove: 'onCellMouseMove',
+  rowMouseOver: 'onRowMouseOver',
+  rowMouseOut: 'onRowMouseOut',
+  rowMouseDown: 'onRowMouseDown',
+  rowMouseUp: 'onRowMouseUp',
+  rowMouseMove: 'onRowMouseMove',
+  cellKeyDown: 'onCellKeyDown',
+  cellKeyUp: 'onCellKeyUp',
+  cellKeyPress: 'onCellKeyPress',
+  editStart: 'onEditStart',
+  editEnd: 'onEditEnd',
+  dataChange: 'onDataChange',
+  selectionChange: 'onSelectionChange',
+  sortChange: 'onSortChange',
+  filterChange: 'onFilterChange',
+  scroll: 'onScroll',
+  rowExpand: 'onRowExpand',
+  rowCollapse: 'onRowCollapse',
+} as const satisfies Record<string, keyof GridOptions<any>>;
+
+// 클래스와 같은 이름의 interface 선언 병합 — `on`·`once`·`off` 에 이벤트 이름별 인자 형 오버로드만 더한다
+// (구현은 EventEmitter 그대로라 런타임 코드 0). 표에 없는 이름은 EventEmitter 의 (string, handler) 시그니처로 간다.
+// / Declaration merging with the class: adds per-event-name overloads to on/once/off (signatures only;
+// runtime is EventEmitter as is). Names not in the table fall through to EventEmitter's (string, handler).
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface OpenGrid<T extends Record<string, any> = any> {
+  on<K extends keyof GridEventMap<T>>(event: K, handler: (e: GridEventMap<T>[K]) => void): this;
+  on(event: string, handler: (...args: any[]) => void): this;
+  once<K extends keyof GridEventMap<T>>(event: K, handler: (e: GridEventMap<T>[K]) => void): this;
+  once(event: string, handler: (...args: any[]) => void): this;
+  off<K extends keyof GridEventMap<T>>(event: K, handler?: (e: GridEventMap<T>[K]) => void): this;
+  off(event: string, handler?: (...args: any[]) => void): this;
 }
 
 /**
@@ -283,6 +343,8 @@ export class OpenGrid<T extends Record<string, any> = any>
   private _filterPanel: FilterPanel | null = null;
   private _filterSelect: FilterSelectPanel | null = null;
   private _pagination: Pagination | null = null;
+  /** 사용자가 정한 행 높이(생성 옵션 또는 마지막 setRowHeight). 기본 밀도로 돌아갈 때 쓴다. / The user's row height; restored by the default density. */
+  private _userRowHeight?: number;
   private _dnd: RowDragDrop | null = null;
   private _mergeEngine: MergeEngine = new MergeEngine();
   private _liveRegion: HTMLElement | null = null;
@@ -517,13 +579,228 @@ export class OpenGrid<T extends Record<string, any> = any>
   private static _defaultStrategies: Array<[string, Function]> = [];
 
   /**
+   * 요소 `el` 과 그 자손에 붙어 있는 그리드를 문서 순서대로 돌려준다(파괴한 그리드는 빠진다).
+   * 화면의 한 영역에 어떤 그리드가 떠 있는지 알아야 할 때 쓴다 — 그리드를 전역 변수에 따로 담아 둘 필요가 없다.
+   *
+   * Returns the grids mounted on element `el` and its descendants, in document order (destroyed grids
+   * are excluded). Use it when you need to know which grids live in an area of the page — no need to
+   * keep grids in global variables.
+   *
+   * 要素 `el` とその子孫に載っているグリッドを文書順に返します(破棄したグリッドは含みません)。
+   * 画面のある領域にどのグリッドがあるかを知りたいときに使います — グリッドをグローバル変数に別途保持する必要はありません。
+   *
+   * 按文档顺序返回挂在元素 `el` 及其后代上的表格(已销毁的表格不包含在内)。
+   * 需要知道页面某个区域里有哪些表格时使用 — 不必把表格另存到全局变量里。
+   *
+   * @param el - 찾을 범위의 뿌리 요소(자기 자신 포함)
+   *
+   * Root element of the search (itself included)
+   *
+   * 探す範囲のルート要素(自身を含む)
+   *
+   * 查找范围的根元素(包含其自身)
+   *
+   * @returns 살아 있는 그리드 목록
+   *
+   * The live grids
+   *
+   * 生きているグリッドの一覧
+   *
+   * 仍存活的表格列表
+   *
+   * @example
+   * const grids = OpenGrid.instancesIn(document.getElementById('page')!);
+   * console.log(`이 영역의 그리드 ${grids.length}개`);
+   */
+  static instancesIn(el: Element): OpenGrid<any>[] {
+    // 그리드는 살아 있는 동안 자기 컨테이너에 og-container 클래스를 단다(_mount 가 달고 destroy 가 뗀다).
+    // / A live grid carries the og-container class on its container (added by _mount, removed by destroy).
+    const containers = [el, ...Array.from(el.querySelectorAll('.og-container'))];
+    return containers.flatMap(c => [...(gridsByContainer.get(c) ?? [])]);
+  }
+
+  /**
+   * 요소 `el` 과 그 자손에 붙어 있는 그리드를 모두 파괴한다. 화면의 한 영역을 갈아 끼우기 **전에** 부르면
+   * 그 안의 그리드가 남긴 옵저버·타이머·실시간 구독까지 정리된다(SPA 라우트 전환, 탭 닫기 등).
+   *
+   * Destroys every grid mounted on element `el` and its descendants. Call it **before** replacing an
+   * area of the page and the grids inside it release their observers, timers and realtime
+   * subscriptions too (SPA route change, closing a tab, etc.).
+   *
+   * 要素 `el` とその子孫に載っているグリッドをすべて破棄します。画面のある領域を差し替える**前に**呼ぶと、
+   * その中のグリッドが残したオブザーバ・タイマー・リアルタイム購読まで片付きます(SPA のルート切り替え、タブを閉じるときなど)。
+   *
+   * 销毁挂在元素 `el` 及其后代上的所有表格。在替换页面某个区域**之前**调用,
+   * 其中表格留下的观察器、定时器、实时订阅也会一并清理(SPA 路由切换、关闭标签页等)。
+   *
+   * 한 그리드의 `destroy()` 가 예외를 던져도 나머지는 끝까지 정리한 뒤 그 예외를 던진다(여럿이면 `errors` 에 모은 Error).
+   *
+   * Even if one grid's `destroy()` throws, the rest are still cleaned up, then that error is thrown
+   * (several failures become one Error carrying them in `errors`).
+   *
+   * あるグリッドの `destroy()` が例外を投げても残りは最後まで片付け、そのあとでその例外を投げます(複数なら `errors` にまとめた Error)。
+   *
+   * 即使某个表格的 `destroy()` 抛出异常,其余表格也会清理到底,之后再抛出该异常(多个时合并为带 `errors` 的 Error)。
+   *
+   * @param el - 정리할 범위의 뿌리 요소(자기 자신 포함)
+   *
+   * Root element of the area to clean up (itself included)
+   *
+   * 片付ける範囲のルート要素(自身を含む)
+   *
+   * 要清理范围的根元素(包含其自身)
+   *
+   * @example
+   * OpenGrid.destroyAllIn(stage);
+   * stage.innerHTML = nextScreenHtml;
+   */
+  static destroyAllIn(el: Element): void {
+    // 먼저 다 모은 뒤 파괴한다 — 부모 그리드가 상세 행의 자식 그리드를 먼저 치워도 destroy 는 두 번 불려도 안전하다.
+    // 한 그리드가 실패해도 나머지는 끝까지 정리하고, 실패는 마지막에 알린다.
+    // / Collect first, then destroy — destroy is idempotent, so a parent tearing down its detail-row children first is fine.
+    // One grid failing does not stop the rest; failures are reported at the end.
+    const errors: unknown[] = [];
+    for (const grid of OpenGrid.instancesIn(el)) {
+      try { grid.destroy(); } catch (err) { errors.push(err); }
+    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) {
+      throw Object.assign(new Error(`OpenGrid.destroyAllIn: ${errors.length} grids failed to destroy`), { errors });
+    }
+  }
+
+  /**
+   * 앞으로 만들 모든 그리드에 override 레이어를 걸고, 그 등록을 되돌리는 함수를 돌려준다.
+   * 화면(컴포넌트)이 사라질 때 그 함수를 부르면 그 뒤에 만드는 그리드에는 더 이상 걸리지 않는다.
+   * 이미 만든 그리드는 그대로다 — 그 그리드에서 벗기려면 `grid.restore(name)` 이나 `destroy()` 를 쓴다.
+   * 체이닝이 필요하면 `OpenGrid.defaultOverride` 를 쓴다(같은 등록, 반환값만 다르다).
+   *
+   * Applies an override layer to every grid created from now on, and returns a function that undoes
+   * this registration. Call it when the screen (component) goes away and grids created afterwards no
+   * longer get the layer. Grids that already exist keep it — to remove it from such a grid use
+   * `grid.restore(name)` or `destroy()`. For chaining use `OpenGrid.defaultOverride` (same
+   * registration, different return value).
+   *
+   * これから作るすべてのグリッドに override レイヤーを掛け、その登録を取り消す関数を返します。
+   * 画面(コンポーネント)が消えるときにその関数を呼べば、その後に作るグリッドにはもう掛かりません。
+   * すでに作ったグリッドはそのままです — そのグリッドから外すには `grid.restore(name)` か `destroy()` を使います。
+   * チェーンが必要なら `OpenGrid.defaultOverride` を使います(同じ登録で、戻り値だけが違います)。
+   *
+   * 给此后创建的所有表格挂上 override 层,并返回一个撤销这次注册的函数。
+   * 画面(组件)消失时调用这个函数,之后再创建的表格就不会再挂上它。
+   * 已经创建的表格保持原样 — 要从那个表格上去掉,请用 `grid.restore(name)` 或 `destroy()`。
+   * 需要链式调用时请用 `OpenGrid.defaultOverride`(注册相同,只是返回值不同)。
+   *
+   * @param name - 대상 공개 메서드 이름
+   *
+   * Target public method name
+   *
+   * 対象となる公開メソッド名
+   *
+   * 目标公开方法名
+   *
+   * @param fn - override 레이어 함수(첫 인자 orig)
+   *
+   * Override layer function (first arg = orig)
+   *
+   * override レイヤー関数(第 1 引数が orig)
+   *
+   * override 层函数(第 1 个参数为 orig)
+   *
+   * @param opts - 재진입/에러 정책
+   *
+   * Reentrancy & error policy
+   *
+   * 再入/エラーのポリシー
+   *
+   * 重入/错误的策略
+   *
+   * @returns 이 등록 하나만 되돌리는 함수(여러 번 불러도 탈 없음)
+   *
+   * A function that undoes only this registration (safe to call more than once)
+   *
+   * この登録ひとつだけを取り消す関数(何度呼んでも問題ありません)
+   *
+   * 只撤销这一次注册的函数(多次调用也没问题)
+   *
+   * @example
+   * // 앱 시작 때 한 번 — 그 뒤 만드는 모든 그리드에 걸린다.
+   * const off = OpenGrid.addDefaultOverride('getDisplayValue', (orig, ri, field) => orig(ri, field).toUpperCase());
+   * // 그 규칙이 더 필요 없어질 때(마이크로프론트엔드 언마운트, 테스트 정리 등)
+   * off();
+   * // 컴포넌트 수명에 묶을 때는 그리드를 만드는 컴포넌트보다 먼저 등록돼야 한다.
+   * // React 는 자식 effect 가 부모보다 먼저 돌므로, 부모 useEffect 에서 등록하면 자식이 이미 만든 그리드에는 걸리지 않는다.
+   */
+  static addDefaultOverride(name: string, fn: OverrideLayer, opts: OverrideCallOptions = {}): () => void {
+    const entry: [string, OverrideLayer, OverrideCallOptions] = [name, fn, opts];
+    OpenGrid._defaultOverrides.push(entry);
+    return () => removeEntry(OpenGrid._defaultOverrides, entry);
+  }
+
+  /**
+   * 앞으로 만들 모든 그리드에 strategy 슬롯을 걸고, 그 등록을 되돌리는 함수를 돌려준다.
+   * 쓰임새와 규칙은 `addDefaultOverride` 와 같다(이미 만든 그리드는 그대로).
+   * 체이닝이 필요하면 `OpenGrid.defaults.strategy` 를 쓴다.
+   *
+   * Applies a strategy slot to every grid created from now on, and returns a function that undoes
+   * this registration. Usage and rules are the same as `addDefaultOverride` (grids that already exist
+   * keep it). For chaining use `OpenGrid.defaults.strategy`.
+   *
+   * これから作るすべてのグリッドに strategy スロットを掛け、その登録を取り消す関数を返します。
+   * 使い方と規則は `addDefaultOverride` と同じです(すでに作ったグリッドはそのまま)。
+   * チェーンが必要なら `OpenGrid.defaults.strategy` を使います。
+   *
+   * 给此后创建的所有表格挂上 strategy 槽,并返回一个撤销这次注册的函数。
+   * 用法和规则与 `addDefaultOverride` 相同(已经创建的表格保持原样)。
+   * 需要链式调用时请用 `OpenGrid.defaults.strategy`。
+   *
+   * @param slot - strategy 슬롯 이름
+   *
+   * Strategy slot name
+   *
+   * strategy スロット名
+   *
+   * strategy 槽名
+   *
+   * @param fn - 슬롯에 꽂을 함수
+   *
+   * Function to plug into the slot
+   *
+   * スロットに差し込む関数
+   *
+   * 插入该槽的函数
+   *
+   * @returns 이 등록 하나만 되돌리는 함수(여러 번 불러도 탈 없음)
+   *
+   * A function that undoes only this registration (safe to call more than once)
+   *
+   * この登録ひとつだけを取り消す関数(何度呼んでも問題ありません)
+   *
+   * 只撤销这一次注册的函数(多次调用也没问题)
+   *
+   * @example
+   * const off = OpenGrid.addDefaultStrategy('displayFormatter', companyFormatter);
+   * // 화면을 떠날 때
+   * off();
+   */
+  static addDefaultStrategy(slot: string, fn: Function): () => void {
+    const entry: [string, Function] = [slot, fn];
+    OpenGrid._defaultStrategies.push(entry);
+    return () => removeEntry(OpenGrid._defaultStrategies, entry);
+  }
+
+  /**
    * 정적: 모든 신규 그리드에 적용될 override 레이어 등록.
+   * 나중에 되돌려야 하면 되돌리는 함수를 돌려주는 `OpenGrid.addDefaultOverride` 를 쓴다.
    *
    * Static: register an override layer applied to every newly created grid.
+   * If you need to undo it later, use `OpenGrid.addDefaultOverride`, which returns an undo function.
    *
    * 静的: すべての新規グリッドに適用される override レイヤーを登録。
+   * 後で取り消す必要があれば、取り消し関数を返す `OpenGrid.addDefaultOverride` を使います。
    *
    * 静态: 注册应用到所有新建表格的 override 层。
+   * 之后需要撤销时,请用会返回撤销函数的 `OpenGrid.addDefaultOverride`。
    *
    * @param name - 대상 공개 메서드 이름
    *
@@ -561,22 +838,26 @@ export class OpenGrid<T extends Record<string, any> = any>
    * OpenGrid.defaultOverride('getDisplayValue', (orig, ri, field) => orig(ri, field).toUpperCase());
    */
   static defaultOverride(name: string, fn: OverrideLayer, opts: OverrideCallOptions = {}): typeof OpenGrid {
-    OpenGrid._defaultOverrides.push([name, fn, opts]);
+    OpenGrid.addDefaultOverride(name, fn, opts);
     return OpenGrid;
   }
 
   /**
    * 정적 전역 defaults 네임스페이스 (strategy 슬롯).
+   * 나중에 되돌려야 하면 되돌리는 함수를 돌려주는 `OpenGrid.addDefaultStrategy` 를 쓴다.
    *
    * Static global defaults namespace (strategy slots).
+   * If you need to undo it later, use `OpenGrid.addDefaultStrategy`, which returns an undo function.
    *
    * 静的グローバルな defaults 名前空間(strategy スロット)。
+   * 後で取り消す必要があれば、取り消し関数を返す `OpenGrid.addDefaultStrategy` を使います。
    *
    * 静态全局的 defaults 命名空间(strategy 槽)。
+   * 之后需要撤销时,请用会返回撤销函数的 `OpenGrid.addDefaultStrategy`。
    */
   static defaults = {
     strategy(slot: string, fn: Function): typeof OpenGrid {
-      OpenGrid._defaultStrategies.push([slot, fn]);
+      OpenGrid.addDefaultStrategy(slot, fn);
       return OpenGrid;
     },
   };
@@ -900,6 +1181,11 @@ export class OpenGrid<T extends Record<string, any> = any>
           new OpenGrid(host, { ...subgridOptions, _detailDepth: depth } as any),
       },
     );
+    // 컨테이너가 정해진 첫 시점에 등록한다 — 뒤 단계에서 예외가 나도 destroyAllIn 으로 찾아 정리할 수 있게.
+    // / Register as soon as the container is known, so a grid that fails later can still be found by destroyAllIn.
+    const onContainer = gridsByContainer.get(this._container) ?? new Set();
+    onContainer.add(this);
+    gridsByContainer.set(this._container, onContainer);
     this._bindOptionEvents();
 
     if (this._options.defaultSort?.length) {
@@ -1186,6 +1472,14 @@ export class OpenGrid<T extends Record<string, any> = any>
       rowHeight: this._options.rowHeight,
       onRender: (s, e) => this._doRender(s, e),
     });
+
+    // 본문 스크롤을 `scroll` 이벤트로 알린다(옵션 onScroll·grid.on('scroll') 이 여기서 불린다).
+    // / Report body scrolling as the `scroll` event (option onScroll and grid.on('scroll') are called from here).
+    const bodyEl = this._renderer.bodyWrapper;
+    bodyEl.addEventListener('scroll', () => {
+      const { scrollTop, scrollLeft, scrollHeight, clientHeight } = bodyEl;
+      this.emit('scroll', { scrollTop, scrollLeft, isAtTop: scrollTop <= 0, isAtBottom: scrollTop + clientHeight >= scrollHeight - 1 });
+    }, { passive: true });
 
     // 그리드↔그리드 드래그용 레지스트리 등록 (bodyWrapper 기준)
     crossGridRegistry.register(this._renderer.bodyWrapper, this);
@@ -1567,7 +1861,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 工作表的数据
    */
-  addWorksheet(name: string, columns?: import('./types').ColumnDef<T>[], data?: T[]): void {
+  addWorksheet(name: string, columns?: ColumnOrGroup<T>[], data?: T[]): void {
     if (!this._wsManager) {
       this._wsManager = new WorksheetManager<T>(
         this._container,
@@ -1863,35 +2157,17 @@ export class OpenGrid<T extends Record<string, any> = any>
     setTimeout(() => { if (this._liveRegion) this._liveRegion.textContent = msg; }, 50);
   }
 
+  // 옵션 onX 는 이벤트 'x' 구독의 줄임말이다 — 옵션 콜백이 불리는 길은 이 리스너 하나뿐이다.
+  // 처리기(CellEventHandler 등)는 emit 만 하고 옵션을 직접 부르지 않는다(직접 부르면 두 번 불린다).
+  // 리스너는 부르는 순간의 this._options 를 읽으므로 setOptions 로 바꾼 콜백이 곧바로 쓰인다.
+  // / Option `onX` is shorthand for subscribing to event 'x' — this listener is the only path an
+  // option callback is invoked through. Handlers only emit and never call the option directly (doing
+  // so fires it twice). The listener reads `this._options` at call time, so callbacks replaced via
+  // setOptions take effect immediately.
   private _bindOptionEvents(): void {
-    if (this._options.onCellClick) this.on('cellClick', this._options.onCellClick);
-    if (this._options.onCellDblClick) this.on('cellDblClick', this._options.onCellDblClick);
-    if (this._options.onRowClick) this.on('rowClick', this._options.onRowClick);
-    if (this._options.onEditStart) this.on('editStart', this._options.onEditStart);
-    if (this._options.onEditEnd) this.on('editEnd', this._options.onEditEnd);
-    if (this._options.onSortChange) this.on('sortChange', this._options.onSortChange);
-    if (this._options.onFilterChange) this.on('filterChange', this._options.onFilterChange);
-    if (this._options.onScroll) this.on('scroll', this._options.onScroll);
-    if (this._options.onDataChange) this.on('dataChange', this._options.onDataChange);
-    if (this._options.onSelectionChange) this.on('selectionChange', this._options.onSelectionChange);
-    // Sprint 35 ?좉퇋
-    if (this._options.onRowDblClick)    this.on('rowDblClick',    this._options.onRowDblClick);
-    if (this._options.onRowMouseOver)   this.on('rowMouseOver',   this._options.onRowMouseOver);
-    if (this._options.onRowMouseOut)    this.on('rowMouseOut',    this._options.onRowMouseOut);
-    if (this._options.onRowMouseDown)   this.on('rowMouseDown',   this._options.onRowMouseDown);
-    if (this._options.onRowMouseUp)     this.on('rowMouseUp',     this._options.onRowMouseUp);
-    if (this._options.onRowMouseMove)   this.on('rowMouseMove',   this._options.onRowMouseMove);
-    if (this._options.onCellMouseOver)  this.on('cellMouseOver',  this._options.onCellMouseOver);
-    if (this._options.onCellMouseOut)   this.on('cellMouseOut',   this._options.onCellMouseOut);
-    if (this._options.onCellMouseDown)  this.on('cellMouseDown',  this._options.onCellMouseDown);
-    if (this._options.onCellMouseUp)    this.on('cellMouseUp',    this._options.onCellMouseUp);
-    if (this._options.onCellMouseMove)  this.on('cellMouseMove',  this._options.onCellMouseMove);
-    if (this._options.onCellKeyDown)    this.on('cellKeyDown',    this._options.onCellKeyDown);
-    if (this._options.onCellKeyUp)      this.on('cellKeyUp',      this._options.onCellKeyUp);
-    if (this._options.onCellKeyPress)   this.on('cellKeyPress',   this._options.onCellKeyPress);
-    // F2(C5.1 on* 버킷)
-    if (this._options.onRowExpand)      this.on('rowExpand',      this._options.onRowExpand);
-    if (this._options.onRowCollapse)    this.on('rowCollapse',    this._options.onRowCollapse);
+    for (const [event, key] of Object.entries(OPTION_EVENTS)) {
+      this.on(event, (e: unknown) => (this._options[key] as ((e: unknown) => void) | undefined)?.(e));
+    }
   }
   // R6(§3.1 C5): 데이터 변경 표면은 MutationService 로 이관. 아래는 얇은 위임(공개 API 불변).
   // / R6 (§3.1 C5): the mutation surface moved to MutationService; below are thin delegations (public API unchanged).
@@ -2224,7 +2500,7 @@ export class OpenGrid<T extends Record<string, any> = any>
   clearData(): void {
     this._rowMgr.reset();
     this._data.clearData();
-    // R4: totals=0 → full 렌더 → emit([]) (onDataChange bound listener 로 ONCE, 명시 재호출 없음).
+    // R4: totals=0 → full 렌더 → emit([]).
     this._mutation.commit({ totals: 'zero', renderMode: 'full', emitPayload: () => [] });
   }
 
@@ -2305,7 +2581,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     // R4: unshiftRow 도 트리거 브래킷 없음 — pushRow 와 동형 커밋.
     this._mutation.commit({
       totals: 'count', renderMode: 'sync-window',
-      emitPayload: () => this._data.getData(), fireOnDataChangeExplicitly: true,
+      emitPayload: () => this._data.getData(),
     });
   }
 
@@ -2476,6 +2752,41 @@ export class OpenGrid<T extends Record<string, any> = any>
    * 返回指定索引的行对象(单件查询用)。
    */
   getRowAt(rowIndex: number): T { return this._data.getRowByIndex(rowIndex) as T; }
+
+  /**
+   * 화면 순서로 늘어놓은 **전체** 목록(그룹 머리·트리·상세 칸 포함)에서 `flatIndex` 번째 줄의 데이터 행을 돌려준다. 이 번호는 스크롤 위치와 무관하다 — 지금 창에 보이는 줄 가운데 몇 번째가 아니다. 그룹 머리·상세 칸이면 `null`, 트리 줄이면 그 노드의 데이터 행.
+   * `getRowAt(rowIndex)` 는 데이터의 표시 순서라 그룹·트리·상세가 켜지면 둘이 다른 줄을 가리킨다.
+   *
+   * Returns the data row on the `flatIndex`-th line of the **whole** list laid out in on-screen order (group heads, tree rows and detail slots included). The number does not depend on the scroll position — it is not a position among the lines currently visible in the viewport. `null` for group heads and detail slots; for tree lines, that node's data row.
+   * `getRowAt(rowIndex)` uses the data's display order, so with grouping, tree or detail on the two point at different lines.
+   *
+   * 画面順に並べた**全体**の一覧(グループ見出し・ツリー・詳細欄を含む)で `flatIndex` 番目の行のデータ行を返します。この番号はスクロール位置と関係ありません — いま窓に見えている行の中での何番目かではありません。グループ見出し・詳細欄なら `null`、ツリーの行ならそのノードのデータ行。
+   * `getRowAt(rowIndex)` はデータの表示順なので、グループ・ツリー・詳細が有効だと両者は別の行を指します。
+   *
+   * 在按画面顺序排列的**完整**列表(包括分组标题、树、详情栏)中,返回第 `flatIndex` 行的数据行。这个编号与滚动位置无关 — 不是当前窗口中可见行里的第几行。分组标题、详情栏返回 `null`;树的行返回该节点的数据行。
+   * `getRowAt(rowIndex)` 使用数据的显示顺序,启用分组、树、详情时两者指向不同的行。
+   *
+   * @param flatIndex - 화면 순서 전체 목록에서의 줄 번호(0부터, 스크롤과 무관)
+   *
+   * Line number in the whole on-screen-order list (0-based, independent of scrolling)
+   *
+   * 画面順の全体一覧での行番号(0 始まり、スクロールと無関係)
+   *
+   * 在画面顺序完整列表中的行号(从 0 开始,与滚动无关)
+   *
+   * @returns 데이터 행, 없으면 `null`
+   *
+   * The data row, or `null`
+   *
+   * データ行、なければ `null`
+   *
+   * 数据行,没有则为 `null`
+   *
+   * @example
+   * const row = grid.getFlatRow(3); // 전체 목록의 넷째 줄(스크롤해도 같은 줄)
+   * if (row) console.log(row.name);
+   */
+  getFlatRow(flatIndex: number): T | null { return this._flatModel.rowAt(flatIndex) as T | null; }
 
   // ── Phase 0 인프라 / Phase 0 infrastructure ──────────────────────────────────────
 
@@ -3128,7 +3439,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 把列构成的整体换成新定义并重新绘制。按画面模式整体更换要展示的列集合时使用(单个的添加/删除用 insertColumn/deleteColumn)。
    */
-  applyColumns(columns: ColumnDef<T>[]): void {
+  applyColumns(columns: ColumnOrGroup<T>[]): void {
     const ctx = this._trigMgr.mkCtx('applyColumns', [columns]);
     if (!this._trigMgr.exec('before:applyColumns', ctx)) return;
     this._colLayout.setColumns(columns);
@@ -3808,7 +4119,71 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 打开打印用的窗口。
    */
-  print(options?: { title?: string; excludeFields?: string[] }): void { this._exportMgr.print(options); }
+  print(options?: PrintOptions): void { this._exportMgr.print(options); }
+
+  /**
+   * 페이지당 행 수를 바꾸고 1쪽으로 돌아간다(`pagination: true` 일 때). 페이지 바의 행 수 목록을 고른 것과 같다.
+   * 페이징을 켜지 않은 그리드에서는 화면은 그대로이고 값만 기억해 두었다가 페이징을 켤 때 쓴다.
+   *
+   * Changes the rows per page and returns to page 1 (when `pagination: true`) — the same as picking a
+   * size in the pager's rows-per-page list. On a grid without pagination nothing changes on screen; the
+   * value is remembered and used when pagination is turned on.
+   *
+   * 1 ページあたりの行数を変えて 1 ページ目に戻ります(`pagination: true` のとき)。ページバーの行数リストで選ぶのと同じです。
+   * ページングを有効にしていないグリッドでは画面は変わらず、値だけを覚えておいてページングを有効にしたときに使います。
+   *
+   * 修改每页行数并回到第 1 页(`pagination: true` 时)。与在分页栏的行数列表中选择相同。
+   * 没有启用分页的表格上画面不变,只记住这个值,在启用分页时使用。
+   *
+   * @param size - 페이지당 행 수(1 이상의 정수)
+   *
+   * Rows per page (an integer of 1 or more)
+   *
+   * 1 ページあたりの行数(1 以上の整数)
+   *
+   * 每页行数(1 以上的整数)
+   *
+   * @throws RangeError — `size` 가 1 이상의 정수가 아닐 때
+   *
+   * RangeError — when `size` is not an integer of 1 or more
+   *
+   * RangeError — `size` が 1 以上の整数でないとき
+   *
+   * RangeError — `size` 不是 1 以上的整数时
+   *
+   * @example
+   * grid.setPageSize(50);
+   */
+  setPageSize(size: number): void {
+    if (!Number.isInteger(size) || size < 1) throw new RangeError(`OpenGrid.setPageSize: size must be an integer >= 1 (got ${size})`);
+    this._options.pageSize = size;
+    this._pagination?.setPageSize(size);
+  }
+
+  /**
+   * 찾기 바를 열고 입력 칸에 포커스한다(Ctrl+F 와 같다). 단추로 찾기를 열게 할 때 쓴다.
+   *
+   * Opens the find bar and focuses its input (same as Ctrl+F). Use it to open search from a button.
+   *
+   * 検索バーを開いて入力欄にフォーカスします(Ctrl+F と同じ)。ボタンから検索を開かせたいときに使います。
+   *
+   * 打开查找栏并让输入框获得焦点(与 Ctrl+F 相同)。想用按钮打开查找时使用。
+   *
+   * @example
+   * searchButton.addEventListener('click', () => grid.openFindBar());
+   */
+  openFindBar(): void { this._findMgr.open(); }
+
+  /**
+   * 찾기 바를 닫고 찾기로 걸러 낸 것을 푼다(모든 행이 다시 보인다).
+   *
+   * Closes the find bar and clears the find filter (all rows show again).
+   *
+   * 検索バーを閉じ、検索での絞り込みを解除します(すべての行が再び表示されます)。
+   *
+   * 关闭查找栏并解除查找的筛选(所有行重新显示)。
+   */
+  closeFindBar(): void { this._findMgr.close(); }
 
   /**
    * 데이터 배열 변환.
@@ -4256,21 +4631,29 @@ export class OpenGrid<T extends Record<string, any> = any>
    * ('comfortable') 보여 줄 때 쓴다. 행 높이·안쪽 여백 토큰만 조정하는 순수 가산적 변경이라 색·형태·질감은
    * 전혀 건드리지 않는다. 밀도는 행 높이를 바꾸므로 좌표를 다시 계산해야 할 때 창 크기 변경과 똑같은 경로로
    * 재배치한다. 없는 이름을 넘겨도 안전하게 기본값으로 되돌아간다(throw 안 함).
+   * 보통 모드의 행 높이도 밀도 값으로 바뀌고, 기본('default')으로 돌아가면 사용자가 정한 행 높이(생성 옵션
+   * `rowHeight` 또는 마지막 `setRowHeight`)로 돌아온다.
    *
    * Change how tightly rows are packed (density) — show the same data more compactly ('compact') or with
    * more breathing room ('comfortable'). It adjusts only row-height/padding tokens (purely additive), never
    * touching color/form/texture. Because density changes row height, it relayouts via the same path as a
    * window resize when needed. An unknown name safely falls back to the default (never throws).
+   * The normal-mode row height follows the density too; back at 'default' it returns to the user's row
+   * height (the `rowHeight` option or the last `setRowHeight`).
    *
    * 行間の詰まり具合(密度)を変えます — 同じデータを画面によりぎっしり('compact')、またはゆったり('comfortable')
    * 見せるときに使います。行の高さ・内側の余白のトークンだけを調整する純粋に加算的な変更なので、色・形状・質感には
    * いっさい触れません。密度は行の高さを変えるため、座標を計算し直す必要があるときはウィンドウのサイズ変更と同じ経路で
    * 再配置します。存在しない名前を渡しても安全に既定値へ戻ります(throw しません)。
+   * 通常モードの行の高さも密度の値に変わり、既定('default')に戻ると利用者が決めた行の高さ(生成オプション
+   * `rowHeight` または最後の `setRowHeight`)に戻ります。
    *
    * 改变行间的紧密程度(密度)— 想把同样的数据在画面上显示得更密('compact')或更宽松('comfortable')
    * 时使用。它只调整行高、内侧留白的 token,是纯粹加算式的变更,完全不碰颜色、形状、质感。
    * 因为密度会改变行高,需要重新计算坐标时,以与窗口尺寸变更相同的路径重新布局。
    * 传入不存在的名称也会安全地回到默认值(不会 throw)。
+   * 普通模式的行高也会随密度改变;回到默认('default')时恢复为用户设定的行高(创建选项 `rowHeight`
+   * 或最后一次 `setRowHeight`)。
    *
    * @param name - 밀도 값 id(예 'compact', 'comfortable')
    *
@@ -4293,28 +4676,86 @@ export class OpenGrid<T extends Record<string, any> = any>
     // ③ 행높이 브리지: --og-density-row-height 를 base.css 소비 토큰 --og-row-height 로 미러.
     const rowHeight = res.tokens['--og-density-row-height'];
     if (rowHeight != null) this._container.style.setProperty('--og-row-height', rowHeight);
-    // ④ relayout: 밀도만 좌표 재파생 요구 → 리사이즈와 동일 경로 재사용(신규 로직 없음).
+    // ④ 보통 모드 행 높이: 밀도에 행 높이가 있으면 그 값, 기본 밀도면 사용자가 정한 행 높이로 되돌린다.
+    // / Normal-mode row height: the density's value, or back to the user's row height for the default density.
+    this._userRowHeight ??= this._options.rowHeight;
+    this._applyRowHeight(rowHeight != null ? parseFloat(rowHeight) : this._userRowHeight);
+    // ⑤ relayout: 밀도만 좌표 재파생 요구 → 리사이즈와 동일 경로 재사용(신규 로직 없음).
     if (res.requiresRelayout) this._onResize();
+  }
+
+  /**
+   * 보통 모드의 행 높이(px)를 바꾸고 다시 배치한다. 이 값은 「사용자가 정한 행 높이」로 기억되어, 밀도를 기본(`setDensity('default')`)으로 되돌릴 때도 이 값으로 돌아온다.
+   * 밀도 프리셋 대신 딱 맞는 높이가 필요할 때 쓴다.
+   *
+   * Changes the normal-mode row height (px) and lays out again. The value is remembered as "the user's row height", so returning the density to default (`setDensity('default')`) also comes back to it.
+   * Use it when you need an exact height instead of a density preset.
+   *
+   * 通常モードの行の高さ(px)を変えて配置し直します。この値は「利用者が決めた行の高さ」として覚えられ、密度を既定(`setDensity('default')`)に戻したときもこの値に戻ります。
+   * 密度のプリセットではなく、ぴったりの高さが必要なときに使います。
+   *
+   * 修改普通模式的行高(px)并重新布局。这个值会被记为「用户设定的行高」,把密度恢复为默认(`setDensity('default')`)时也会回到这个值。
+   * 需要精确高度而不是密度预设时使用。
+   *
+   * @param px - 행 높이(1 이상의 유한수)
+   *
+   * Row height (a finite number of 1 or more)
+   *
+   * 行の高さ(1 以上の有限の数)
+   *
+   * 行高(1 以上的有限数)
+   *
+   * @throws RangeError — `px` 가 1 이상의 유한수가 아닐 때
+   *
+   * RangeError — when `px` is not a finite number of 1 or more
+   *
+   * RangeError — `px` が 1 以上の有限の数でないとき
+   *
+   * RangeError — `px` 不是 1 以上的有限数时
+   *
+   * @example
+   * grid.setRowHeight(44); // 터치 화면에서 손가락으로 누르기 좋게
+   */
+  setRowHeight(px: number): void {
+    if (!Number.isFinite(px) || px < 1) throw new RangeError(`OpenGrid.setRowHeight: px must be a finite number >= 1 (got ${px})`);
+    this._userRowHeight = px;
+    this._applyRowHeight(px);
+    this._onResize();
+  }
+
+  // 행 높이를 쓰는 세 곳(옵션·가상 스크롤·행 끌기)을 함께 맞춘다. 그리기(GridRenderer)는 옵션을 매번 읽는다.
+  // / Keeps the three users of row height (options, virtual scroll, row drag) in step; the renderer reads options each time.
+  private _applyRowHeight(px: number): void {
+    this._options.rowHeight = px;
+    this._vs?.setRowHeight(px);
+    this._dnd?.setRowHeight(px);
   }
 
   /**
    * 배경 질감을 바꾼다 — 밋밋한 배경 대신 리넨('linen')·종이결('paper-grain')·모눈('graph') 같은 결을 깔고
    * 싶을 때 쓴다. 배경 페인트만 바꾸는 순수 가산적 변경이라 행 위치는 그대로다(재배치 없음). 색·형태·밀도 축과
    * 따로 논다. 없는 이름을 넘겨도 안전하게 기본(질감 없음)으로 되돌아간다(throw 안 함).
+   * 결은 머리글·바닥글·페이지 바에만 깔리고 데이터 칸 뒤에는 깔리지 않는다. 테마가 머리글에 깐 무늬가 있으면
+   * 질감이 우선한다(색은 그대로).
    *
    * Change the background texture — lay a grain like linen ('linen'), paper ('paper-grain'), or a grid
    * ('graph') over the plain background. It only repaints the background (purely additive), so row positions
    * stay put (no relayout). Independent of the color/form/density axes. An unknown name safely falls back to
    * none (never throws).
+   * The grain goes on the header, footer and pager only, never behind data cells. If the theme draws a
+   * pattern on the header, the texture takes precedence (colors stay the same).
    *
    * 背景の質感を変えます — のっぺりした背景の代わりに、リネン('linen')・紙目('paper-grain')・方眼('graph')といった
    * 風合いを敷きたいときに使います。背景のペイントだけを変える純粋に加算的な変更なので、行の位置はそのままです
    * (再配置なし)。色・形状・密度の各軸とは独立しています。存在しない名前を渡しても安全に既定(質感なし)へ戻ります
    * (throw しません)。
+   * 風合いは見出し・フッター・ページバーにだけ敷かれ、データのセルの後ろには敷かれません。テーマが見出しに
+   * 模様を敷いている場合は質感が優先されます(色はそのまま)。
    *
    * 改变背景的质感 — 想在平淡的背景上铺一层亚麻('linen')、纸纹('paper-grain')、方格('graph')这类
    * 纹理时使用。它只改变背景的绘制,是纯粹加算式的变更,因此行的位置保持不变(无需重新布局)。
    * 与颜色、形状、密度各轴互不相干。传入不存在的名称也会安全地回到默认(无质感)(不会 throw)。
+   * 纹理只铺在表头、表尾和分页栏上,不会铺在数据单元格后面。如果主题在表头铺了图案,质感优先(颜色不变)。
    *
    * @param name - 질감 값 id(예 'linen', 'paper-grain', 'graph')
    *
@@ -4410,6 +4851,7 @@ export class OpenGrid<T extends Record<string, any> = any>
   destroy(): void {
     if (this._destroyed) return;
     this._destroyed = true;
+    gridsByContainer.get(this._container)?.delete(this);
     if (this._renderer) crossGridRegistry.unregister(this._renderer.bodyWrapper);
     this._trigMgr.clear();
     this._ro?.disconnect();
@@ -4429,7 +4871,9 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._liveRegion?.remove();
     this._liveRegion = null;
     this._container.innerHTML = '';
-    this._container.classList.remove('og-container');
+    // 같은 요소에 다른 그리드가 아직 살아 있으면 표식을 남긴다 — instancesIn 이 그 그리드를 계속 찾도록.
+    // / Keep the marker while another grid still lives on this element, so instancesIn keeps finding it.
+    if (!gridsByContainer.get(this._container)?.size) this._container.classList.remove('og-container');
     this.removeAllListeners();
   }
 }

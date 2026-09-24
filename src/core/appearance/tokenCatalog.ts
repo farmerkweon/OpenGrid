@@ -47,7 +47,7 @@ export const TOKEN_CATALOG: ReadonlyArray<TokenCatalogEntry> = [
   { name: '--og-status-warning', axis: 'theme', default: '#f9a825', desc: '상태: 경고', context: 'semantic' },
   { name: '--og-status-success', axis: 'theme', default: '#388e3c', desc: '상태: 성공', context: 'semantic' },
   { name: '--og-status-info', axis: 'theme', default: '#1976d2', desc: '상태: 정보', context: 'semantic' },
-  { name: '--og-texture-ink', axis: 'theme', default: '0 0 0', desc: '질감 잉크(rgb 채널) — 질감 결이 참조하는 색(장식색)', context: 'decorative' },
+  { name: '--og-texture-ink', axis: 'theme', default: '0, 0, 0', desc: '질감 잉크(rgb 채널) — 질감 결이 참조하는 색(장식색)', context: 'decorative' },
 
   // ── 형태(FORM / skin) ──
   { name: '--og-radius-md', axis: 'skin', default: '4px', desc: '중간 반경(형태)' },
@@ -68,7 +68,7 @@ export const TOKEN_CATALOG: ReadonlyArray<TokenCatalogEntry> = [
   // ── 질감(TEXTURE / texture) — 신설 축 ──
   { name: '--og-texture-bg', axis: 'texture', default: 'none', desc: '질감 결(gradient 레시피, --og-texture-ink 참조)', context: 'decorative' },
   { name: '--og-texture-size', axis: 'texture', default: 'auto', desc: '질감 반복 크기' },
-  { name: '--og-texture-opacity', axis: 'texture', default: '0', desc: '질감 알파(정직 상한 0.1)' },
+  { name: '--og-texture-opacity', axis: 'texture', default: '0', desc: '레시피 잉크 알파의 상한(0.1) — 등록 때 검사하는 값이며 칠하는 데 직접 쓰지 않음' },
   { name: '--og-texture-seam', axis: 'texture', default: 'none', desc: '실땀(무광 스티치 — 대각 해칭 금지)', context: 'decorative' },
   { name: '--og-texture-zone', axis: 'texture', default: 'chrome', desc: '질감 존(chrome|all — 데이터셀 배경 금지는 코어 불변식)' },
 ];

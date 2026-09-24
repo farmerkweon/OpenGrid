@@ -48,6 +48,14 @@ const INTENDED_DEFAULT_CHANGES: ReadonlyArray<{ decl: RegExp; why: string }> = [
     decl: /^--og-row-accent-color:var\(--og-row-selected-color\)$/,
     why: 'A-1 안전판(모션 검토 문서 §3.1): 고전 10종에서 선택행 막대가 대비 1.00 으로 소실되는 것을 그 행 글자색으로 물러서서 막는다. A-1 과 반드시 짝.',
   },
+  {
+    decl: /^background-image:var\(--og-texture-bg\) !important$/,
+    why: '제안 P10: 질감 축 토큰을 크롬에 칠하는 규칙. [data-og-texture] 가 붙은 그리드에만 걸리므로 축을 안 지정한 기본 화면은 그대로다.',
+  },
+  {
+    decl: /^background-size:var\(--og-texture-size\) !important$/,
+    why: '제안 P10: 위와 짝(결 반복 크기). 같은 선택자 안에만 있다.',
+  },
 ];
 
 /** 주석 제거 → var(--x, F) 를 F 로 치환(중첩 해소까지 반복). */

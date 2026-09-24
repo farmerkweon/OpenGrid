@@ -92,6 +92,9 @@ export class RowDragDrop {
     this._onMouseUp   = this._onMouseUp.bind(this);
   }
 
+  /** 행 높이가 바뀌면(밀도·setRowHeight) 끌어 놓을 자리 계산도 새 높이를 쓰게 한다. / Use the new row height for drop-slot math after a row-height change. */
+  setRowHeight(px: number): void { this._rowHeight = px; }
+
   /**
    * 행 엘리먼트에 드래그 핸들 삽입.
    * / Insert a drag handle into a row element.

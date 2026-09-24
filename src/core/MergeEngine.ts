@@ -7,15 +7,55 @@
  *     / consecutive equal values in a field collapse into a rowSpan automatically
  */
 
-/** 병합 대상 셀 정의(기준 셀). / A cell to merge (the anchor cell). */
+/**
+ * 병합할 셀 지정. `row`·`col` 이 기준 셀(왼쪽 위)이고, 거기서 아래로 `rowSpan` 칸·오른쪽으로 `colSpan` 칸을 한 칸으로 합친다.
+ *
+ * A cell to merge. `row`/`col` is the anchor (top-left) cell; from there `rowSpan` cells down and `colSpan` cells right are joined into one.
+ *
+ * 結合するセルの指定。`row`・`col` が基準セル(左上)で、そこから下へ `rowSpan` 個・右へ `colSpan` 個を一つのセルにまとめます。
+ *
+ * 要合并的单元格的指定。`row`/`col` 是基准单元格(左上),从那里向下 `rowSpan` 格、向右 `colSpan` 格合成一格。
+ */
 export interface MergeCell {
-  /** 표시 행 인덱스(0-base). / Display row index (0-based). */
+  /**
+   * 표시 행 인덱스(0부터).
+   *
+   * Display row index (0-based).
+   *
+   * 表示行のインデックス(0 始まり)。
+   *
+   * 显示行的索引(从 0 开始)。
+   */
   row: number;
-  /** 리프 컬럼 인덱스(0-base). / Leaf column index (0-based). */
+  /**
+   * 보이는 잎 컬럼 인덱스(0부터).
+   *
+   * Visible leaf-column index (0-based).
+   *
+   * 表示されている末端列のインデックス(0 始まり)。
+   *
+   * 可见叶子列的索引(从 0 开始)。
+   */
   col: number;
-  /** 세로 병합 칸 수(1 이상, 기본 1). / Vertical span count (>=1, default 1). */
+  /**
+   * 세로로 합칠 칸 수(1 이상, 기본 1).
+   *
+   * Number of cells to join vertically (1 or more, default 1).
+   *
+   * 縦にまとめるセル数(1 以上、既定 1)。
+   *
+   * 纵向合并的格数(1 以上,默认 1)。
+   */
   rowSpan?: number;
-  /** 가로 병합 칸 수(1 이상, 기본 1). / Horizontal span count (>=1, default 1). */
+  /**
+   * 가로로 합칠 칸 수(1 이상, 기본 1).
+   *
+   * Number of cells to join horizontally (1 or more, default 1).
+   *
+   * 横にまとめるセル数(1 以上、既定 1)。
+   *
+   * 横向合并的格数(1 以上,默认 1)。
+   */
   colSpan?: number;
 }
 

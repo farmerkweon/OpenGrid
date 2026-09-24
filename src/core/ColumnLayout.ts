@@ -1,4 +1,4 @@
-import type { ColumnDef } from './types.js';
+import type { ColumnDef, ColumnOrGroup } from './types.js';
 
 /** 리프(말단) 컬럼 — 배치 계산에 필요한 인덱스·깊이 메타를 얹은 컬럼 정의. / A leaf column — a column def augmented with index/depth metadata for layout. */
 export interface FlatColumn<T = any> extends ColumnDef<T> {
@@ -40,7 +40,7 @@ export interface HeaderCell {
  * layout.computeWidths(800);     // 리프 너비 배열 / per-leaf widths
  */
 export class ColumnLayout<T = any> {
-  private _columns: ColumnDef<T>[];
+  private _columns: ColumnOrGroup<T>[];
   private _flatLeaves: FlatColumn<T>[] = [];
   private _maxDepth: number = 1;
   private _frozenCount: number = 0;
@@ -51,7 +51,7 @@ export class ColumnLayout<T = any> {
    * @param columns - 컬럼 정의 배열(그룹 헤더는 children 사용) / Column definitions (group headers use `children`)
    * @param frozenCount - 좌측 고정 컬럼 수(기본 0) / Number of left-frozen columns (default 0)
    */
-  constructor(columns: ColumnDef<T>[], frozenCount: number = 0) {
+  constructor(columns: ColumnOrGroup<T>[], frozenCount: number = 0) {
     this._columns = columns;
     this._frozenCount = frozenCount;
     this._process();
@@ -61,13 +61,15 @@ export class ColumnLayout<T = any> {
     const leaves: FlatColumn<T>[] = [];
     let colIndex = 0;
 
-    const walk = (cols: ColumnDef<T>[], depth: number): void => {
+    const walk = (cols: ColumnOrGroup<T>[], depth: number): void => {
       for (const col of cols) {
         if (col.children && col.children.length > 0) {
           walk(col.children, depth + 1);
           this._maxDepth = Math.max(this._maxDepth, depth + 1);
         } else {
-          leaves.push({ ...col, _colIndex: colIndex++, _depth: depth, _leaf: true });
+          // 자식이 없으면 잎 컬럼이다(ColumnGroupDef 는 children 이 필수) — 잎의 field 는 형이 보장한다.
+          // / No children means a leaf (ColumnGroupDef requires children) — the leaf's field is type-guaranteed.
+          leaves.push({ ...(col as ColumnDef<T>), _colIndex: colIndex++, _depth: depth, _leaf: true });
         }
       }
     };
@@ -111,7 +113,7 @@ export class ColumnLayout<T = any> {
    *
    * @param columns - 새 컬럼 정의 배열 / New column definitions
    */
-  setColumns(columns: ColumnDef<T>[]): void {
+  setColumns(columns: ColumnOrGroup<T>[]): void {
     this._columns = columns;
     this._process();
   }
@@ -164,7 +166,7 @@ export class ColumnLayout<T = any> {
    * @param field - 제거할 컬럼 field / Field of the column to remove
    */
   removeColumn(field: string): void {
-    const removeFromList = (cols: ColumnDef<T>[]): ColumnDef<T>[] => {
+    const removeFromList = (cols: ColumnOrGroup<T>[]): ColumnOrGroup<T>[] => {
       return cols.filter(c => {
         if (c.field === field) return false;
         if (c.children) c.children = removeFromList(c.children);
@@ -215,7 +217,7 @@ export class ColumnLayout<T = any> {
     const rows: HeaderCell[][] = Array.from({ length: this._maxDepth }, () => []);
     let colIndex = 0;
 
-    const walk = (cols: ColumnDef<T>[], depth: number): number => {
+    const walk = (cols: ColumnOrGroup<T>[], depth: number): number => {
       let span = 0;
       for (const col of cols) {
         if (col.hidden) continue;

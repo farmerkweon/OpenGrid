@@ -95,6 +95,9 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     const col = this._d.getColLayout().visibleLeaves[colIndex];
 
     if (row && col) {
+      // 누른 칸이 키보드 포커스 칸이 된다(WAI-ARIA grid) — 클릭 뒤 곧바로 누른 키(F2·Enter·Ctrl+C·단축키)가 이 칸에 먹도록.
+      // / The clicked cell becomes the keyboard focus cell (WAI-ARIA grid), so keys pressed right after act on it.
+      editMgr.setFocusCell(rowIndex, colIndex);
       const colEditable = col.editable !== false && (col.editable !== undefined || opts.editable);
       if (isToggleCol(col) && colEditable) {
         const curVal = (row as any)[col.field];
@@ -128,11 +131,9 @@ export class CellEventHandler<T extends Record<string, any> = any> {
         target: e.target as HTMLElement, originalEvent: e,
       };
       this._d.emit('cellClick', evt);
-      opts.onCellClick?.(evt);
 
       const rowEvt = { type: 'rowClick', rowIndex, row, target: e.target as HTMLElement, originalEvent: e };
       this._d.emit('rowClick', rowEvt);
-      opts.onRowClick?.(rowEvt);
 
       const isSelectCol = (col.type as string) === 'select';
       const alreadyEditing = editMgr.activeEditor != null &&
@@ -154,8 +155,8 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     this._d.emit('selectionChange', {
       rows: rowMgr.getSelections(),
       rowIndexes: [...rowMgr.selectedRows],
+      cells: [],
     });
-    opts.onSelectionChange?.({ rows: rowMgr.getSelections(), rowIndexes: [...rowMgr.selectedRows], cells: [] });
   }
 
   /**
@@ -179,11 +180,9 @@ export class CellEventHandler<T extends Record<string, any> = any> {
       target: e.target as HTMLElement, originalEvent: e,
     };
     this._d.emit('cellDblClick', evt);
-    opts.onCellDblClick?.(evt);
 
     const rowEvt = { type: 'rowDblClick', rowIndex, row, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('rowDblClick', rowEvt);
-    opts.onRowDblClick?.(rowEvt);
 
     if (opts.editMode === 'dblclick') this._d.getEditMgr().startEdit(rowIndex, colIndex, e);
   }
@@ -199,13 +198,10 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
-    const opts = this._d.getOptions();
     const cellEvt = { type: 'cellMouseOver', rowIndex: ri, columnIndex: ci, field: col.field, value: (row as any)[col.field], row, column: col as any, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('cellMouseOver', cellEvt);
-    opts.onCellMouseOver?.(cellEvt);
     const rowEvt = { type: 'rowMouseOver', rowIndex: ri, row, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('rowMouseOver', rowEvt);
-    opts.onRowMouseOver?.(rowEvt);
   }
 
   /**
@@ -219,13 +215,10 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
-    const opts = this._d.getOptions();
     const cellEvt = { type: 'cellMouseOut', rowIndex: ri, columnIndex: ci, field: col.field, value: (row as any)[col.field], row, column: col as any, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('cellMouseOut', cellEvt);
-    opts.onCellMouseOut?.(cellEvt);
     const rowEvt = { type: 'rowMouseOut', rowIndex: ri, row, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('rowMouseOut', rowEvt);
-    opts.onRowMouseOut?.(rowEvt);
   }
 
   /**
@@ -242,13 +235,10 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
-    const opts = this._d.getOptions();
     const cellEvt = { type: 'cellMouseDown', rowIndex: ri, columnIndex: ci, field: col.field, value: (row as any)[col.field], row, column: col as any, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('cellMouseDown', cellEvt);
-    opts.onCellMouseDown?.(cellEvt);
     const rowEvt = { type: 'rowMouseDown', rowIndex: ri, row, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('rowMouseDown', rowEvt);
-    opts.onRowMouseDown?.(rowEvt);
   }
 
   /**
@@ -264,13 +254,10 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
-    const opts = this._d.getOptions();
     const cellEvt = { type: 'cellMouseUp', rowIndex: ri, columnIndex: ci, field: col.field, value: (row as any)[col.field], row, column: col as any, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('cellMouseUp', cellEvt);
-    opts.onCellMouseUp?.(cellEvt);
     const rowEvt = { type: 'rowMouseUp', rowIndex: ri, row, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('rowMouseUp', rowEvt);
-    opts.onRowMouseUp?.(rowEvt);
   }
 
   /**
@@ -286,13 +273,10 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
-    const opts = this._d.getOptions();
     const cellEvt = { type: 'cellMouseMove', rowIndex: ri, columnIndex: ci, field: col.field, value: (row as any)[col.field], row, column: col as any, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('cellMouseMove', cellEvt);
-    opts.onCellMouseMove?.(cellEvt);
     const rowEvt = { type: 'rowMouseMove', rowIndex: ri, row, target: e.target as HTMLElement, originalEvent: e };
     this._d.emit('rowMouseMove', rowEvt);
-    opts.onRowMouseMove?.(rowEvt);
   }
 
   /**
@@ -310,11 +294,7 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     const row = this._d.getData().getRowByIndex(ri);
     const col = this._d.getColLayout().visibleLeaves[ci];
     if (!row || !col) return;
-    const opts = this._d.getOptions();
     const evt = { type: eventName, rowIndex: ri, columnIndex: ci, field: col.field, value: (row as any)[col.field], row, column: col as any, key: e.key, target: this._d.getContainer(), originalEvent: e };
     this._d.emit(eventName, evt);
-    if (eventName === 'cellKeyDown') opts.onCellKeyDown?.(evt as any);
-    else if (eventName === 'cellKeyUp') opts.onCellKeyUp?.(evt as any);
-    else opts.onCellKeyPress?.(evt as any);
   }
 }

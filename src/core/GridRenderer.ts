@@ -379,6 +379,9 @@ export class GridRenderer {
         th.setAttribute('role', 'columnheader');
         th.setAttribute('scope', 'col');
         if (sortable) {
+          // 「정렬 가능」 표시 — CSS 가 인라인 cursor 대신 이 클래스로 가려낸다(정렬된 칸의 og-sorted 와 같은 가족).
+          // / "Sortable" marker — CSS keys off this class rather than the inline cursor (same family as og-sorted).
+          th.classList.add('og-sortable');
           th.setAttribute('aria-sort', sortInfo ? (sortInfo.dir === 'asc' ? 'ascending' : 'descending') : 'none');
           // 정렬 가능한 헤더는 키보드로 접근 가능 (roving tabindex: 첫 번째만 0)
           th.tabIndex = leafIdx === 0 ? 0 : -1;
@@ -951,9 +954,13 @@ export class GridRenderer {
           cellEl.classList.add('og-range-selected');
           cellEl.style.background = 'var(--og-range-bg, rgba(25,118,210,0.12))';
         }
-        // 셀 접근성 레이블 (헤더명: 값)
+        // 셀 접근성 레이블: col.ariaLabel(문자열|함수)이 있으면 그것, 없으면 「헤더명: 값」
+        // / Cell accessible label: col.ariaLabel (string|function) when given, else "header: value".
         const _rawVal = rowData ? rowData[col.field] : null;
-        cellEl.setAttribute('aria-label', `${col.header}: ${_rawVal == null ? '' : String(_rawVal)}`);
+        const _aria = col.ariaLabel;
+        cellEl.setAttribute('aria-label', _aria == null
+          ? `${col.header}: ${_rawVal == null ? '' : String(_rawVal)}`
+          : typeof _aria === 'function' ? String(_aria(_rawVal, rowData as any) ?? '') : String(_aria));
 
         // 툴팁(native title): col.tooltip(문자열|함수) 우선, 없고 opts.tooltips 면 셀 값 자동 노출
         if (col.tooltip != null) {

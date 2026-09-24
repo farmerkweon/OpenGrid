@@ -57,6 +57,11 @@
       "require": "./dist/open-grid-header.cjs"
     },
     "./header.css": "./dist/open-grid-header.css",
+    "./a11y": {
+      "types": "./dist/types/a11y/index.d.ts",
+      "import": "./dist/open-grid-a11y.js",
+      "require": "./dist/open-grid-a11y.cjs"
+    },
     "./style.css": "./dist/style.css"
   },
   "files": [
@@ -71,7 +76,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && vite build --config vite.config.typography.ts && vite build --config vite.config.header.ts && npm run build:angular",
+    "build": "tsc && vite build && vite build --config vite.config.typography.ts && vite build --config vite.config.header.ts && vite build --config vite.config.a11y.ts && npm run build:angular",
     "build:angular": "npm --prefix angular install --no-audit --no-fund && npm --prefix angular run build && node -e \"require('fs').rmSync('dist/angular/esm2022',{recursive:true,force:true})\"",
     "build:types": "tsc --emitDeclarationOnly",
     "test": "vitest run",

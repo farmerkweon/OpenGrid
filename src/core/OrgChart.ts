@@ -220,6 +220,7 @@ export class OrgChart {
   private _roots: TreeNode<any>[] = [];
   private _expandedKeys = new Set<any>();
   private _selectedId: any = null;
+  private _destroyed = false;
 
   /**
    * @param selector - 마운트할 컨테이너 셀렉터 문자열 또는 엘리먼트
@@ -370,6 +371,41 @@ export class OrgChart {
   collapseAll(): void {
     this._expandedKeys.clear();
     this._rebuild();
+  }
+
+  /**
+   * 조직도를 파괴한다: 컨테이너 내용을 비우고 `og-orgchart` 클래스를 떼며, 붙들던 데이터를 놓는다.
+   * 같은 요소를 다른 화면(그리드 등)에 다시 쓰기 전에 부른다. 두 번 불러도 탈 없다.
+   * `setTheme`/`setSkin` 으로 건 속성은 사용자가 정한 것이라 남긴다(`OpenGrid.destroy()` 와 같은 방침).
+   *
+   * Destroys the org chart: empties the container, removes the `og-orgchart` class and releases the
+   * data it held. Call it before reusing the same element for another view (a grid, etc.). Safe to
+   * call more than once. Attributes set through `setTheme`/`setSkin` are the caller's choice and are
+   * left in place (same policy as `OpenGrid.destroy()`).
+   *
+   * 組織図を破棄します: コンテナの中身を空にし、`og-orgchart` クラスを外し、保持していたデータを手放します。
+   * 同じ要素を別の画面(グリッドなど)に使い直す前に呼びます。何度呼んでも問題ありません。
+   * `setTheme`/`setSkin` で付けた属性は利用者が決めたものなので残します(`OpenGrid.destroy()` と同じ方針)。
+   *
+   * 销毁组织架构图: 清空容器内容、去掉 `og-orgchart` 类,并释放它持有的数据。
+   * 在把同一个元素改用于别的画面(表格等)之前调用。多次调用也没问题。
+   * 通过 `setTheme`/`setSkin` 设置的属性是使用者的选择,因此保留(与 `OpenGrid.destroy()` 的方针相同)。
+   *
+   * @example
+   * chart.destroy();
+   * const grid = new OpenGrid(sameElement, { columns });
+   */
+  destroy(): void {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    // 노드 카드·펼침 단추의 리스너는 그 요소와 함께 사라진다 — window·document 에 단 리스너는 없다.
+    // / Listeners live on node cards and toggle buttons and go away with them — none are on window/document.
+    this._container.innerHTML = '';
+    this._container.classList.remove('og-orgchart');
+    this._data = [];
+    this._roots = [];
+    this._expandedKeys.clear();
+    this._selectedId = null;
   }
 
   private _toggle(id: any): void {

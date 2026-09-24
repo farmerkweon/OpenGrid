@@ -36,16 +36,12 @@ import type { GridOptions, EditEvent, Position } from './types.js';
  *               / `true` = emit before render (writeCell/endBatch — current order); default
  *               `false` = render first (insert/delete).
  * - `emitPayload` : `emit('dataChange', …)` 페이로드 지연 평가(thunk). getData() 시점을
- *               현행과 동일(render 뒤 or 앞)하게 유지 + 명시 onDataChange 재호출 시 2회 평가 보존.
+ *               현행과 동일(render 뒤 or 앞)하게 유지. `onDataChange` 옵션은 이 emit 의 리스너로만
+ *               불린다(한 번) — 커밋이 옵션을 따로 부르지 않는다.
  *               / Lazily-evaluated (thunk) payload for `emit('dataChange', …)`. Keeps the
  *               `getData()` evaluation point identical to current behavior (before or after
- *               render) and preserves double evaluation when `onDataChange` is explicitly
- *               re-invoked.
- * - `fireOnDataChangeExplicitly` : true=`_options.onDataChange?.()` 를 **명시 재호출**(bound listener 와 합쳐 DOUBLE-fire).
- *               row mutator=true, setData/clearData=false(bound listener 로 ONCE).
- *               / `true` = **explicitly re-invokes** `_options.onDataChange?.()` (combined with
- *               the bound listener, this DOUBLE-fires). Row mutators = `true`;
- *               setData/clearData = `false` (bound listener fires ONCE).
+ *               render). The `onDataChange` option is invoked only as a listener of this emit
+ *               (once) — the commit never calls the option separately.
  * - `flushFormula` : true=emit 전에 `_flushFormulaRecalc()`(writeCell/endBatch).
  *               / `true` = calls `_flushFormulaRecalc()` right before emit (writeCell/endBatch).
  * - `preRender` : render 직전 훅(deleteRow 의 removedRowId invalidate 루프).
@@ -65,7 +61,6 @@ export interface CommitSpec {
   renderMode: 'sync-window' | 'full' | 'async-vs';
   emitBeforeRender?: boolean;
   emitPayload: () => any;
-  fireOnDataChangeExplicitly?: boolean;
   flushFormula?: boolean;
   preRender?: () => void;
   coalescable?: boolean;
@@ -188,7 +183,6 @@ export class MutationService<T extends Record<string, any> = any> {
     };
     const doEmit = (): void => {
       this._deps.emit('dataChange', spec.emitPayload());
-      if (spec.fireOnDataChangeExplicitly) this._deps.getOptions().onDataChange?.(spec.emitPayload());
     };
 
     if (spec.emitBeforeRender) { doEmit(); doRender(); }
@@ -226,7 +220,6 @@ export class MutationService<T extends Record<string, any> = any> {
     container.setAttribute('aria-colcount', String(this._deps.getColLayout().visibleLeaves.length));
     this._deps.announce(this._deps.t('data.loadedAnnounce', { count: dl.rowCount }));
     // R4: setData 는 렌더를 setTotalRows/rebuild(VS rAF, 비동기)로 이미 처리 → 커밋은 emit 만.
-    // onDataChange 는 bound listener 로 ONCE(명시 재호출 없음).
     this.commit({ renderMode: 'async-vs', emitPayload: () => dl.getData() });
     ctx.result = data.length;
     trigMgr.exec('after:setData', ctx);
@@ -248,10 +241,10 @@ export class MutationService<T extends Record<string, any> = any> {
       : position as any;
     dl.addRow(item, pos);
     const n = dl.rowCount;
-    // R4: totals → sync-window 렌더 → emit → 명시 onDataChange(DOUBLE-fire).
+    // R4: totals → sync-window 렌더 → emit.
     this.commit({
       totals: 'count', renderMode: 'sync-window',
-      emitPayload: () => dl.getData(), fireOnDataChangeExplicitly: true,
+      emitPayload: () => dl.getData(),
     });
     ctx.result = { rowCount: n, item };
     trigMgr.exec('after:insertRow', ctx);
@@ -266,10 +259,10 @@ export class MutationService<T extends Record<string, any> = any> {
     const arr = Array.isArray(items) ? items : [items];
     const dl = this._deps.getData();
     arr.forEach(it => dl.addRow(it, 'last'));
-    // R4: pushRow 는 트리거 브래킷 없음 — 커밋만(totals→render→emit→명시 onDataChange DOUBLE-fire).
+    // R4: pushRow 는 트리거 브래킷 없음 — 커밋만(totals→render→emit).
     this.commit({
       totals: 'count', renderMode: 'sync-window',
-      emitPayload: () => dl.getData(), fireOnDataChangeExplicitly: true,
+      emitPayload: () => dl.getData(),
     });
   }
 
@@ -294,11 +287,11 @@ export class MutationService<T extends Record<string, any> = any> {
       .filter((id): id is string => id != null);
     idxs.forEach(i => dl.removeRow(i));
     const n = dl.rowCount;
-    // R4: totals → (preRender=삭제 rowId invalidate, skipRender) → sync-window 렌더 → emit → 명시 onDataChange.
+    // R4: totals → (preRender=삭제 rowId invalidate, skipRender) → sync-window 렌더 → emit.
     this.commit({
       totals: 'count', renderMode: 'sync-window',
       preRender: () => this._deps.invalidateRemovedRows(removedRowIds),
-      emitPayload: () => dl.getData(), fireOnDataChangeExplicitly: true,
+      emitPayload: () => dl.getData(),
     });
     ctx.result = { deleted: idxs.length, rowCount: n };
     trigMgr.exec('after:deleteRow', ctx);
@@ -326,15 +319,14 @@ export class MutationService<T extends Record<string, any> = any> {
     const ci = colLayout.getColumnIndex(field);
     const evt: EditEvent<T> = { type: 'editEnd', rowIndex, columnIndex: ci, field, oldValue: old, newValue: value, row: row as T, column: col as any };
     this._deps.emit('editEnd', evt);
-    this._deps.getOptions().onEditEnd?.(evt);
     // F3(C2/§8.5): 값이 바뀐 셀을 dirty seed 로 적립 — 배치 중이면 endBatch 에서, 아니면
     // 아래에서 즉시 onValuesChanged([key]) 1회로 소비한다(수식 셀 자신의 값 직접 덮어쓰기 포함).
     this._deps.seedFormulaDirty(rowIndex, field);
     // R4(C2.1): 커밋이 배치 코얼레싱을 내재화(coalescable) — 배치 중이면 _batchDirty 만 세우고
-    // endBatch 가 1회 flush. 비배치 시 flush→emit→명시 onDataChange→render(emit 이 render 앞).
+    // endBatch 가 1회 flush. 비배치 시 flush→emit→render(emit 이 render 앞).
     this.commit({
       renderMode: 'sync-window', flushFormula: true, emitBeforeRender: true,
-      emitPayload: () => dl.getData(), fireOnDataChangeExplicitly: true,
+      emitPayload: () => dl.getData(),
       coalescable: true,
     });
     ctx.result = { rowIndex, field, oldValue: old, newValue: value };
@@ -363,10 +355,10 @@ export class MutationService<T extends Record<string, any> = any> {
     if (this._batchDepth === 0 && this._batchDirty) {
       this._batchDirty = false;
       // R4/F3(C2.1): 배치 중 쌓인 dirty seed 를 여기서 1회 소비 후 커밋(비배치 writeCell 과 동형:
-      // flush→emit→명시 onDataChange→render). 이미 depth=0 이라 coalescable 불필요.
+      // flush→emit→render). 이미 depth=0 이라 coalescable 불필요.
       this.commit({
         renderMode: 'sync-window', flushFormula: true, emitBeforeRender: true,
-        emitPayload: () => this._deps.getData().getData(), fireOnDataChangeExplicitly: true,
+        emitPayload: () => this._deps.getData().getData(),
       });
     }
   }

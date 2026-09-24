@@ -7,7 +7,7 @@
 //   탭 UI는 그리드 컨테이너 하단에 .og-sheet-tabs 영역으로 삽입.
 // ============================================================
 
-import type { ColumnDef, WorksheetDef, WorksheetState } from './types.js';
+import type { ColumnOrGroup, WorksheetDef, WorksheetState } from './types.js';
 import { t as _globalT } from './i18n/LocaleRegistry.js';
 
 /** 시트 전환 시 호출되는 콜백. / Callback invoked when the active sheet switches. */
@@ -49,7 +49,7 @@ export class WorksheetManager<T extends Record<string, any> = any> {
    * @param columns - 시트 컬럼 정의(기본 빈 배열) / Sheet column definitions (default empty array)
    * @param data - 시트 초기 데이터(기본 빈 배열) / Initial sheet data (default empty array)
    */
-  add(name: string, columns: ColumnDef<T>[] = [], data: T[] = []): void {
+  add(name: string, columns: ColumnOrGroup<T>[] = [], data: T[] = []): void {
     if (this._sheets.has(name)) {
       throw new Error(`WorksheetManager: 시트 '${name}'이 이미 존재합니다`);
     }

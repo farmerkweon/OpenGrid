@@ -27,8 +27,10 @@ const ROOT = resolve(__dirname, '../../..');
  *  - false 는 옵트인 로드(dist 에 별도 파일로 복사됨).
  */
 const CSS_BUDGET: ReadonlyArray<{ path: string; gzip: number; everyone: boolean; note: string }> = [
-  { path: 'src/styles/base.css',       gzip: 15_500, everyone: true,
-    note: '실측 14,127B(2026-08-08). C-1~C-3 토큰화분 여유 포함. 전원 배송이라 여유를 짜게 잡는다.' },
+  { path: 'src/styles/base.css',       gzip: 15_700, everyone: true,
+    note: '실측 14,127B(2026-08-08). C-1~C-3 토큰화분 여유 포함. 전원 배송이라 여유를 짜게 잡는다. ' +
+      '2026-09-24 15,500→15,700: 질감 축을 칠하는 규칙(제안 P10) +116B — 직전 실측 15,464B 로 이미 99.8% 였다. ' +
+      'setTexture() 가 코어 API 라 칠하는 규칙도 전원 배송 파일에 둔다(옵트인 파일로 빼면 setTexture 만 부른 사용자는 또 아무것도 안 보인다). 검토자 승인 대상.' },
   { path: 'src/styles/themes.css',     gzip: 26_000, everyone: false,
     note: '실측 11,915B + 신규 12칸 11,515B = 23,430B 예상. 옵트인이나 **테마 하나만 써도 전량을 받는다.**' },
   { path: 'src/styles/skins.css',      gzip:  3_000, everyone: false, note: '실측 2,348B. 이번 작업 대상 아님.' },

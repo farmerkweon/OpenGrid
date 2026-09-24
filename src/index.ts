@@ -178,17 +178,45 @@ export type { FilterSelectConfig, FilterSelectColumn } from './core/FilterSelect
 export type {
   GridOptions,
   ColumnDef,
+  ColumnGroupDef,
+  ColumnOrGroup,
   OpenGridInstance,
   CellEvent,
   CellKeyEvent,
   EditEvent,
   RowEvent,
   SortItem,
+  SortEvent,
+  SelectionEvent,
+  FilterEvent,
+  ScrollEvent,
+  RowExpandEvent,
+  RowCheckEvent,
+  AllCheckEvent,
+  RowDropEvent,
+  LocaleChangeEvent,
+  WriteCellsSkipEvent,
+  RangeChangeEvent,
+  RangeCopyEvent,
+  RangeFillEvent,
+  FormulaChangeEvent,
+  FormulaRecalcEvent,
+  FormulaErrorEvent,
+  GridDropEvent,
+  GridMappingEvent,
+  GridEventMap,
+  SummaryOp,
+  SummaryOpName,
+  OverrideLayerFn,
+  OverrideCallOptions,
   FilterItem,
   ExportOptions,
   FooterDef,
   SummaryOptions,
   RendererDef,
+  RendererType,
+  RendererName,
+  PrintOptions,
   EditorDef,
   DataType,
   SelectionMode,
@@ -202,6 +230,36 @@ export type {
   CellRange,
   FlatRowRef,
 } from './core/types.js';
+/**
+ * 셀 병합 지정(`grid.mergeCells` 인자).
+ *
+ * A cell-merge spec (the argument of `grid.mergeCells`).
+ *
+ * セル結合の指定(`grid.mergeCells` の引数)。
+ *
+ * 单元格合并的指定(`grid.mergeCells` 的参数)。
+ */
+export type { MergeCell } from './core/MergeEngine.js';
+/**
+ * 페이지 바에서 쪽을 옮기거나 쪽 크기를 바꾼 이벤트(pageChange)의 인자.
+ *
+ * Argument of the pageChange event (page moved or page size changed in the pager).
+ *
+ * ページバーでページを移動したりページサイズを変えたイベント(pageChange)の引数。
+ *
+ * 在分页栏翻页或修改每页大小的事件(pageChange)的参数。
+ */
+export type { PageChangeEvent } from './core/Pagination.js';
+/**
+ * 조건부 서식 규칙과 그 부품 형(`grid.setConditionalFormat` 인자).
+ *
+ * Conditional-formatting rule and its part types (the argument of `grid.setConditionalFormat`).
+ *
+ * 条件付き書式の規則とその部品の型(`grid.setConditionalFormat` の引数)。
+ *
+ * 条件格式规则及其组成部分的类型(`grid.setConditionalFormat` 的参数)。
+ */
+export type { CFRule, CFCondition, CFEncodeSpec, CFScope, CFStyleRef, CFInlineStyle } from './core/cf/CFRule.js';
 /**
  * XmlConverter 파싱/직렬화 옵션·결과.
  *

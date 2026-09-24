@@ -317,7 +317,6 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     const range = this._model.getActiveRange();
     const opts = this._d.getOptions() as any;
     this._d.emit('selectionChange', { rows: [], rowIndexes: [], cells });
-    opts.onSelectionChange?.({ rows: [], rowIndexes: [], cells });
     this._d.emit('rangeChange', { range });
     opts.onRangeChange?.({ range });
     this._announceSelection();

@@ -145,6 +145,17 @@ export type Position = 'first' | 'last' | 'before' | 'after' | number;
  * 内置单元格渲染器的类型名。
  */
 export type RendererType = 'text' | 'number' | 'date' | 'checkbox' | 'button' | 'link' | 'image' | 'icon' | 'switch' | 'sparkline' | 'template' | 'custom' | 'badge' | 'progress' | 'rating' | 'radio' | 'img' | 'html' | 'barcode';
+
+/**
+ * 컬럼 `renderer` 에 쓸 수 있는 이름 — 내장 렌더러 이름 또는 `OpenGrid.registerRenderer` 로 등록한 이름.
+ *
+ * A name usable as a column `renderer` — a built-in renderer name or one registered with `OpenGrid.registerRenderer`.
+ *
+ * 列の `renderer` に使える名前 — 組み込みレンダラーの名前、または `OpenGrid.registerRenderer` で登録した名前。
+ *
+ * 可用作列 `renderer` 的名称 — 内置渲染器名称,或用 `OpenGrid.registerRenderer` 注册的名称。
+ */
+export type RendererName = RendererType | (string & {});
 /**
  * 내장 셀 에디터 타입 이름.
  *
@@ -623,17 +634,41 @@ export interface CellKeyEvent<T = any> {
 }
 
 /**
- * 정렬 변경 이벤트(sortChange).
+ * 정렬 변경 이벤트(sortChange). 머리글 클릭·`orderBy()`·`resetOrder()` 어느 길이든 같은 모양으로 온다.
  *
- * Sort change event (sortChange).
+ * Sort change event (sortChange). It has the same shape whether it comes from a header click, `orderBy()` or `resetOrder()`.
  *
- * ソート変更イベント（sortChange）。
+ * ソート変更イベント(sortChange)。見出しのクリック・`orderBy()`・`resetOrder()` のどの経路でも同じ形で届きます。
  *
- * 排序变更事件（sortChange）。
+ * 排序变更事件(sortChange)。无论来自表头点击、`orderBy()` 还是 `resetOrder()`,形状都相同。
+ *
+ * @example
+ * grid.on('sortChange', (e: SortEvent) => {
+ *   if (!e.field) say('정렬 해제');
+ *   else say(`${e.field} ${e.dir ?? '해제'}`);
+ * });
  */
 export interface SortEvent {
-  field: string;
-  dir: SortDir;
+  /**
+   * 방금 정렬이 바뀐 컬럼. 정렬을 모두 풀었으면(`resetOrder()`) 없다.
+   *
+   * The column whose sort just changed. Absent when all sorting was cleared (`resetOrder()`).
+   *
+   * いまソートが変わった列。ソートをすべて解除したとき(`resetOrder()`)はありません。
+   *
+   * 刚刚改变排序的列。全部解除排序(`resetOrder()`)时不存在。
+   */
+  field?: string;
+  /**
+   * 그 컬럼의 새 방향. 그 컬럼의 정렬이 풀렸으면 없다.
+   *
+   * That column's new direction. Absent when that column's sort was cleared.
+   *
+   * その列の新しい向き。その列のソートが解除されたときはありません。
+   *
+   * 该列的新方向。该列的排序被解除时不存在。
+   */
+  dir?: SortDir;
   /**
    * 멀티정렬 전체 상태.
    *
@@ -671,18 +706,54 @@ export interface FilterEvent {
 }
 
 /**
- * 스크롤 이벤트(scroll).
+ * 본문 스크롤 이벤트(scroll). 스크롤하는 동안 화면이 그려질 때마다 한 번(초당 60회 안팎)까지 온다. 서버 요청처럼 무거운 일은 직접 모아서(throttle) 한다.
  *
- * Scroll event (scroll).
+ * Body scroll event (scroll). Arrives at most once per rendered frame while scrolling (around 60 times a second). Batch heavy work such as server requests yourself (throttle).
  *
- * スクロールイベント（scroll）。
+ * 本文のスクロールイベント(scroll)。スクロール中、画面が描かれるたびに最大 1 回(毎秒 60 回前後)届きます。サーバー要求のような重い処理は自分でまとめて(throttle)行います。
  *
- * 滚动事件（scroll）。
+ * 正文滚动事件(scroll)。滚动期间每次画面绘制最多触发一次(每秒约 60 次)。服务器请求这类繁重的工作请自行合并(throttle)后再做。
  */
 export interface ScrollEvent {
+  /**
+   * 가로 스크롤 위치(px).
+   *
+   * Horizontal scroll position (px).
+   *
+   * 横スクロールの位置(px)。
+   *
+   * 横向滚动位置(px)。
+   */
   scrollLeft: number;
+  /**
+   * 세로 스크롤 위치(px). 0 이 맨 위.
+   *
+   * Vertical scroll position (px); 0 is the top.
+   *
+   * 縦スクロールの位置(px)。0 がいちばん上。
+   *
+   * 纵向滚动位置(px)。0 为最顶部。
+   */
   scrollTop: number;
+  /**
+   * 맨 위에 있으면 `true`.
+   *
+   * `true` at the very top.
+   *
+   * いちばん上にあれば `true`。
+   *
+   * 位于最顶部时为 `true`。
+   */
   isAtTop: boolean;
+  /**
+   * 맨 아래에 닿았으면 `true`(1px 여유를 둔다 — 소수점 스크롤 값 때문). 끝까지 내리면 다음 쪽을 불러오는 데 쓴다.
+   *
+   * `true` once the bottom is reached (with 1px of slack for fractional scroll values). Use it to load the next page when the user reaches the end.
+   *
+   * いちばん下に届いたら `true`(小数のスクロール値のため 1px の余裕を持たせます)。最後まで下げたら次のページを読み込むのに使います。
+   *
+   * 到达最底部时为 `true`(因滚动值可能带小数,留 1px 余量)。可用于滚到底时加载下一页。
+   */
   isAtBottom: boolean;
 }
 
@@ -1550,7 +1621,7 @@ export interface RendererDef {
    *
    * 使用哪个内置渲染器。
    */
-  type: RendererType;
+  type: RendererName;
   /**
    * 렌더러별 추가 옵션(자유 키).
    *
@@ -1816,7 +1887,7 @@ export interface ColumnDef<T = any> {
    *
    * 单元格的绘制方式。用一行传内置渲染器名称，需要附加选项时传 RendererDef 对象。
    */
-  renderer?: RendererType | RendererDef;
+  renderer?: RendererName | RendererDef;
   /**
    * 이 컬럼을 편집할 수 있는지. true 면 항상 편집 가능, 함수로 주면 행마다 다르게 결정합니다
    * (예: 상태가 '확정'인 행만 잠그기). GridOptions.editable 과 둘 다 참일 때만 실제로 열립니다.
@@ -1992,7 +2063,7 @@ export interface ColumnDef<T = any> {
    *
    * 多级表头用的子列。
    */
-  children?: ColumnDef<T>[];
+  children?: ColumnOrGroup<T>[];
 
   /**
    * 셀 title 툴팁(정적 또는 값·행 함수).
@@ -2004,6 +2075,24 @@ export interface ColumnDef<T = any> {
    * 单元格的 title 提示（静态，或按值、行的函数）。
    */
   tooltip?: string | ((value: any, row: T) => string);
+
+  /**
+   * 셀을 화면 낭독기가 읽을 글(`aria-label`). 주지 않으면 「머리글: 값」을 읽는다. 스파크라인·데이터바처럼 그림으로 그린 셀에 「무엇을 뜻하는지」를 말로 달아 줄 때 쓴다(문자열 또는 값·행 함수).
+   * 수식 셀은 수식 안내(오류 설명 포함)가 이 값보다 먼저다.
+   *
+   * The text screen readers read for the cell (`aria-label`). Without it they read "header: value". Use it to put into words what a drawn cell (sparkline, data bar, …) means (a string, or a value/row function).
+   * For formula cells the formula description (including error explanations) takes precedence.
+   *
+   * スクリーンリーダーがセルを読むときの文(`aria-label`)。渡さなければ「見出し: 値」を読みます。スパークラインやデータバーのように絵で描いたセルに「何を意味するか」を言葉で付けるときに使います(文字列、または値・行の関数)。
+   * 数式セルでは数式の案内(エラーの説明を含む)がこの値より優先されます。
+   *
+   * 屏幕阅读器朗读该单元格时的文字(`aria-label`)。不传则朗读「表头: 值」。用于给迷你折线、数据条这类以图形绘制的单元格用文字说明「表示什么」(字符串,或按值、行的函数)。
+   * 公式单元格中,公式说明(包括错误说明)优先于此值。
+   *
+   * @example
+   * { field: 'trend', header: '추세', renderer: 'sparkline', ariaLabel: (v: number[]) => `최근 값 ${v[v.length - 1]}, 처음보다 ${v[v.length - 1] >= v[0] ? '올랐다' : '내렸다'}` }
+   */
+  ariaLabel?: string | ((value: any, row: T) => string);
 
   // Sprint 36: select 타입 컬럼 — 정적 옵션 배열 또는 동적 옵션 함수
   // / Sprint 36: select-type column — static option array or dynamic option function
@@ -2162,6 +2251,60 @@ export interface ColumnDef<T = any> {
 }
 
 /**
+ * `columns` 에 넣을 수 있는 한 항목 — 값을 보여 주는 컬럼(`ColumnDef`) 또는 묶음 머리글(`ColumnGroupDef`).
+ *
+ * One entry of `columns` — a value column (`ColumnDef`) or a group header (`ColumnGroupDef`).
+ *
+ * `columns` に入れられる一項目 — 値を表示する列(`ColumnDef`)、またはまとめ見出し(`ColumnGroupDef`)。
+ *
+ * `columns` 中的一项 — 显示值的列(`ColumnDef`)或分组表头(`ColumnGroupDef`)。
+ */
+export type ColumnOrGroup<T = any> = ColumnDef<T> | ColumnGroupDef<T>;
+
+/**
+ * 묶음 머리글 컬럼 — 여러 컬럼 위에 한 줄 머리글을 얹는다(다단 헤더). `header` 가 묶음 머리글 글자이고
+ * 실제 값을 보여 주는 컬럼은 `children` 에 둔다. 묶음 자체는 값을 보여 주지 않으므로 `field` 는 적지 않아도 된다.
+ *
+ * A group-header column — puts one header row over several columns (multi-level header). `header` is
+ * the group's caption and the columns that show values go in `children`. The group itself shows no
+ * value, so `field` is optional.
+ *
+ * まとめ見出しの列 — 複数の列の上に一段の見出しを載せます(多段ヘッダー)。`header` がまとめ見出しの文字で、
+ * 実際に値を表示する列は `children` に置きます。まとめ自体は値を表示しないので `field` は書かなくてもかまいません。
+ *
+ * 分组表头列 — 在多个列上方加一行表头(多级表头)。`header` 是分组表头的文字,真正显示值的列放在
+ * `children` 里。分组本身不显示值,因此可以不写 `field`。
+ *
+ * @example
+ * columns: [
+ *   { field: 'name', header: '이름' },
+ *   { header: '매출(만원)', children: [{ field: 'q1', header: '1분기' }, { field: 'q2', header: '2분기' }] },
+ * ]
+ */
+export interface ColumnGroupDef<T = any> extends Omit<ColumnDef<T>, 'field' | 'children'> {
+  /**
+   * 묶음에는 값이 없으므로 선택 항목이다.
+   *
+   * Optional, since a group has no value of its own.
+   *
+   * まとめには値がないので任意項目です。
+   *
+   * 分组没有自己的值,因此为可选项。
+   */
+  field?: string;
+  /**
+   * 묶음 아래에 놓일 컬럼들(잎 컬럼 또는 다시 묶음).
+   *
+   * Columns under the group (leaf columns or nested groups).
+   *
+   * まとめの下に置く列(末端の列、またはさらにまとめ)。
+   *
+   * 分组下面的列(叶子列或再嵌套的分组)。
+   */
+  children: ColumnOrGroup<T>[];
+}
+
+/**
  * 트리 노드 아이콘 정의.
  *
  * Tree node icon definition.
@@ -2295,6 +2438,17 @@ export interface FilterItem {
 export type SummaryOp = 'SUM' | 'AVG' | 'MIN' | 'MAX' | 'COUNT';
 
 /**
+ * 집계 op 이름 — 내장 op(`SummaryOp`) 또는 `summaryOp` 전략 슬롯으로 새로 만든 이름(예: 'MEDIAN').
+ *
+ * An aggregate op name — a built-in op (`SummaryOp`) or a name you added through the `summaryOp` strategy slot (e.g. 'MEDIAN').
+ *
+ * 集計 op の名前 — 組み込みの op(`SummaryOp`)、または `summaryOp` 戦略スロットで新しく作った名前(例: 'MEDIAN')。
+ *
+ * 聚合 op 名称 — 内置 op(`SummaryOp`),或通过 `summaryOp` 策略槽新增的名称(例如 'MEDIAN')。
+ */
+export type SummaryOpName = SummaryOp | (string & {});
+
+/**
  * 필드별 집계 정의.
  *
  * Per-field aggregate definition.
@@ -2305,7 +2459,7 @@ export type SummaryOp = 'SUM' | 'AVG' | 'MIN' | 'MAX' | 'COUNT';
  */
 export interface SummaryFieldDef {
   field: string;
-  op: SummaryOp;
+  op: SummaryOpName;
   label?: string;
 }
 
@@ -2363,7 +2517,7 @@ export interface SummaryOptions {
    * 在一个组内生成多行汇总时（例如合计行 + 平均行）。也可用 customFn 自行聚合。
    */
   rows?: Array<{
-    op: SummaryOp;
+    op: SummaryOpName;
     label?: string;
     customFn?: (items: any[]) => number;
   }>;
@@ -2403,7 +2557,7 @@ export interface FooterDef {
    *
    * 计算哪种聚合（SUM/AVG/…）。
    */
-  op?: SummaryOp;
+  op?: SummaryOpName;
   /**
    * 집계 대신 그대로 보여줄 고정 문구(예: '합계').
    *
@@ -2465,6 +2619,16 @@ export interface PrintOptions {
   title?: string;
   excludeFields?: string[];
   showFooter?: boolean;
+  /**
+   * 인쇄 쪽 맨 아래에 넣을 글(예: 출력 일시·담당 부서). 비우면 넣지 않는다. HTML 로 해석되므로 사용자 입력을 그대로 넣지 않는다.
+   *
+   * Text placed at the bottom of the printed page (e.g. print time, department). Omitted when empty. It is parsed as HTML, so do not pass raw user input.
+   *
+   * 印刷ページのいちばん下に入れる文(例: 出力日時・担当部署)。空なら入れません。HTML として解釈されるので、利用者の入力をそのまま渡さないでください。
+   *
+   * 放在打印页最下方的文字(例如打印时间、负责部门)。为空则不放。它会被当作 HTML 解析,因此不要直接传入用户输入。
+   */
+  footerText?: string;
 }
 
 // ─── 내보내기 / export ─────────────────────────────────────────────
@@ -2661,7 +2825,7 @@ export interface GridOptions<T = any> {
    *
    * 列定义数组（必填）。
    */
-  columns: ColumnDef<T>[];
+  columns: ColumnOrGroup<T>[];
 
   // 레이아웃 / layout
   /**
@@ -3048,7 +3212,7 @@ export interface GridOptions<T = any> {
    *  - 'interactive': 源／目标结构不同时弹出映射对话框，由开发者匹配并输出转换脚本
    *  - 函数: 以 (srcRow) => targetRow 直接转换（不弹对话框，直接 baking）
    */
-  crossGridMapping?: 'auto' | 'interactive' | ((srcRow: T) => Partial<T>);
+  crossGridMapping?: 'auto' | 'interactive' | ((srcRow: T) => Record<string, any>);
 
   // 셀 병합 / cell merge
   /**
@@ -3352,6 +3516,32 @@ export interface GridOptions<T = any> {
    * 首次渲染完成的回调。
    */
   onReady?: (grid: OpenGridInstance<T>) => void;
+  /**
+   * 셀 클릭 콜백.
+   *
+   * 이 옵션을 비롯한 이벤트 옵션 `onX` 는 `grid.on('x', …)` 과 같은 구독이다. 한 번의 일에 한 번 불리고,
+   * `grid.on` 으로 단 리스너보다 먼저 불린다. `grid.off('x')` 로 그 이벤트의 리스너를 전부 해제하면 옵션 콜백도 멈춘다.
+   * `setOptions` 로 바꾼 콜백은 곧바로 쓰인다.
+   *
+   * Cell-click callback.
+   *
+   * This and the other event options `onX` are the same subscription as `grid.on('x', …)`. They fire
+   * once per occurrence, before listeners added with `grid.on`. Removing every listener of the event
+   * with `grid.off('x')` stops the option callback too. A callback replaced through `setOptions` takes
+   * effect immediately.
+   *
+   * セルクリックのコールバック。
+   *
+   * このオプションをはじめとするイベントオプション `onX` は `grid.on('x', …)` と同じ購読です。1 回の出来事につき 1 回呼ばれ、
+   * `grid.on` で付けたリスナーより先に呼ばれます。`grid.off('x')` でそのイベントのリスナーをすべて解除するとオプションのコールバックも止まります。
+   * `setOptions` で差し替えたコールバックはすぐに使われます。
+   *
+   * 单元格点击回调。
+   *
+   * 这个选项以及其他事件选项 `onX` 与 `grid.on('x', …)` 是同一种订阅。每发生一次只调用一次,
+   * 并且先于用 `grid.on` 添加的监听器调用。用 `grid.off('x')` 解除该事件的全部监听器时,选项回调也会停止。
+   * 通过 `setOptions` 替换的回调会立即生效。
+   */
   onCellClick?: (e: CellEvent<T>) => void;
   onCellDblClick?: (e: CellEvent<T>) => void;
   onEditStart?: (e: EditEvent<T>) => void;
@@ -3411,6 +3601,15 @@ export interface GridOptions<T = any> {
   onRowCollapse?: (e: RowExpandEvent<T>) => void;
   onSortChange?: (e: SortEvent) => void;
   onFilterChange?: (e: FilterEvent) => void;
+  /**
+   * 본문을 스크롤할 때 호출. 스크롤하는 동안 화면이 그려질 때마다 한 번(초당 60회 안팎)까지 온다. 서버 요청처럼 무거운 일은 직접 모아서(throttle) 한다.
+   *
+   * Called while the body scrolls. Arrives at most once per rendered frame while scrolling (around 60 times a second). Batch heavy work such as server requests yourself (throttle).
+   *
+   * 本文をスクロールするときに呼び出し。スクロール中、画面が描かれるたびに最大 1 回(毎秒 60 回前後)届きます。サーバー要求のような重い処理は自分でまとめて(throttle)行います。
+   *
+   * 正文滚动时调用。滚动期间每次画面绘制最多触发一次(每秒约 60 次)。服务器请求这类繁重的工作请自行合并(throttle)后再做。
+   */
   onScroll?: (e: ScrollEvent) => void;
   onDrop?: (e: DragDropEvent<T>) => void;
   onRowDrop?: (e: { fromIndex: number; toIndex: number }) => void;
@@ -3476,6 +3675,233 @@ export interface GridOptions<T = any> {
   onCellKeyDown?: (e: CellKeyEvent<T>) => void;
   onCellKeyUp?: (e: CellKeyEvent<T>) => void;
   onCellKeyPress?: (e: CellKeyEvent<T>) => void;
+}
+
+/**
+ * 행 체크 상자를 켜거나 끈 이벤트(rowCheck).
+ *
+ * Event fired when a row checkbox is toggled (rowCheck).
+ *
+ * 行のチェックボックスをオン・オフしたイベント(rowCheck)。
+ *
+ * 勾选或取消某行复选框的事件(rowCheck)。
+ */
+export interface RowCheckEvent<T = any> {
+  /**
+   * 바뀐 행의 표시 순서 인덱스.
+   *
+   * Display-order index of the row.
+   *
+   * 変わった行の表示順インデックス。
+   *
+   * 发生变化的行的显示顺序索引。
+   */
+  rowIndex: number;
+  /**
+   * 새 체크 상태.
+   *
+   * The new checked state.
+   *
+   * 新しいチェック状態。
+   *
+   * 新的勾选状态。
+   */
+  checked: boolean;
+  /**
+   * 그 행의 데이터.
+   *
+   * The row's data.
+   *
+   * その行のデータ。
+   *
+   * 该行的数据。
+   */
+  row: T | undefined;
+}
+
+/**
+ * 머리글의 「모두 선택」 체크 상자를 켜거나 끈 이벤트(allCheck).
+ *
+ * Event fired when the header's select-all checkbox is toggled (allCheck).
+ *
+ * 見出しの「すべて選択」チェックボックスをオン・オフしたイベント(allCheck)。
+ *
+ * 切换表头「全选」复选框的事件(allCheck)。
+ */
+export interface AllCheckEvent {
+  /**
+   * 새 체크 상태.
+   *
+   * The new checked state.
+   *
+   * 新しいチェック状態。
+   *
+   * 新的勾选状态。
+   */
+  checked: boolean;
+}
+
+/**
+ * 행을 끌어 같은 그리드 안에서 옮긴 이벤트(rowDrop).
+ *
+ * Event fired when a row is dragged to a new place in the same grid (rowDrop).
+ *
+ * 行をドラッグして同じグリッド内で移動したイベント(rowDrop)。
+ *
+ * 在同一表格内拖动行到新位置的事件(rowDrop)。
+ */
+export interface RowDropEvent {
+  /**
+   * 옮기기 전 위치.
+   *
+   * Position before the move.
+   *
+   * 移動前の位置。
+   *
+   * 移动前的位置。
+   */
+  fromIndex: number;
+  /**
+   * 옮긴 뒤 위치.
+   *
+   * Position after the move.
+   *
+   * 移動後の位置。
+   *
+   * 移动后的位置。
+   */
+  toIndex: number;
+}
+
+/**
+ * 화면 언어를 바꾼 이벤트(localeChange).
+ *
+ * Event fired when the display locale changes (localeChange).
+ *
+ * 表示言語を変えたイベント(localeChange)。
+ *
+ * 切换显示语言的事件(localeChange)。
+ */
+export interface LocaleChangeEvent {
+  /**
+   * 새 언어 id.
+   *
+   * The new locale id.
+   *
+   * 新しい言語 id。
+   *
+   * 新的语言 id。
+   */
+  locale: string;
+  /**
+   * 바뀌기 전 언어 id.
+   *
+   * The previous locale id.
+   *
+   * 変わる前の言語 id。
+   *
+   * 切换前的语言 id。
+   */
+  prev: string;
+}
+
+/**
+ * `writeCells` 가 일부 칸을 건너뛰었다는 알림(writeCellsSkip) — 수식 칸 등 쓸 수 없는 칸.
+ *
+ * Notice that `writeCells` skipped some cells (writeCellsSkip) — cells that cannot be written, such as formula cells.
+ *
+ * `writeCells` が一部のセルを飛ばしたという知らせ(writeCellsSkip) — 数式セルなど書き込めないセル。
+ *
+ * `writeCells` 跳过了部分单元格的通知(writeCellsSkip)— 例如公式单元格等无法写入的单元格。
+ */
+export interface WriteCellsSkipEvent {
+  /**
+   * 건너뛴 칸 수.
+   *
+   * Number of cells skipped.
+   *
+   * 飛ばしたセルの数。
+   *
+   * 跳过的单元格数。
+   */
+  skipped: number;
+  /**
+   * 쓰려던 칸 수.
+   *
+   * Number of cells requested.
+   *
+   * 書こうとしたセルの数。
+   *
+   * 请求写入的单元格数。
+   */
+  total: number;
+}
+
+/**
+ * `grid.on()` 이 받는 이벤트 이름과 그 인자 형의 표. 이름을 적으면 인자 형이 정해져 따로 형을 달지 않아도 된다.
+ * 표에 없는 이름(직접 `emit` 하는 사용자 이벤트 등)도 그대로 쓸 수 있다 — 그때 인자 형은 정해지지 않는다.
+ *
+ * The table of event names `grid.on()` accepts and their argument types. Naming the event fixes the argument type, so no manual annotation is needed.
+ * Names not in the table (such as your own events raised with `emit`) still work; their argument type is simply not fixed.
+ *
+ * `grid.on()` が受け取るイベント名とその引数の型の表。名前を書けば引数の型が決まるので、別に型を付けなくて済みます。
+ * 表にない名前(自分で `emit` する利用者イベントなど)もそのまま使えます — その場合、引数の型は決まりません。
+ *
+ * `grid.on()` 接受的事件名及其参数类型的对照表。写出事件名即可确定参数类型,无需另外标注。
+ * 表中没有的名称(例如自己 `emit` 的用户事件)也可以照常使用 — 此时参数类型不固定。
+ *
+ * @example
+ * grid.on('rowCheck', (e) => console.log(e.rowIndex, e.checked));   // e: RowCheckEvent<Row>
+ * grid.on('formulaRecalc', (e) => console.log(e.cycles, e.ms));      // e: FormulaRecalcEvent
+ */
+export interface GridEventMap<T = any> {
+  cellClick: CellEvent<T>;
+  cellDblClick: CellEvent<T>;
+  cellMouseOver: CellEvent<T>;
+  cellMouseOut: CellEvent<T>;
+  cellMouseDown: CellEvent<T>;
+  cellMouseUp: CellEvent<T>;
+  cellMouseMove: CellEvent<T>;
+  cellKeyDown: CellKeyEvent<T>;
+  cellKeyUp: CellKeyEvent<T>;
+  cellKeyPress: CellKeyEvent<T>;
+  rowClick: RowEvent<T>;
+  rowDblClick: RowEvent<T>;
+  rowMouseOver: RowEvent<T>;
+  rowMouseOut: RowEvent<T>;
+  rowMouseDown: RowEvent<T>;
+  rowMouseUp: RowEvent<T>;
+  rowMouseMove: RowEvent<T>;
+  editStart: EditEvent<T>;
+  editEnd: EditEvent<T>;
+  dataChange: T[];
+  selectionChange: SelectionEvent<T>;
+  sortChange: SortEvent;
+  filterChange: FilterEvent;
+  scroll: ScrollEvent;
+  rowExpand: RowExpandEvent<T>;
+  rowCollapse: RowExpandEvent<T>;
+  rowCheck: RowCheckEvent<T>;
+  allCheck: AllCheckEvent;
+  rowDrop: RowDropEvent;
+  pageChange: import('./Pagination.js').PageChangeEvent;
+  rangeChange: RangeChangeEvent;
+  rangeCopy: RangeCopyEvent;
+  rangeFill: RangeFillEvent;
+  formulaChange: FormulaChangeEvent;
+  formulaRecalc: FormulaRecalcEvent;
+  formulaError: FormulaErrorEvent;
+  gridDropBefore: GridDropEvent<T>;
+  gridDropAfter: GridDropEvent<T>;
+  gridDropComplete: GridDropEvent<T>;
+  gridDropMapping: GridMappingEvent<T>;
+  chartCreate: import('./chart/types.js').ChartInstance;
+  chartRender: { id: string; model: import('./chart/types.js').ChartDataModel };
+  chartPointClick: { id: string; point: import('./chart/types.js').ChartPoint };
+  chartDestroy: { id: string };
+  localeChange: LocaleChangeEvent;
+  writeCellsSkip: WriteCellsSkipEvent;
+  ready: OpenGridInstance<T>;
 }
 
 // ─── 그리드 인스턴스 인터페이스 / grid instance interface ──────────────────────────
@@ -3945,6 +4371,9 @@ export interface OpenGridInstance<T = any> {
   insertRow(item: Partial<T>, position?: Position): void;
   pushRow(items: Partial<T> | Partial<T>[]): void;
   unshiftRow(items: Partial<T> | Partial<T>[]): void;
+  appendRows(items: Partial<T> | Partial<T>[]): void;
+  prependRows(items: Partial<T> | Partial<T>[]): void;
+  reorderRow(fromIndex: number, toIndex: number): void;
   deleteRow(rowIndex: number | number[]): void;
   deleteById(ids: string[]): void;
 
@@ -3954,6 +4383,40 @@ export interface OpenGridInstance<T = any> {
   getDisplayValue(rowIndex: number, field: string): string;
   writeCell(rowIndex: number, field: string, value: any): void;
   getRowAt(rowIndex: number): T;
+  /**
+   * 화면 순서로 늘어놓은 **전체** 목록(그룹 머리·트리·상세 칸 포함)에서 `flatIndex` 번째 줄의 데이터 행을 돌려준다. 이 번호는 스크롤 위치와 무관하다 — 지금 창에 보이는 줄 가운데 몇 번째가 아니다. 그룹 머리·상세 칸이면 `null`, 트리 줄이면 그 노드의 데이터 행.
+   * `getRowAt(rowIndex)` 는 데이터의 표시 순서라 그룹·트리·상세가 켜지면 둘이 다른 줄을 가리킨다.
+   *
+   * Returns the data row on the `flatIndex`-th line of the **whole** list laid out in on-screen order (group heads, tree rows and detail slots included). The number does not depend on the scroll position — it is not a position among the lines currently visible in the viewport. `null` for group heads and detail slots; for tree lines, that node's data row.
+   * `getRowAt(rowIndex)` uses the data's display order, so with grouping, tree or detail on the two point at different lines.
+   *
+   * 画面順に並べた**全体**の一覧(グループ見出し・ツリー・詳細欄を含む)で `flatIndex` 番目の行のデータ行を返します。この番号はスクロール位置と関係ありません — いま窓に見えている行の中での何番目かではありません。グループ見出し・詳細欄なら `null`、ツリーの行ならそのノードのデータ行。
+   * `getRowAt(rowIndex)` はデータの表示順なので、グループ・ツリー・詳細が有効だと両者は別の行を指します。
+   *
+   * 在按画面顺序排列的**完整**列表(包括分组标题、树、详情栏)中,返回第 `flatIndex` 行的数据行。这个编号与滚动位置无关 — 不是当前窗口中可见行里的第几行。分组标题、详情栏返回 `null`;树的行返回该节点的数据行。
+   * `getRowAt(rowIndex)` 使用数据的显示顺序,启用分组、树、详情时两者指向不同的行。
+   *
+   * @param flatIndex - 화면 순서 전체 목록에서의 줄 번호(0부터, 스크롤과 무관)
+   *
+   * Line number in the whole on-screen-order list (0-based, independent of scrolling)
+   *
+   * 画面順の全体一覧での行番号(0 始まり、スクロールと無関係)
+   *
+   * 在画面顺序完整列表中的行号(从 0 开始,与滚动无关)
+   *
+   * @returns 데이터 행, 없으면 `null`
+   *
+   * The data row, or `null`
+   *
+   * データ行、なければ `null`
+   *
+   * 数据行,没有则为 `null`
+   *
+   * @example
+   * const row = grid.getFlatRow(3); // 전체 목록의 넷째 줄(스크롤해도 같은 줄)
+   * if (row) console.log(row.name);
+   */
+  getFlatRow(flatIndex: number): T | null;
 
   // ── 배치 쓰기 인프라 / batch-write infrastructure ────────────────────────────
   /**
@@ -4020,7 +4483,7 @@ export interface OpenGridInstance<T = any> {
   getColumnDefs(): ColumnDef<T>[];
   getAllColumnDefs(): ColumnDef<T>[];
   getColumnCount(): number;
-  applyColumns(columns: ColumnDef<T>[]): void;
+  applyColumns(columns: ColumnOrGroup<T>[]): void;
   insertColumn(colDef: ColumnDef<T>, position?: Position): void;
   deleteColumn(field: string): void;
   hideColumn(field: string | string[]): void;
@@ -4368,6 +4831,11 @@ export interface OpenGridInstance<T = any> {
   freeze(columnCount: number): void;
   freezeRows(rowCount: number): void;
 
+  // 셀 병합
+  mergeCells(cells: import('./MergeEngine.js').MergeCell[]): void;
+  autoMerge(fields: string[]): void;
+  clearMerge(): void;
+
   // 그룹
   groupBy(fields: string[]): void;
   clearGroup(): void;
@@ -4377,6 +4845,10 @@ export interface OpenGridInstance<T = any> {
   expandAll(): void;
   collapseAll(): void;
   expandNodes(ids: string | string[], open?: boolean): void;
+  enableTree(): void;
+  disableTree(): void;
+  expandAllNodes(): void;
+  collapseAllNodes(): void;
 
   // 내보내기 / 인쇄
   exportExcel(options?: ExportOptions | string): void;
@@ -4384,6 +4856,10 @@ export interface OpenGridInstance<T = any> {
   exportJson(options?: ExportOptions | string): void;
   toArray(keyValue?: boolean): any[];
   print(options?: PrintOptions): void;
+  setPageSize(size: number): void;
+  setRowHeight(px: number): void;
+  openFindBar(): void;
+  closeFindBar(): void;
 
   // 스크롤
   jumpToRow(rowIndex: number): void;
@@ -4399,6 +4875,8 @@ export interface OpenGridInstance<T = any> {
   resize(width?: number, height?: number): void;
   setTheme(theme: string): void;
   setThemeVar(varName: string, value: string): void;
+  setIcon(role: string, svgOrKey: string): OpenGridInstance<T>;
+  renderIcon(role: string, opts?: { size?: number; title?: string; el?: boolean }): string | SVGElement;
   /**
    * 스킨(형태 축)을 바꿉니다 — 모서리·테두리·여백 같은 "생김새"만 갈아 끼우고, 색 테마는 그대로 둡니다.
    *
@@ -4530,7 +5008,7 @@ export interface OpenGridInstance<T = any> {
   setFilterSelect(config: import('./FilterSelect.js').FilterSelectConfig | null): void;
 
   // F2: 워크시트
-  addWorksheet(name: string, columns?: ColumnDef<T>[], data?: T[]): void;
+  addWorksheet(name: string, columns?: ColumnOrGroup<T>[], data?: T[]): void;
   removeWorksheet(name: string): void;
   switchWorksheet(name: string): void;
   renameWorksheet(oldName: string, newName: string): void;
@@ -4539,8 +5017,11 @@ export interface OpenGridInstance<T = any> {
   exportSheetsExcel(filename?: string): void;
 
   // 이벤트
+  on<K extends keyof GridEventMap<T>>(event: K, handler: (e: GridEventMap<T>[K]) => void): OpenGridInstance<T>;
   on(event: string, handler: Function): OpenGridInstance<T>;
+  once<K extends keyof GridEventMap<T>>(event: K, handler: (e: GridEventMap<T>[K]) => void): OpenGridInstance<T>;
   once(event: string, handler: Function): OpenGridInstance<T>;
+  off<K extends keyof GridEventMap<T>>(event: K, handler?: (e: GridEventMap<T>[K]) => void): OpenGridInstance<T>;
   off(event: string, handler?: Function): OpenGridInstance<T>;
   emit(event: string, data?: any): void;
 
@@ -4633,7 +5114,7 @@ export interface WorksheetDef<T = any> {
    *
    * 工作表专用的列（未指定时共用表格的 columns）。
    */
-  columns?: ColumnDef<T>[];
+  columns?: ColumnOrGroup<T>[];
   data?: T[];
 }
 
@@ -4648,7 +5129,7 @@ export interface WorksheetDef<T = any> {
  */
 export interface WorksheetState<T = any> {
   name: string;
-  columns: ColumnDef<T>[];
+  columns: ColumnOrGroup<T>[];
   data: T[];
 }
 

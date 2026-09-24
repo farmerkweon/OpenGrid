@@ -36,6 +36,16 @@ export const TEXTURE_OPACITY_CAP = 0.1;
  * named 값은 relayout 을 요구하지 않는다(질감은 배경 페인트만 — 좌표 불변).
  * / TextureRegistry — the 3rd texture axis. The registration gate clamps texture-opacity to ≤0.1.
  *
+ * 새 질감을 등록할 때: `--og-texture-bg` 는 **필수**다 — 빠뜨리면 질감을 켠 그리드의 크롬에서
+ * `background-image` 가 none 이 되어 테마가 머리글에 깐 그림(예: stitch 능직)까지 지워진다(칠 규칙이
+ * !important 이기 때문). 잉크는 `rgba(var(--og-texture-ink, 0, 0, 0), a)` 처럼 **폴백을 함께** 적는다 —
+ * 잉크를 정의하지 않은 테마에서 폴백 없는 참조는 무효 값이 되어 아무것도 칠해지지 않는다. 결의 세기는
+ * 잉크 알파로 정한다(`--og-texture-opacity` 는 그 상한 검사값이지 칠하는 데 쓰지 않는다).
+ * / When registering a texture: `--og-texture-bg` is required (missing it blanks the chrome's
+ * background-image, wiping theme header patterns, because the paint rule is !important). Write the ink
+ * with a fallback, `rgba(var(--og-texture-ink, 0, 0, 0), a)`; strength comes from that alpha
+ * (`--og-texture-opacity` is only the cap checked at registration).
+ *
  * @example
  * textureRegistry.resolve('linen'); // { tokens:{'--og-texture-bg':…,'--og-texture-opacity':'0.06',…}, attr:{name:'data-og-texture',value:'linen'} }
  * textureRegistry.resolve('default'); // { tokens:{} } — byte-identical
@@ -69,8 +79,8 @@ export class TextureRegistry extends TokenAxis {
 /** Linen — 리넨 결(교차 해칭 대신 미세 수직/수평 결). / Linen — fine woven grain. */
 export const TEXTURE_LINEN: TokenDelta = {
   '--og-texture-bg':
-    'repeating-linear-gradient(0deg, rgba(var(--og-texture-ink),0.05) 0 1px, transparent 1px 4px), ' +
-    'repeating-linear-gradient(90deg, rgba(var(--og-texture-ink),0.04) 0 1px, transparent 1px 4px)',
+    'repeating-linear-gradient(0deg, rgba(var(--og-texture-ink, 0, 0, 0),0.05) 0 1px, transparent 1px 4px), ' +
+    'repeating-linear-gradient(90deg, rgba(var(--og-texture-ink, 0, 0, 0),0.04) 0 1px, transparent 1px 4px)',
   '--og-texture-size': '4px 4px',
   '--og-texture-opacity': '0.06',
   '--og-texture-zone': 'chrome',
@@ -79,7 +89,7 @@ export const TEXTURE_LINEN: TokenDelta = {
 /** Paper-grain — 종이 그레인(부드러운 점묘 결). / Paper-grain — soft speckle. */
 export const TEXTURE_PAPER_GRAIN: TokenDelta = {
   '--og-texture-bg':
-    'radial-gradient(rgba(var(--og-texture-ink),0.05) 0.5px, transparent 0.5px)',
+    'radial-gradient(rgba(var(--og-texture-ink, 0, 0, 0),0.05) 0.5px, transparent 0.5px)',
   '--og-texture-size': '3px 3px',
   '--og-texture-opacity': '0.05',
   '--og-texture-zone': 'chrome',
@@ -88,8 +98,8 @@ export const TEXTURE_PAPER_GRAIN: TokenDelta = {
 /** Graph — 모눈(엔지니어링 도면 격자). / Graph — engineering grid. */
 export const TEXTURE_GRAPH: TokenDelta = {
   '--og-texture-bg':
-    'repeating-linear-gradient(0deg, rgba(var(--og-texture-ink),0.06) 0 1px, transparent 1px 8px), ' +
-    'repeating-linear-gradient(90deg, rgba(var(--og-texture-ink),0.06) 0 1px, transparent 1px 8px)',
+    'repeating-linear-gradient(0deg, rgba(var(--og-texture-ink, 0, 0, 0),0.06) 0 1px, transparent 1px 8px), ' +
+    'repeating-linear-gradient(90deg, rgba(var(--og-texture-ink, 0, 0, 0),0.06) 0 1px, transparent 1px 8px)',
   '--og-texture-size': '8px 8px',
   '--og-texture-opacity': '0.07',
   '--og-texture-seam': 'var(--og-texture-ink)',

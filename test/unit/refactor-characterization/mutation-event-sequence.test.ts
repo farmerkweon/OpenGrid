@@ -8,10 +8,10 @@
  *
  * The three output sinks (00_current_architecture.md §2.4-5):
  *   (1) emit('dataChange')            — EventEmitter, host subscribes via grid.on('dataChange')
- *   (2) onDataChange option callback  — NOTE: bound as a 'dataChange' LISTENER in _bindOptionEvents
- *                                        (OpenGrid.ts:1055), so it fires from the emit itself; the
- *                                        row mutators ALSO call this._options.onDataChange?.() again
- *                                        (e.g. :1147) → observable DOUBLE-FIRE (setData does NOT).
+ *   (2) onDataChange option callback  — bound as a 'dataChange' LISTENER in _bindOptionEvents, so it
+ *                                        fires from the emit itself, exactly ONCE. (The R0 golden pinned a
+ *                                        DOUBLE-FIRE — row mutators also re-called the option directly.
+ *                                        That was a defect and is fixed: the event is now the only path.)
  *   (3) after:<op> / complete triggers — TriggerManager (OpenGrid.ts:1104,1149,1200,1244).
  *
  * Golden ordering below was captured by runtime observation, not guessed.
@@ -96,7 +96,7 @@ describe('R0: mutation output ORDER golden (emit / onDataChange / trigger)', () 
     g.destroy();
   });
 
-  it('insertRow — onDataChange DOUBLE-fires (bound listener + explicit call), then after/complete', () => {
+  it('insertRow — onDataChange fires ONCE (bound listener only), then after/complete', () => {
     const log: string[] = [];
     const g = makeGrid(log);
     g.setData(sample.map(r => ({ ...r })));
@@ -105,14 +105,13 @@ describe('R0: mutation output ORDER golden (emit / onDataChange / trigger)', () 
     expect(log).toEqual([
       'opt:onDataChange',   // bound listener (from emit)
       'emit:dataChange',    // host subscriber (from emit)
-      'opt:onDataChange',   // explicit this._options.onDataChange?.() (OpenGrid.ts:1147)
       'after:insertRow',
       'complete:insertRow',
     ]);
     g.destroy();
   });
 
-  it('pushRow — same double-fire but fires NO trigger (no before/after bracket)', () => {
+  it('pushRow — onDataChange once, and fires NO trigger (no before/after bracket)', () => {
     const log: string[] = [];
     const g = makeGrid(log);
     g.setData(sample.map(r => ({ ...r })));
@@ -122,12 +121,11 @@ describe('R0: mutation output ORDER golden (emit / onDataChange / trigger)', () 
     expect(log).toEqual([
       'opt:onDataChange',
       'emit:dataChange',
-      'opt:onDataChange',
     ]);
     g.destroy();
   });
 
-  it('deleteRow — onDataChange double-fires, then after/complete', () => {
+  it('deleteRow — onDataChange fires once, then after/complete', () => {
     const log: string[] = [];
     const g = makeGrid(log);
     g.setData(sample.map(r => ({ ...r })));
@@ -136,7 +134,6 @@ describe('R0: mutation output ORDER golden (emit / onDataChange / trigger)', () 
     expect(log).toEqual([
       'opt:onDataChange',
       'emit:dataChange',
-      'opt:onDataChange',
       'after:deleteRow',
       'complete:deleteRow',
     ]);
@@ -149,15 +146,13 @@ describe('R0: mutation output ORDER golden (emit / onDataChange / trigger)', () 
     g.setData(sample.map(r => ({ ...r })));
     log.length = 0;
     g.writeCell(0, 'name', 'Z');
-    // GOLDEN: editEnd double-fires (bound onEditEnd + explicit onEditEnd, OpenGrid.ts:1228-1229),
-    // then dataChange double-fires (OpenGrid.ts:1239-1240), then after:writeCell/complete.
+    // GOLDEN: editEnd pair (option once, then subscriber), then dataChange pair, then
+    // after:writeCell/complete. (Was a double-fire of each option before the fix.)
     expect(log).toEqual([
       'opt:onEditEnd',
       'emit:editEnd',
-      'opt:onEditEnd',
       'opt:onDataChange',
       'emit:dataChange',
-      'opt:onDataChange',
       'after:writeCell',
       'complete:writeCell',
     ]);

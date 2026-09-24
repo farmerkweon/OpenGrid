@@ -2,7 +2,7 @@ import { ColumnLayout } from './ColumnLayout.js';
 import { _downloadText } from './GridRenderer.js';
 import { applyMask } from './MaskingEngine.js';
 import type { WorksheetManager } from './WorksheetManager.js';
-import type { ExportOptions } from './types.js';
+import type { ExportOptions, PrintOptions } from './types.js';
 
 /**
  * ExportManager 의존성 주입 인터페이스. / Dependency-injection interface for ExportManager.
@@ -256,7 +256,7 @@ export class ExportManager<T extends Record<string, any> = any> {
    *
    * @param options - 제목·제외 필드·인쇄 푸터 텍스트 / Title, excluded fields, and print-footer text
    */
-  print(options?: { title?: string; excludeFields?: string[]; footerText?: string }): void {
+  print(options?: PrintOptions): void {
     const title      = options?.title      ?? 'OPEN_GRID';
     const footerText = options?.footerText ?? '';
     const data = this._d.getData();

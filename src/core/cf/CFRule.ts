@@ -10,10 +10,13 @@
 // ============================================================
 
 /**
- * 통계가 필요 없는 값 비교/텍스트/날짜 조건과, 열 전역 통계가 필요한 조건(topN·stdBand·duplicate)을
- * 1급으로 담는 조건 카탈로그(REQ-T5-042). 각 조건은 순수 판정 술어로 해석된다.
- * / First-class condition catalog (REQ-T5-042). Stat-free comparisons plus column-wide stat
- * conditions (topN/stdBand/duplicate). Each is interpreted by a pure predicate.
+ * 규칙이 걸리는 조건. `type` 으로 종류를 고른다: 값 비교(compare)·글자 포함(textContains)·날짜(dateOccurring)·상위 N(topN·topNpct)·평균 위아래(aboveAvg)·표준편차 띠(stdBand)·중복(duplicate)·등록한 술어(custom).
+ *
+ * The condition that fires a rule. Pick the kind with `type`: value comparison (compare), text contains (textContains), date (dateOccurring), top N (topN, topNpct), above/below average (aboveAvg), standard-deviation band (stdBand), duplicates (duplicate) or a registered predicate (custom).
+ *
+ * 規則が掛かる条件。`type` で種類を選びます: 値の比較(compare)・文字を含む(textContains)・日付(dateOccurring)・上位 N(topN・topNpct)・平均の上下(aboveAvg)・標準偏差の帯(stdBand)・重複(duplicate)・登録した述語(custom)。
+ *
+ * 触发规则的条件。用 `type` 选择种类:数值比较(compare)、包含文字(textContains)、日期(dateOccurring)、前 N 名(topN、topNpct)、高于/低于平均(aboveAvg)、标准差区间(stdBand)、重复(duplicate)、已注册的谓词(custom)。
  */
 export type CFCondition =
   | { readonly type: 'compare'; readonly op: '>' | '>=' | '<' | '<=' | '=' | '!=' | 'between'; readonly a: number; readonly b?: number }
@@ -27,9 +30,13 @@ export type CFCondition =
   | { readonly type: 'custom'; readonly predicateId: string; readonly params?: Readonly<Record<string, unknown>> };
 
 /**
- * encode 슬롯 — 4종 시각 인코딩의 판별 유니온. 정직성 파라미터를 각자 소유(§2.1).
- * bar: 0기준·음수 양방향·클램프·로그. scale: 이산 기본·연속 옵트인·발산 중립. icon: 이중부호화.
- * / encode slot — discriminated union of the 4 visual encodings; each owns its honesty params.
+ * 조건에 맞는 칸을 어떻게 보여 줄지. `kind` 로 고른다: 막대(bar)·색 단계(scale)·아이콘(icon)·작은 추세선(sparkline).
+ *
+ * How matching cells are shown. Pick with `kind`: bar, color scale (scale), icon or a small trend line (sparkline).
+ *
+ * 条件に合うセルをどう見せるか。`kind` で選びます: バー(bar)・色の段階(scale)・アイコン(icon)・小さな推移線(sparkline)。
+ *
+ * 如何显示符合条件的单元格。用 `kind` 选择:条形(bar)、色阶(scale)、图标(icon)、小型趋势线(sparkline)。
  */
 export type CFEncodeSpec =
   | { readonly kind: 'bar'; readonly axis?: 'zero' | 'min'; readonly negative?: 'bidirectional' | 'none'; readonly clamp?: boolean; readonly log?: boolean; readonly fill?: 'solid' | 'gradient'; readonly seed?: 'primary' | 'graphite' }
@@ -37,21 +44,61 @@ export type CFEncodeSpec =
   | { readonly kind: 'icon'; readonly setId: string; readonly steps?: 3 | 4 | 5; readonly reverse?: boolean; readonly iconOnly?: boolean }
   | { readonly kind: 'sparkline'; readonly chart?: 'bar' | 'line' | 'area'; readonly normalize?: 'row' | 'column' };
 
-/** 적용 스코프 — 어느 셀 집합에 거는가. columnId 필수 + 선택적 행범위·행상태 술어. / Application scope. */
+/**
+ * 규칙을 걸 칸의 범위 — 컬럼 하나(필수)와, 필요하면 행 범위·행 상태.
+ *
+ * Which cells the rule applies to — one column (required) and optionally a row range or row state.
+ *
+ * 規則を掛けるセルの範囲 — 列 1 つ(必須)と、必要なら行の範囲・行の状態。
+ *
+ * 规则作用的单元格范围 — 一列(必需),需要时再加行范围或行状态。
+ */
 export interface CFScope {
   readonly columnId: string;
-  /** 반열림 행 범위 [startRow, endRow). 미지정=열 전체. / Half-open row range; absent = whole column. */
+  /**
+   * 행 범위 [startRow, endRow) — 끝은 포함하지 않는다. 없으면 컬럼 전체.
+   *
+   * Row range [startRow, endRow) — end excluded. Absent means the whole column.
+   *
+   * 行の範囲 [startRow, endRow) — 終わりは含みません。なければ列全体。
+   *
+   * 行范围 [startRow, endRow) — 不含末尾。没有则为整列。
+   */
   readonly range?: { readonly startRow: number; readonly endRow: number };
-  /** 행상태 제한(예: 'added'|'edited'|'removed'). / Row-state gate. */
+  /**
+   * 이 상태의 행에만 건다(추가·수정·삭제된 행).
+   *
+   * Apply only to rows in this state (added, edited or removed).
+   *
+   * この状態の行にだけ掛けます(追加・修正・削除された行)。
+   *
+   * 只作用于该状态的行(新增、修改、删除的行)。
+   */
   readonly rowState?: 'added' | 'edited' | 'removed';
 }
 
-/** 이름붙인 재사용 스타일 참조(색조정자 단일관리, MCD-DB014). / Named reusable style reference. */
+/**
+ * 이름 붙여 등록한 스타일을 가리킨다(여러 규칙이 같은 색을 나눠 쓸 때).
+ *
+ * Refers to a style registered by name (when several rules share the same colors).
+ *
+ * 名前を付けて登録したスタイルを指します(複数の規則が同じ色を共有するとき)。
+ *
+ * 引用按名称注册的样式(多个规则共用同一套颜色时)。
+ */
 export interface CFStyleRef {
   readonly ref: string;
 }
 
-/** 인라인 스타일(공용 프리미티브). named style 이 없을 때의 직접 지정. / Inline style primitives. */
+/**
+ * 규칙 안에 바로 적는 스타일(글자색·배경·굵게·기울임·밑줄).
+ *
+ * A style written directly in the rule (text color, background, bold, italic, underline).
+ *
+ * 規則の中に直接書くスタイル(文字色・背景・太字・斜体・下線)。
+ *
+ * 直接写在规则里的样式(文字颜色、背景、粗体、斜体、下划线)。
+ */
 export interface CFInlineStyle {
   readonly color?: string;
   readonly background?: string;
@@ -66,25 +113,101 @@ export function isStyleRef(s: CFStyleRef | CFInlineStyle | undefined): s is CFSt
 }
 
 /**
- * 조건부서식 규칙 — 직렬화 가능한 선언 값 객체(순수 데이터, DOM·함수 참조 없음). REQ-T5-001/808.
- * / A conditional-formatting rule — a serializable declarative value object (pure data).
+ * 조건부 서식 규칙 하나. 함수를 담지 않는 데이터라 JSON 으로 저장했다가 그대로 되살릴 수 있다. `grid.setConditionalFormat([규칙…])` 에 넘긴다.
+ *
+ * One conditional-formatting rule. It holds no functions, so it can be saved as JSON and restored as is. Pass it to `grid.setConditionalFormat([rules…])`.
+ *
+ * 条件付き書式の規則 1 つ。関数を持たないデータなので JSON で保存してそのまま復元できます。`grid.setConditionalFormat([規則…])` に渡します。
+ *
+ * 一条条件格式规则。它不包含函数,可以保存为 JSON 后原样还原。传给 `grid.setConditionalFormat([规则…])`。
+ *
+ * @example
+ * const rule: CFRule = {
+ *   id: 'high-sales', when: { type: 'compare', op: '>', a: 100 }, encode: { kind: 'bar' },
+ *   scope: { columnId: 'sales' }, priority: 1,
+ * };
+ * await grid.setConditionalFormat([rule]);
  */
 export interface CFRule {
-  /** 안정 식별자(직렬화·계보·우선순위 tie-break 결정론). / Stable id (serialization/lineage/tie-break). */
+  /**
+   * 규칙 이름(겹치지 않게). 우선순위가 같을 때 순서를 정하는 데도 쓴다.
+   *
+   * The rule's id (unique). Also breaks ties between equal priorities.
+   *
+   * 規則の名前(重ならないように)。優先度が同じときの順番決めにも使います。
+   *
+   * 规则名称(不重复)。优先级相同时也用它决定顺序。
+   */
   readonly id: string;
-  /** 발화 조건(1급 카탈로그 중 하나, REQ-T5-042). / Firing condition. */
+  /**
+   * 걸리는 조건.
+   *
+   * The condition.
+   *
+   * 掛かる条件。
+   *
+   * 触发条件。
+   */
   readonly when: CFCondition;
-  /** 시각 인코딩 종류(4종 공유 스키마). / Visual encoding (4 kinds share one schema). */
+  /**
+   * 보여 주는 방식.
+   *
+   * How it is shown.
+   *
+   * 見せ方。
+   *
+   * 显示方式。
+   */
   readonly encode: CFEncodeSpec;
-  /** named style 참조 또는 인라인 스타일. / Named-style ref or inline style. */
+  /**
+   * 등록한 스타일 이름 또는 바로 적은 스타일.
+   *
+   * A registered style name or an inline style.
+   *
+   * 登録したスタイル名、または直接書いたスタイル。
+   *
+   * 已注册的样式名或直接写的样式。
+   */
   readonly style?: CFStyleRef | CFInlineStyle;
-  /** 적용 스코프. / Application scope. */
+  /**
+   * 거는 범위.
+   *
+   * Where it applies.
+   *
+   * 掛ける範囲。
+   *
+   * 作用范围。
+   */
   readonly scope: CFScope;
-  /** 우선순위(작을수록 먼저 평가·낮은 층). 동값이면 id 로 결정론 tie-break. / Priority (smaller = earlier/lower). */
+  /**
+   * 우선순위. 작을수록 먼저 본다. 같으면 `id` 순.
+   *
+   * Priority; smaller is evaluated first. Ties go by `id`.
+   *
+   * 優先度。小さいほど先に見ます。同じなら `id` の順。
+   *
+   * 优先级。数值越小越先判断。相同则按 `id` 排序。
+   */
   readonly priority: number;
-  /** 참이면 이 규칙 뒤 규칙 평가 중단(엑셀 Stop-If-True). 기본 false. / Stop-If-True (Excel). */
+  /**
+   * `true` 면 이 규칙이 걸린 칸에는 뒤 규칙을 보지 않는다(엑셀의 「True 이면 중지」). 기본 `false`.
+   *
+   * When `true`, later rules are skipped for cells this rule matched (Excel's Stop If True). Default `false`.
+   *
+   * `true` ならこの規則が掛かったセルには後の規則を見ません(Excel の「条件を満たす場合は停止」)。既定 `false`。
+   *
+   * 为 `true` 时,本规则命中的单元格不再判断后面的规则(Excel 的「如果为真则停止」)。默认 `false`。
+   */
   readonly stopIfTrue?: boolean;
-  /** 직렬화 스키마 버전(하위호환 진화). / Serialization schema version. */
+  /**
+   * 저장 형식 판 번호(옛 판을 읽을 때 쓴다).
+   *
+   * Saved-format version (used when reading older versions).
+   *
+   * 保存形式の版番号(古い版を読むときに使います)。
+   *
+   * 保存格式的版本号(读取旧版本时使用)。
+   */
   readonly v?: number;
 }
 
