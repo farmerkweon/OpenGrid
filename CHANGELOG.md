@@ -2,6 +2,40 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.6.1] - 2026-09-24
+
+### Fixed
+- **옵션 콜백이 한 번의 일에 두 번 불리던 문제** / **Option callbacks fired twice per occurrence.**
+  `onCellClick`·`onRowClick`·`onEditEnd`·`onDataChange`·`onSortChange`·`onSelectionChange`·마우스·키 콜백 등 23종이
+  클릭·편집 한 번에 두 번 불렸다(React·Vue·Angular 래퍼의 출력도 같았다). 이제 한 번만 불린다.
+  옵션 `onX` 는 `grid.on('x', …)` 과 같은 구독이라 `setOptions` 로 바꾼 콜백이 곧바로 쓰이고, `grid.off('x')` 로 그 이벤트를 전부 해제하면 옵션 콜백도 멈춘다.
+  / 23 option callbacks (and the wrapper outputs) now fire once. Option `onX` is the same subscription as `grid.on('x', …)`.
+- **`onScroll` 이 불리지 않던 문제** / **`onScroll` was never called.**
+  본문을 스크롤하면 `scroll` 이벤트가 화면이 그려질 때마다 한 번까지 나온다. / Body scrolling now emits `scroll`, at most once per frame.
+- **셀을 눌러도 키보드 포커스 칸이 되지 않던 문제** / **A clicked cell did not become the keyboard focus cell.**
+- **밀도를 바꿔도 보통 모드 행 높이가 그대로이던 문제** / **Density did not change the normal-mode row height.**
+  `'default'` 로 돌아가면 생성 옵션 `rowHeight` 로 돌아온다. / Back at `'default'`, the `rowHeight` option applies again.
+- **질감(`setTexture`)이 칠해지지 않던 문제** / **`setTexture()` painted nothing.**
+  머리글·바닥글·페이지 바에만 칠하며 데이터 칸과 테마 색은 그대로다. / Painted on the header, footer and pager only.
+- **`sortChange` 인자 모양이 길마다 다르던 문제** / **`sortChange` had a different shape per path.**
+  머리글 클릭·`orderBy()`·`resetOrder()` 모두 `{ field, dir, sortList }` 로 온다. 정렬이 풀린 컬럼에 `dir: 'asc'` 가 오던 것도 바로잡았고, `resetOrder()` 도 이벤트를 낸다.
+  ⚠ TypeScript strict: `SortEvent.field`·`dir` 가 선택 항목이 되었다(정렬을 풀면 없다) — `if (e.field)` 로 좁혀 읽는다.
+  / Same shape on every path; `resetOrder()` now emits too. ⚠ `SortEvent.field`/`dir` are now optional in the types.
+- **형 정의 결함** / **Type-definition fixes.**
+  `OpenGridInstance` 에 없던 기존 메서드 12개(`mergeCells`·`expandAllNodes` 등), `PrintOptions.footerText`, `crossGridMapping` 반환 형,
+  `renderer` 에 등록한 렌더러 이름, 푸터 `op` 에 슬롯으로 만든 집계 이름, 묶음 머리글 컬럼의 `field`(선택)를 실제 동작에 맞췄다.
+  묶음 컬럼 때문에 **돌려받은** 컬럼(`getWorksheet().columns`, `children`)의 `field` 는 `'children' in col` 로 좁혀 읽는다.
+  / Types now match existing behaviour; narrow returned group columns with `'children' in col`.
+
+### Changed
+- **이미 있던 동작을 공개 API·형으로 드러냄** / **Existing internals exposed as public API and types.**
+  예제가 내부 필드를 만지던 자리를 공개 메서드로 바꿨다: `setPageSize()`·`openFindBar()`/`closeFindBar()`·`setRowHeight()`·`getFlatRow()`,
+  요소 안 그리드 정리 `OpenGrid.instancesIn()`/`destroyAllIn()`, 되돌리는 함수를 돌려주는 `addDefaultOverride()`/`addDefaultStrategy()`(기존 메서드는 그대로),
+  `OrgChart.destroy()`. 코어 안에 있던 접근성 도구는 별도 진입점 `open-grid/a11y` 로 공개했다(import 하지 않으면 배송되지 않음). 컬럼 `ariaLabel`·머리글 `og-sortable` 클래스.
+  이벤트 인자 형(`GridEventMap` — `grid.on('이름', …)` 의 인자 형이 정해진다, 기존 호출은 그대로)과 `CFRule`·`SummaryOp`·`OverrideLayerFn` 등을 내보낸다.
+  / Methods that examples reached through internals are now public; the internal accessibility helpers ship as `open-grid/a11y`;
+  event argument types and several existing types are exported. Existing calls are unaffected.
+
 ## [1.6.0] - 2026-09-16
 
 ### Added
