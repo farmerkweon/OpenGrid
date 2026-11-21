@@ -5,6 +5,8 @@ import type { RowManager } from './RowManager.js';
 import { isToggleCol } from './CellTypeRegistry.js';
 import { evaluateFormula } from './FormulaEngine.js';
 import { OGDecimal } from './OGDecimal.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderRequest } from './domain/render/ports.js';
 
 /**
  * {@link CellEventHandler} 의존성 주입 계약. / Dependency-injection contract for {@link CellEventHandler}.
@@ -29,8 +31,11 @@ export interface CellEventDeps<T extends Record<string, any>> {
   emit: (event: string, ...args: any[]) => void;
   /** 셀 값을 기록한다(토글/라디오 컬럼 등에서 사용). / Write a cell value (used by toggle/radio columns, etc.). */
   writeCell: (ri: number, field: string, value: any) => void;
-  /** 바디를 다시 그린다. / Re-render the body. */
-  doRender: () => void;
+  /**
+   * 그리기 요청을 낸다(받는 쪽이 계획대로 그린다). 이 객체는 무엇을 그릴지 정하지 않고 「무엇이 바뀌었나」만 알린다.
+   * / Submit a render request (the receiver paints per plan). This object reports what changed, not what to paint.
+   */
+  submitRender: (req: IRenderRequest) => void;
   /** 그리드 컨테이너 엘리먼트 조회. / Look up the grid container element. */
   getContainer: () => HTMLElement;
   // ── F1: 범위 선택(selection:'cells') 배선 훅(M-1) ──────────────
@@ -151,7 +156,9 @@ export class CellEventHandler<T extends Record<string, any> = any> {
     // doRender + selectionChange/rangeChange 를 처리했다(중복 emit 방지, M-1 회귀 격리).
     if (opts.selection === 'cells') return;
 
-    this._d.doRender();
+    // 여기까지 오면 바뀐 것은 행 선택뿐이다(토글·라디오처럼 값이 바뀌는 칸은 위 writeCell 이 따로 값 바뀜 요청을 냄).
+    // / Only row selection changed here (value-changing cells such as toggles/radios already sent their own value request via writeCell).
+    this._d.submitRender(RenderRequest.ROW_STATE);
     this._d.emit('selectionChange', {
       rows: rowMgr.getSelections(),
       rowIndexes: [...rowMgr.selectedRows],

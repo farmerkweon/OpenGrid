@@ -172,6 +172,12 @@ export const EN_MESSAGES = {
   },
   export: {
     printSummary: '{rows} rows × {cols} cols · {date}',
+    preparing: 'Preparing export…',
+    exporting: 'Exporting {done} / {total} rows ({percent}%)',
+    cancel: 'Cancel',
+    cancelled: 'Export cancelled',
+    done: 'Export complete',
+    exportError: 'Export failed',
   },
 } satisfies LocaleMessages;
 

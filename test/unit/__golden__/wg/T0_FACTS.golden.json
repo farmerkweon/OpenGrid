@@ -1,0 +1,429 @@
+{
+  "_about": "T0 L18(골든 DOM·대조 틀) 실측 사실. L19 가 T0_FACTS.json 으로 합친다. 시각은 date 실측.",
+  "_written": "2026-11-21 04:49:09",
+  "GD-sizes": {
+    "value": {
+      "GD-01": {
+        "fileBytes": 89702,
+        "lines": 1115,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-02": {
+        "fileBytes": 122378,
+        "lines": 1516,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 13,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-03": {
+        "fileBytes": 100436,
+        "lines": 1177,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 9,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-04": {
+        "fileBytes": 89393,
+        "lines": 1111,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 238,
+        "headerCell": 8,
+        "mergePh": 2,
+        "ariaRowspan": 0
+      },
+      "GD-05": {
+        "fileBytes": 89761,
+        "lines": 1113,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 238,
+        "headerCell": 8,
+        "mergePh": 2,
+        "ariaRowspan": 1
+      },
+      "GD-06": {
+        "fileBytes": 89748,
+        "lines": 1103,
+        "ogRow": 29,
+        "groupRow": 1,
+        "gridcell": 232,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-07": {
+        "fileBytes": 99995,
+        "lines": 1457,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-08": {
+        "fileBytes": 100520,
+        "lines": 1165,
+        "ogRow": 28,
+        "groupRow": 0,
+        "gridcell": 224,
+        "headerCell": 9,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-09": {
+        "fileBytes": 91863,
+        "lines": 1121,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-10": {
+        "fileBytes": 193869,
+        "lines": 2219,
+        "ogRow": 59,
+        "groupRow": 0,
+        "gridcell": 472,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-11": {
+        "fileBytes": 92046,
+        "lines": 1116,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-12": {
+        "fileBytes": 91437,
+        "lines": 1129,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 10,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-13": {
+        "fileBytes": 64085,
+        "lines": 775,
+        "ogRow": 20,
+        "groupRow": 0,
+        "gridcell": 160,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-14": {
+        "fileBytes": 89748,
+        "lines": 1103,
+        "ogRow": 29,
+        "groupRow": 1,
+        "gridcell": 232,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-15": {
+        "fileBytes": 90110,
+        "lines": 1117,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      }
+    },
+    "cmd": "WG_GOLDEN_UPDATE=1 npx vitest run test/unit/wg-golden-dom.test.ts (저장) → 파일을 node 로 세어 냄(og-row·gridcell·header-cell 정규식)",
+    "ts": "2026-11-21 04:35:03",
+    "note": "장면 공통 컨테이너 1200x640, 본문 상자 주입 1200x600. 첫 그림은 30행(VirtualScroll onRender 길) — GD-10 은 CF 적용 뒤 통째 수단으로 다시 그려 59행."
+  },
+  "GD-masking": {
+    "value": [
+      "og-r-<n> → og-r-@k (처음 나온 순서)"
+    ],
+    "cmd": "두 번 그린 사진 비교 15/15 바이트 같음 (wg-golden-dom.test.ts 「결정적」 시험)",
+    "ts": "2026-11-21 04:49:09"
+  },
+  "U-REG-08": {
+    "value": {
+      "scene": "GD-05",
+      "gridcellWithAriaColindex": 238,
+      "mergePlaceholders": 2,
+      "rowSpanMasterHasAriaColindex": true
+    },
+    "cmd": "GD-05.html 에서 role=\"gridcell\"(aria-colindex 를 가짐)·og-cell--merge-ph 셈",
+    "ts": "2026-11-21 04:35:03",
+    "note": "세로 병합 마스터 칸은 aria-colindex 를 가진 gridcell 로 세어지고(aria-rowspan=3), 가려진 두 자리(placeholder)는 aria-colindex 가 없다 → `.og-cell[aria-colindex]` 수 = 240 − 2 = 238."
+  },
+  "NR-15/GD-14": {
+    "value": {
+      "ogRow": 29,
+      "groupRow": 1,
+      "bodyHeightPx": 4384
+    },
+    "cmd": "GD-14.html 셈 (묶음 200행, 두 그룹 펼침)",
+    "ts": "2026-11-21 04:35:03",
+    "note": "지금 코드는 묶음을 펼쳐도 전 행을 DOM 으로 그리지 않는다 — 그린 범위(.og-row 29 + 묶음 행 1)만. 본문 높이는 펼친 합(137행×32)."
+  },
+  "ST-08": {
+    "value": {
+      "existingNetCatches": true,
+      "existingNetFailed": [
+        "test/unit/appearance-resolver.test.ts > leaf 데이터 헤더 th 의 cssText 가 변경 전 골든과 정확히 동일",
+        "test/unit/appearance-resolver.test.ts > extra 컬럼(stateColumn) th 의 cssText 가 변경 전 골든과 정확히 동일"
+      ],
+      "existingNetCounts": "171 파일(1 실패) · 1941 통과 · 2 실패 · 2 건너뜀",
+      "gd01Catches": true,
+      "gd01Line": 13
+    },
+    "cmd": "npx vitest run --config sessions/widegrid-perf-2026-11/steps/T0/L18/st08/vitest.st08.config.mjs (setupFiles 로 실행 중에만 renderHeader 감쌈, wg-* 뺌) · wg-golden-dom.test.ts ST-08",
+    "ts": "2026-11-21 04:42:17"
+  },
+  "ST-20": {
+    "value": [
+      {
+        "variant": "ⓐ 자료만 바꿈",
+        "verdict": "A ≠ B (잡음)",
+        "line": 786
+      },
+      {
+        "variant": "ⓑ og-selected 지움(행)",
+        "verdict": "A ≠ B (잡음)",
+        "line": 615
+      },
+      {
+        "variant": "ⓑ' 칸 클래스 지움",
+        "verdict": "A ≠ B (잡음)",
+        "line": 933
+      },
+      {
+        "variant": "ⓒ 칸 폭 +1px",
+        "verdict": "A ≠ B (잡음)",
+        "line": 777
+      },
+      {
+        "variant": "ⓓ aria-selected 바꿈(행)",
+        "verdict": "A ≠ B (잡음)",
+        "line": 615
+      },
+      {
+        "variant": "ⓓ' 칸 aria-label 바꿈",
+        "verdict": "A ≠ B (잡음)",
+        "line": 1080
+      },
+      {
+        "variant": "ⓔ 칸 순서 맞바꿈",
+        "verdict": "A ≠ B (잡음)",
+        "line": 1230
+      }
+    ],
+    "cmd": "npx vitest run test/unit/wg-df-differential.test.ts (ST-20 묶음)",
+    "ts": "2026-11-21 04:49:09",
+    "note": "og-selected·aria-selected 는 지금 코드에서 행에 붙어 ⓑⓓ 는 행에, ⓑ'ⓓ' 는 칸 판(덧붙임)."
+  },
+  "DF-01": {
+    "value": {
+      "seeds": {
+        "1": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 30,
+            "kinds": {
+              "orderBy": 6,
+              "diagonal": 4,
+              "removeRow": 2,
+              "scrollLeft": 3,
+              "dragHandle": 3,
+              "setFilter": 3,
+              "scrollTop": 2,
+              "addRow": 2,
+              "headerClick": 5
+            }
+          },
+          "editorOpened": 8,
+          "editorNotOpened": 0
+        },
+        "2": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 22,
+            "kinds": {
+              "diagonal": 2,
+              "addRow": 3,
+              "removeRow": 2,
+              "scrollTop": 3,
+              "scrollLeft": 6,
+              "headerClick": 3,
+              "orderBy": 1,
+              "dragHandle": 2
+            }
+          },
+          "editorOpened": 3,
+          "editorNotOpened": 0
+        },
+        "3": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 28,
+            "kinds": {
+              "diagonal": 5,
+              "addRow": 4,
+              "orderBy": 3,
+              "setFilter": 1,
+              "scrollTop": 4,
+              "removeRow": 3,
+              "scrollLeft": 4,
+              "headerClick": 3,
+              "dragHandle": 1
+            }
+          },
+          "editorOpened": 4,
+          "editorNotOpened": 0
+        },
+        "4": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 21,
+            "kinds": {
+              "addRow": 4,
+              "removeRow": 3,
+              "orderBy": 2,
+              "scrollLeft": 2,
+              "dragHandle": 1,
+              "diagonal": 4,
+              "headerClick": 2,
+              "scrollTop": 3
+            }
+          },
+          "editorOpened": 4,
+          "editorNotOpened": 0
+        },
+        "5": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 15,
+            "kinds": {
+              "orderBy": 1,
+              "dragHandle": 2,
+              "scrollLeft": 2,
+              "setFilter": 1,
+              "headerClick": 2,
+              "addRow": 3,
+              "diagonal": 2,
+              "scrollTop": 1,
+              "removeRow": 1
+            }
+          },
+          "editorOpened": 0,
+          "editorNotOpened": 0
+        },
+        "6": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 16,
+            "kinds": {
+              "scrollLeft": 2,
+              "removeRow": 4,
+              "dragHandle": 1,
+              "diagonal": 2,
+              "scrollTop": 1,
+              "addRow": 3,
+              "headerClick": 1,
+              "orderBy": 2
+            }
+          },
+          "editorOpened": 1,
+          "editorNotOpened": 0
+        },
+        "7": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 21,
+            "kinds": {
+              "scrollTop": 1,
+              "dragHandle": 3,
+              "headerClick": 1,
+              "orderBy": 4,
+              "addRow": 4,
+              "removeRow": 3,
+              "setFilter": 2,
+              "scrollLeft": 2,
+              "diagonal": 1
+            }
+          },
+          "editorOpened": 0,
+          "editorNotOpened": 0
+        },
+        "8": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 33,
+            "kinds": {
+              "diagonal": 3,
+              "removeRow": 4,
+              "scrollLeft": 4,
+              "orderBy": 3,
+              "dragHandle": 5,
+              "setFilter": 2,
+              "headerClick": 4,
+              "addRow": 3,
+              "scrollTop": 5
+            }
+          },
+          "editorOpened": 3,
+          "editorNotOpened": 0
+        }
+      },
+      "rowScope": "viewport",
+      "fullRenderMeans": "grid._doRender(...grid._visRange())"
+    },
+    "cmd": "npx vitest run test/unit/wg-df-differential.test.ts",
+    "ts": "2026-11-21 04:49:09",
+    "note": "화면 밖 범위 차이 = 「그려진 행 전부」로 비교했다면 A≠B 였던 조작 수. 지금 코드의 두 통째 길(VirtualScroll onRender→_doRender(s,e) / _doRender(..._visRange()))이 화면 밖 여분 행 수만 다름. R7 뒤 rowScope all 로."
+  },
+  "TR-28(L18 몫)": {
+    "value": {
+      "l18UnitFilesDurationSec": 364.56,
+      "tests": "50 passed (50)"
+    },
+    "cmd": "npx vitest run test/unit/wg-golden-dom.test.ts test/unit/wg-df-differential.test.ts",
+    "ts": "2026-11-21 04:49:09"
+  }
+}

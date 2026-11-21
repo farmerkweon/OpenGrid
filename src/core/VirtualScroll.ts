@@ -6,6 +6,16 @@ export interface VirtualScrollOptions {
   overscan?: number;
   /** 가시 범위 변화 시 호출되는 렌더 콜백. / Render callback fired when the visible range changes. */
   onRender: (startIndex: number, endIndex: number) => void;
+  /**
+   * 주면 자체 rAF 를 쓰지 않고, 다시 그려야 할 때 그 자리에서 지금 범위로 이 함수를 부른다(프레임 맞추기·같은 프레임
+   * 요청 합치기는 받는 쪽 몫). 안 주면 지금처럼 자체 rAF 로 한 프레임에 한 번 `onRender`.
+   * 셋째 인자는 「스크롤 위치만 바뀌었나」(행 수·행 높이·보이는 높이가 바뀐 것과 가르려고 — 받는 쪽이 푸터 계산 등을 거름).
+   *
+   * When given, no own rAF is used: on every repaint need this is called right away with the current range
+   * (the receiver aligns to frames and merges requests). Otherwise the own rAF calls `onRender` once per frame.
+   * The third argument tells whether only the scroll position changed.
+   */
+  requestRender?: (startIndex: number, endIndex: number, scrolledOnly: boolean) => void;
 }
 
 /** 현재 가시 행 범위와 스크롤 오프셋. / Current visible row range and scroll offset. */
@@ -41,6 +51,7 @@ export class VirtualScroll {
   private _viewportHeight: number = 0;
   private _rafId: number | null = null;
   private onRender: (startIndex: number, endIndex: number) => void;
+  private readonly _request: ((startIndex: number, endIndex: number, scrolledOnly: boolean) => void) | null;
 
   /**
    * 가상 스크롤 엔진 생성 및 컨테이너 scroll 리스너 부착. / Create the engine and attach the container scroll listener.
@@ -53,16 +64,26 @@ export class VirtualScroll {
     this.rowHeight = options.rowHeight;
     this.overscan = options.overscan ?? 5;
     this.onRender = options.onRender;
+    this._request = options.requestRender ?? null;
 
     this.container.addEventListener('scroll', this._onScroll, { passive: true });
   }
 
   private _onScroll = (): void => {
     this._scrollTop = this.container.scrollTop;
-    this._scheduleRender();
+    this._scheduleRender(true);
   };
 
-  private _scheduleRender(): void {
+  /** @param scrolledOnly - 스크롤 위치만 바뀜(행 수·높이는 그대로) / only the scroll position changed */
+  private _scheduleRender(scrolledOnly = false): void {
+    const request = this._request;
+    if (request !== null) {
+      // 받는 쪽(스케줄러)이 프레임에 맞춰 합친다 — 범위는 지금 값으로(늦게 온 요청의 범위가 이긴다).
+      // The receiver merges per frame; the range is taken now (a later request's range wins).
+      const range = this.getVisibleRange();
+      request(range.startIndex, range.endIndex, scrolledOnly);
+      return;
+    }
     if (this._rafId !== null) return;
     this._rafId = requestAnimationFrame(() => {
       this._rafId = null;
@@ -107,6 +128,9 @@ export class VirtualScroll {
    * @param height - 뷰포트 높이(px) / Viewport height in px
    */
   setViewportHeight(height: number): void {
+    // 같은 높이면 보이는 범위가 그대로라 다시 그릴 까닭이 없다(머리글을 다시 그릴 때마다 같은 값이 들어온다).
+    // Same height → same visible range, so no repaint (the header re-layout passes the same value every time).
+    if (height === this._viewportHeight) return;
     this._viewportHeight = height;
     this._scheduleRender();
   }

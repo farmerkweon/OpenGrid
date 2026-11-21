@@ -1,4 +1,10 @@
 import type { SortItem, FilterItem } from './types.js';
+import type { IRowSource } from './domain/sort/ports.js';
+import { Sorter } from './domain/sort/Sorter.js';
+import { SortKeyStore } from './domain/sort/SortKeyStore.js';
+import { ComparisonOrderer } from './domain/sort/ComparisonOrderer.js';
+import { SyncSortRunner } from './domain/sort/SyncSortRunner.js';
+import { DEFAULT_SORT_COMPARATOR } from './domain/sort/SortKeyColumn.js';
 
 type RowState = 'added' | 'edited' | 'removed' | 'none';
 
@@ -29,7 +35,7 @@ function nextRowId(): string {
  * layer.updateCell(0, 'name', 'Park');
  * layer.getChanges(); // { added, edited, removed }
  */
-export class DataLayer<T extends Record<string, any> = any> {
+export class DataLayer<T extends Record<string, any> = any> implements IRowSource<T> {
   private _data: T[] = [];
   private _original: T[] = [];
   private _meta: Map<string, RowMeta> = new Map();
@@ -64,6 +70,34 @@ export class DataLayer<T extends Record<string, any> = any> {
   private _getStrategy: <F extends Function>(slot: string, fallback: F) => F =
     (_slot, fallback) => fallback;
 
+  // 정렬은 키 뽑기·순서 매기기·실행을 맡은 객체들에 맡긴다. 이 계층은 표시 순서의 주인으로서
+  // 출발 순서를 내주고 결과를 받아 적기만 한다.
+  // Sorting is delegated; this layer only supplies the start order and records the result.
+  // 키 열·등수 보관소는 setData·clearData 때 메모리를 풀어야 하므로 이 계층이 쥐고 있는다.
+  // The key/rank store is held here so setData / clearData can release its memory.
+  private readonly _keys = new SortKeyStore(this);
+  // 긴 공통 머리말 정렬은 드물게 타므로 처음 필요해질 때 따로 내려받는다(받기 전에는 비교 정렬로 같은 순서).
+  // The rarely needed long-prefix sort is fetched on first need (until then the comparison sort gives the same order).
+  private readonly _sorter = new Sorter(this, this._keys, [new ComparisonOrderer()], new SyncSortRunner(), {
+    loadPrefixSort: () => import('./domain/sort/LcpMergeOrderer.js'),
+  });
+
+  private _structureVersion = 0;
+
+  /**
+   * 구조 판 번호 — 행 집합이나 표시 순서가 바뀔 때만 1씩 오른다. / Structure version — bumps only when the row set or display order changes.
+   *
+   * 안쪽 전용. 오르는 곳은 일곱 군데뿐이다: setData · clearData · addRow · removeRow · moveRow · 정렬 결과 적용(applySort) ·
+   * 필터 결과 적용(applyFilter). 칸 값 변경(updateCell·행 객체 직접 수정)으로는 오르지 않는다 — 값이 아니라 구조를 가리키므로,
+   * 합성 행 캐시처럼 「행 자리」만 기억하는 쪽이 무효화 열쇠로 쓴다.
+   * Internal use only. It bumps in exactly seven places: setData, clearData, addRow, removeRow, moveRow, applying a sort
+   * result (applySort) and applying a filter result (applyFilter). Value edits never bump it — it tracks structure, not
+   * values, so caches that only remember row positions (e.g. composed flat rows) can use it as an invalidation key.
+   */
+  get structureVersion(): number {
+    return this._structureVersion;
+  }
+
   /**
    * 데이터 계층 생성. / Create the data layer.
    *
@@ -93,6 +127,7 @@ export class DataLayer<T extends Record<string, any> = any> {
    * @param data - 설정할 행 배열 / Rows to set
    */
   setData(data: T[]): void {
+    this._keys.clear();
     this._data = data.map(row => {
       const id = nextRowId();
       const item = { ...row, [this._idField]: id };
@@ -102,6 +137,7 @@ export class DataLayer<T extends Record<string, any> = any> {
     this._original = this._data.map(r => ({ ...r }));
     this._rebuildIdMap();
     this._displayIndexes = this._data.map((_, i) => i);
+    this._structureVersion++;
   }
 
   /**
@@ -133,11 +169,13 @@ export class DataLayer<T extends Record<string, any> = any> {
 
   /** 모든 데이터·메타·인덱스 초기화. / Clear all data, metadata, and indexes. */
   clearData(): void {
+    this._keys.clear();
     this._data = [];
     this._original = [];
     this._meta.clear();
     this._idMap.clear();
     this._displayIndexes = [];
+    this._structureVersion++;
   }
 
   /** 표시(정렬/필터 후) 행 수. / Displayed (post sort/filter) row count. */
@@ -179,6 +217,7 @@ export class DataLayer<T extends Record<string, any> = any> {
       this._rebuildIdMap();
       this._displayIndexes = this._data.map((_, i) => i);
     }
+    this._structureVersion++;
   }
 
   /**
@@ -210,6 +249,7 @@ export class DataLayer<T extends Record<string, any> = any> {
       .map((r, i) => ({ r, i }))
       .filter(({ r }) => this._meta.get(r[this._idField] as string)?.state !== 'removed')
       .map(({ i }) => i);
+    this._structureVersion++;
 
     return row;
   }
@@ -235,6 +275,7 @@ export class DataLayer<T extends Record<string, any> = any> {
       .map((r, i) => ({ r, i }))
       .filter(({ r }) => this._meta.get(r[this._idField] as string)?.state !== 'removed')
       .map(({ i }) => i);
+    this._structureVersion++;
   }
 
   /**
@@ -500,53 +541,76 @@ export class DataLayer<T extends Record<string, any> = any> {
    * @param sortList - {field, dir} 정렬 키 목록(우선순위 순) / Sort keys {field, dir} in priority order
    */
   applySort(sortList: SortItem[]): void {
-    const notRemoved = (i: number) =>
-      this._meta.get((this._data[i] as any)?.[this._idField])?.state !== 'removed';
-
     if (sortList.length === 0) {
-      this._displayIndexes = this._data.map((_, i) => i).filter(notRemoved);
+      // 정렬 해제는 정렬이 아니라 「원 자료 순서에서 삭제 행만 뺀 것」으로 되돌리기다(필터도 함께 풀림).
+      // Clearing the sort restores source order minus removed rows (the filter is dropped too).
+      this._displayIndexes = this._data.map((_, i) => i).filter(i => this._isNotRemoved(i));
+      this._structureVersion++;
       return;
     }
 
-    // Schwartzian transform: 키를 미리 추출하여 sort comparator 비용 절감
-    const keyed = this._displayIndexes
-      .filter(notRemoved)
-      .map(idx => {
-        const row = this._data[idx]!;
-        return {
-          idx,
-          keys: sortList.map(s => row[s.field]),
-        };
-      });
-
     // Phase 2 슬롯 #1: 단일키 비교자. default = 현행 인라인(number는 av-bv, 그 외 String, null 우선).
-    //   멀티키 루프가 단일키 비교를 래핑. dir 부호 적용은 호출자(루프) 책임이므로 슬롯은 비교만.
+    //   여러 키 고리와 dir 부호 적용은 순서 매기기 쪽 책임이므로 슬롯은 비교만.
     //   ⚠️ 핫패스(행쌍당) — 슬롯 fn 예외는 호출자 책임(try/catch 비감쌈).
-    const cmpStrategy = this._getStrategy(
-      'sortComparator',
-      (a: any, b: any, _field: string, _dir: 'asc' | 'desc'): number => {
-        if (a == null && b == null) return 0;
-        if (a == null) return -1;
-        if (b == null) return 1;
-        if (typeof a === 'number' && typeof b === 'number') return a - b;
-        const sa = String(a), sb = String(b);
-        return sa < sb ? -1 : sa > sb ? 1 : 0;
-      },
-    );
+    const cmpStrategy = this._getStrategy('sortComparator', DEFAULT_SORT_COMPARATOR);
 
-    keyed.sort((a, b) => {
-      for (let si = 0; si < sortList.length; si++) {
-        const dir = sortList[si]!.dir;
-        const field = sortList[si]!.field;
-        const av = a.keys[si];
-        const bv = b.keys[si];
-        const cmp = cmpStrategy(av, bv, field, dir);
-        if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
-      }
-      return 0;
-    });
+    // 출발 = 지금 표시 순서에서 삭제 행을 뺀 것(같은 값끼리는 직전 순서를 지킨다). 여기서 한 번 뽑아 넘긴다 —
+    // 키 열과 순서 매기기가 같은 배열을 보고, 행마다 rowId 를 읽는 거르기도 한 번만 돈다.
+    // Start = current display order minus removed rows (equal keys keep their previous order). Taken once here
+    // and passed down, so key extraction and ordering share it and the removed-row filter runs once.
+    const start = this._displayIndexes.filter(i => this._isNotRemoved(i));
+    this._setOrder(this._sorter.sortNow(sortList, cmpStrategy, start), start.length);
+  }
 
-    this._displayIndexes = keyed.map(k => k.idx);
+  /**
+   * 정렬 원천: 원 자료(복사 아님). / Sort source: the source rows (not a copy).
+   *
+   * 안쪽 전용(정렬 객체가 읽음). 원 배열 그 자체이므로 받은 쪽은 읽기만 하고 고치지 않는다 —
+   * 길이를 바꾸거나 칸을 갈면 이 계층의 표시 순서·rowId 지도와 어긋난다. 10만 행을 정렬마다 베끼지 않으려고 복사하지 않는다.
+   * Internal use only (read by the sort objects). It is the live array: read it, never mutate it — changing its
+   * length or slots desynchronises the display order and rowId map. Not copied, to avoid a 100k-row copy per sort.
+   */
+  get rows(): readonly T[] {
+    return this._data;
+  }
+
+  /**
+   * 정렬 원천: 지금 표시 순서에서 삭제 행을 뺀 원 자료 색인. / Sort source: current display order minus removed rows.
+   *
+   * @returns 원 자료 색인 배열 / Source indexes
+   */
+  displayOrder(): readonly number[] {
+    return this._displayIndexes.filter(i => this._isNotRemoved(i));
+  }
+
+  /**
+   * 정렬 결과(원 자료 색인의 순열)를 표시 순서로 받아 적는다. / Record a sort result as the display order.
+   *
+   * 안쪽 전용(정렬 객체가 따로 낸 순서를 받아 적을 때 — applySort 는 출발 순서 길이로 같은 검사를 거친다). order 는 displayOrder() 의 **순열**이어야 한다 — 길이만 검사하고
+   * 중복·범위 밖은 보지 않는다(뜨거운 길이라 10만 칸 검사를 늘 치르지 않으려고). 받은 배열은 베껴 두므로 부른 쪽이 뒤에 고쳐도 되고,
+   * 이 메서드는 받은 배열을 고치지 않는다.
+   * Internal use only (applySort runs the same check against its start length). order must be a permutation of displayOrder(): only the length is
+   * checked (no duplicate/range scan on this hot path). The input is copied and never mutated.
+   *
+   * @param order - displayOrder() 와 같은 길이의 원 자료 색인 / Source indexes, same length as displayOrder()
+   * @throws RangeError 길이가 다르면 / when the length differs
+   */
+  applyOrder(order: ArrayLike<number>): void {
+    this._setOrder(order, this.displayOrder().length);
+  }
+
+  /** 길이가 expected 와 같을 때만 표시 순서로 받아 적는다(정렬 결과 적용의 한 자리). / Record order if its length is expected. */
+  private _setOrder(order: ArrayLike<number>, expected: number): void {
+    if (order.length !== expected) {
+      throw new RangeError(`DataLayer.applyOrder: expected ${expected} indexes, got ${order.length}`);
+    }
+    this._displayIndexes = Array.from(order);
+    this._structureVersion++;
+  }
+
+  /** 삭제 표시가 안 된 행인가. / Whether the row at source index i is not marked removed. */
+  private _isNotRemoved(i: number): boolean {
+    return this._meta.get((this._data[i] as any)?.[this._idField])?.state !== 'removed';
   }
 
   // ─── 필터 ─────────────────────────────────────────────
@@ -594,6 +658,7 @@ export class DataLayer<T extends Record<string, any> = any> {
         return true;
       })
       .map(({ i }) => i);
+    this._structureVersion++;
   }
 
   /**

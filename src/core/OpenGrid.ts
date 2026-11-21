@@ -14,8 +14,9 @@ import { localeRegistry, LocaleRegistry } from './i18n/LocaleRegistry.js';
 import type { PartialLocaleMessages, LocaleMessageKey, MessageValue } from './i18n/types.js';
 import type { SkinTokenDelta } from './types.js';
 import { RenderController } from './RenderController.js';
-import { GridComposer } from './GridComposer.js';
-import type { ComposerHost } from './GridComposer.js';
+import { GridComposer, type ComposerHost } from './GridComposer.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderScheduler, IHeaderSortIndicator } from './render/ports.js';
 import { MutationService } from './MutationService.js';
 import { FormulaController } from './FormulaController.js';
 import { CrossGridController } from './CrossGridController.js';
@@ -262,6 +263,8 @@ export class OpenGrid<T extends Record<string, any> = any>
   private _vs: VirtualScroll | null = null;
   private _ro: ResizeObserver | null = null;
   private _renderer: GridRenderer | null = null;
+  private _scheduler!: IRenderScheduler; // 그리기 요청의 유일한 입구(GridComposer 가 만듦) / single entry for render requests
+  private _sortIndicator!: IHeaderSortIndicator; // 머리글 정렬 표시만 고치는 객체(GridComposer 가 만듦) / patches only header sort marks
   // R12a(C10): 스타일 해결 단일 초크포인트. 컴포지션 루트에서 생성해 렌더러에 주입.
   private _appearance: AppearanceResolver | null = null;
   /**
@@ -1350,7 +1353,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       // DD-05 S2c-1(CF): 조건부서식 셀 적용 훅. CF 미설정(_cf=null)이거나 컬럼 통계 미캐시면 즉시 return
       //   → 셀 DOM 변화0(제로코스트·byte-identical). 설정 시 순수 파이프(paintFor)로 VisualSpec[] 산출 후
       //   렌더 브리지가 DOM 물질화. now 는 Date.now() 허용(OpenGrid 는 헤드리스 아님).
-      applyCF: (cellEl, ri, field, value, w, h) => {
+      applyCF: (cellEl, ri, field, value, w, h, track) => {
         if (!this._cf || !this._cfAppearance) return;
         const stats = this._cfStats.get(field);
         if (!stats) return;
@@ -1361,9 +1364,10 @@ export class OpenGrid<T extends Record<string, any> = any>
           makeRect(0, 0, w, h),
           { now: Date.now() },
         );
-        applyVisualSpecs(cellEl, specs, w, h);
+        applyVisualSpecs(cellEl, specs, w, h, track);
       },
     }, this._appearance);
+    this._renderer.setSortIndicator(this._sortIndicator); // 첫 머리글을 그리기 전에 / before the first header paint
     // R5(§3.1 C4): 렌더 루프 컨트롤러 배선. 협력자(renderer/vs/pagination)는 여전히
     // 이 _mount 가 소유·생성하며, 값·협력자는 전부 getter 클로저로 주입(늦은-null / colLayout
     // 재할당 견딤). vs 는 아래에서 생성되지만 getVs 는 지연 평가라 순서 무관 — 다만 어떤
@@ -1388,10 +1392,9 @@ export class OpenGrid<T extends Record<string, any> = any>
       getDetailMgr: () => this._detailMgr,
       getRangeMgr: () => this._rangeMgr,
       buildDetailRenderContext: () => this._buildDetailRenderContext(),
-      renderFooterEl: () => this._renderFooterEl(),
+      submitRender: (req) => this._scheduler.submit(req),
     });
-    // R6(§3.1 C5): 데이터 변경 서비스 배선. DataLayer(유일 writer)·협력자는 모두 getter 클로저로
-    // 지연 주입되며, 서비스는 렌더 내부를 모른 채 doRenderWindow/doRenderFull 콜백으로만 렌더를 유발한다.
+    // 데이터 변경 서비스 배선 — 협력자는 getter 클로저로 지연 주입, 렌더는 submitRender 요청으로만 유발한다.
     this._mutation = new MutationService<T>({
       getData: () => this._data,
       getVs: () => this._vs,
@@ -1408,8 +1411,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       t: (key, params) => this.t(key, params),
       applyFilters: () => this._applyFilters(),
       flushFormula: () => this._formula.flushRecalc(),
-      doRenderWindow: () => this._doRender(...this._visRange()),
-      doRenderFull: () => this._doRender(0, -1),
+      submitRender: (req) => this._scheduler.submit(req),
       resetFormulaState: () => {
         // F3(§9 E11): setData 는 rowId 를 재발급하므로 stable-id 앵커에 묶인 기존 수식은 전량
         // 무효(MVP, rowId 재바인딩은 P2) — 오케스트레이터를 새로 만들어 사이드카/그래프를 비운다.
@@ -1470,7 +1472,9 @@ export class OpenGrid<T extends Record<string, any> = any>
 
     this._vs = new VirtualScroll(this._renderer.bodyWrapper, {
       rowHeight: this._options.rowHeight,
-      onRender: (s, e) => this._doRender(s, e),
+      onRender: (s, e) => this._scheduler.submit(RenderRequest.rowsInclusive(s, e)),
+      // 스크롤만이면 「행 스크롤」, 행 수·높이가 바뀌면 통째 — 둘 다 sync 아님, 범위는 그릴 때 세로 창에 묻는다. / Scroll-only vs. size change; both async, range asked at paint time.
+      requestRender: (_s, _e, scrolledOnly) => this._scheduler.submit(scrolledOnly ? RenderRequest.SCROLLED : RenderRequest.WINDOW_CHANGED),
     });
 
     // 본문 스크롤을 `scroll` 이벤트로 알린다(옵션 onScroll·grid.on('scroll') 이 여기서 불린다).
@@ -1525,7 +1529,7 @@ export class OpenGrid<T extends Record<string, any> = any>
         this._options.pageSize,
         (e) => {
           this.emit('pageChange', e);
-          this._doRender(...this._visRange());
+          this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
         },
         (key, params) => this.t(key, params),
       );
@@ -1730,7 +1734,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       return;
     }
     this._renderHeader();
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
 
   /**
@@ -1777,7 +1781,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       // 전체 해제
       col._maskRevealed = true;
     }
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
 
   /**
@@ -1825,7 +1829,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     const { width } = this._container.getBoundingClientRect();
     if (width) this._recalcWidths(width);
     this._renderHeader();
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
 
   /**
@@ -1952,14 +1956,13 @@ export class OpenGrid<T extends Record<string, any> = any>
    */
   exportSheetsExcel(filename?: string): void { this._exportMgr.exportSheetsExcel(filename); }
 
-  // R5(§3.1 C4): 렌더 루프는 RenderController 로 이관. 아래는 동일 시그니처의 얇은 위임 —
-  // 다수 내부 호출부(및 테스트의 `(grid as any)._doRender` 몽키패치)를 그대로 유지하기 위함.
+  // 렌더 루프는 RenderController 의 얇은 위임 — `_doRender` 는 스케줄러가 부르는 그리기 자리(시험이 인스턴스에서 갈아 끼워 셈).
   private _onResize(): void { this._render.onResize(); }
   private _recalcWidths(totalWidth: number): void { this._render.recalcWidths(totalWidth); }
   // 헤더(컬럼 제목 행)를 다시 그린다
   private _renderHeader(): void { this._render.renderHeader(); }
   private _syncHeaderLayout(): void { this._render.syncHeaderLayout(); }
-  private _doRender(startIndex: number, endIndex: number): void { this._render.doRender(startIndex, endIndex); }
+  private _doRender(startIndex: number, endIndex: number, columns?: Parameters<RenderController<T>['doRender']>[2], rowWork?: Parameters<RenderController<T>['doRender']>[3]): void { this._render.doRender(startIndex, endIndex, columns, rowWork); }
 
   /**
    * F2(§4.5/§6.1): masterDetail.enabled 아니면 undefined(GridRenderer 는 기존 경로 그대로).
@@ -2004,7 +2007,7 @@ export class OpenGrid<T extends Record<string, any> = any>
 
   private _handleRowCheck(rowIndex: number, checked: boolean): void {
     this._rowMgr.check(rowIndex, checked);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
     this.emit('rowCheck', { rowIndex, checked, row: this._data.getRowByIndex(rowIndex) });
   }
 
@@ -2019,12 +2022,12 @@ export class OpenGrid<T extends Record<string, any> = any>
 
   private _handleAllCheck(checked: boolean): void {
     this._rowMgr.checkAll(checked, this._data.rowCount);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
     this.emit('allCheck', { checked });
   }
   private _handleRowDrop(fromIndex: number, toIndex: number): void {
     this._data.moveRow(fromIndex, toIndex);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
     this.emit('rowDrop', { fromIndex, toIndex });
     this._options.onRowDrop?.({ fromIndex, toIndex });
   }
@@ -2132,18 +2135,10 @@ export class OpenGrid<T extends Record<string, any> = any>
    */
   reorderRow(fromIndex: number, toIndex: number): void {
     this._data.moveRow(fromIndex, toIndex);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
-  private _handleColResize(colIndex: number, newWidth: number): void {
-    if (this._colWidths[colIndex] !== undefined) {
-      this._colWidths[colIndex] = newWidth;
-    }
-    // 사용자가 조절한 폭을 field 기준으로 기억 → 이후 재계산(_recalcWidths)에서 보존
-    const leaf = this._colLayout.visibleLeaves[colIndex];
-    if (leaf) this._userWidths.set(leaf.field, newWidth);
-    this._renderHeader();                 // 헤더 폭도 즉시 동기화
-    this._doRender(...this._visRange());
-  }
+  // 너비 조절을 놓은 뒤의 폭 저장·다시 그리기는 렌더 루프(폭 계산의 주인)에 맡긴다. / Width commit and repaint belong to the render loop.
+  private _handleColResize(colIndex: number, newWidth: number): void { this._render.commitColumnWidth(colIndex, newWidth); }
   private _handleKeyDown(e: KeyboardEvent): void { this._kbdMgr.handleKeyDown(e); }
 
   private _setFocusCell(ri: number, ci: number): void {
@@ -2203,7 +2198,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._mutation.setData(data);
     // DD-05 S2c-1(CF): 데이터 전량 교체 → 컬럼 통계 무효화·재계산(캐시 갱신). CF 미설정이면 무비용.
     // / CF: full data replace → invalidate & recompute column stats (cache refresh). No-op when CF is unset.
-    if (this._cf) { this._recomputeCFStats(); this._doRender(...this._visRange()); }
+    if (this._cf) { this._recomputeCFStats(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE); }
   }
 
   /**
@@ -2302,7 +2297,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       // 해제: 엔진·통계 캐시 clear 후 재렌더(브리지가 이전 CF 잔재 제거).
       this._cf = null;
       this._cfStats.clear();
-      this._doRender(...this._visRange());
+      this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
       return;
     }
     // 동적 import — cf/ 는 별 청크. 로드 후 엔진 조립 + 색 시드 읽기 포트·통계 계산기 보관(cf/ 정적 참조 회피).
@@ -2311,7 +2306,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._cfAppearance = cf.staticAppearanceView();
     this._cfComputeStats = cf.computeColumnStats;
     this._recomputeCFStats();
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
 
   /**
@@ -3409,7 +3404,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 显示中的叶子列的定义列表。
    */
-  getColumnDefs(): ColumnDef<T>[] { return this._colLayout.visibleLeaves; }
+  getColumnDefs(): ColumnDef<T>[] { return this._colLayout.visibleLeaves.slice(); } // 사본 — 안쪽 캐시를 밖에서 못 바꾸게 / a copy, so callers cannot alter the cached list
   /**
    * 숨김 포함 전체 리프 컬럼 정의.
    *
@@ -3445,7 +3440,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._colLayout.setColumns(columns);
     this._recalcWidths(this._container.getBoundingClientRect().width);
     this._renderHeader();
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
     ctx.result = { columnCount: columns.length };
     this._trigMgr.exec('after:applyColumns', ctx);
   }
@@ -3461,7 +3456,7 @@ export class OpenGrid<T extends Record<string, any> = any>
   insertColumn(colDef: ColumnDef<T>, position?: Position): void {
     this._colLayout.addColumn(colDef, position as any);
     this._recalcWidths(this._container.getBoundingClientRect().width);
-    this._renderHeader(); this._doRender(...this._visRange());
+    this._renderHeader(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
    * 컬럼을 삭제한다(해당 field 참조 수식은 #REF 처리).
@@ -3477,7 +3472,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._recalcWidths(this._container.getBoundingClientRect().width);
     // F3-R28(P0): 열 삭제 → 그 field 를 deps 로 가진 수식들이 자연 #REF 귀결(accessor.hasField=false).
     this._formula.afterRecalc(this._recalc.invalidateField(field), { skipRender: true });
-    this._renderHeader(); this._doRender(...this._visRange());
+    this._renderHeader(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
 
   private _reorderColumn(fromIdx: number, toIdx: number): void {
@@ -3502,7 +3497,7 @@ export class OpenGrid<T extends Record<string, any> = any>
   hideColumn(field: string | string[]): void {
     this._colLayout.hideColumn(field);
     this._recalcWidths(this._container.getBoundingClientRect().width);
-    this._renderHeader(); this._doRender(...this._visRange());
+    this._renderHeader(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
    * 숨긴 컬럼(들)을 다시 표시한다.
@@ -3516,7 +3511,7 @@ export class OpenGrid<T extends Record<string, any> = any>
   showColumn(field: string | string[]): void {
     this._colLayout.showColumn(field);
     this._recalcWidths(this._container.getBoundingClientRect().width);
-    this._renderHeader(); this._doRender(...this._visRange());
+    this._renderHeader(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
    * field 의 보이는 컬럼 인덱스(-1 = 없음).
@@ -3611,7 +3606,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 把指定的行激活(选中)。
    */
-  activate(index: number): void { this._rowMgr.activate(index); this._doRender(...this._visRange()); }
+  activate(index: number): void { this._rowMgr.activate(index); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE); }
   /**
    * 선택 해제.
    *
@@ -3621,7 +3616,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 解除选择。
    */
-  deselect(): void { this._rowMgr.deselect(); this._doRender(...this._visRange()); }
+  deselect(): void { this._rowMgr.deselect(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE); }
   /**
    * 체크된 행 목록({row, rowIndex}).
    *
@@ -3673,7 +3668,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    */
   checkByValue(field: string, values: any[]): void {
     this._rowMgr.checkByValue(field, values);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
    * @deprecated no-op stub — id 기반 체크 해제 미구현. 전체 해제는 `uncheckAll()` 사용.
@@ -3694,7 +3689,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 解除所有勾选。
    */
-  uncheckAll(): void { this._rowMgr.uncheckAll(); this._doRender(...this._visRange()); }
+  uncheckAll(): void { this._rowMgr.uncheckAll(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE); }
   /**
    * 데이터를 정렬한다 — 헤더 클릭 없이 코드로 정렬을 걸 때 쓴다. 한 컬럼만 정렬하려면 field 와 방향을,
    * 여러 컬럼을 우선순위대로 정렬하려면 SortItem 배열을 넘긴다. 정렬 전후로 `before/after:orderBy` 트리거가
@@ -3840,7 +3835,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    *
    * 把左起 n 列对横向滚动也固定。想让名称、id 这类识别用的列始终可见,只把其余部分左右浏览时使用(n=0 则解除固定)。
    */
-  freeze(n: number): void { this._colLayout.setFrozen(n); this._renderHeader(); this._doRender(...this._visRange()); }
+  freeze(n: number): void { this._colLayout.setFrozen(n); this._renderHeader(); this._scheduler.submit(RenderRequest.REPAINT_VISIBLE); }
   /**
    * 수동 병합: [{row, col, rowSpan?, colSpan?}]
    *
@@ -3852,7 +3847,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    */
   mergeCells(cells: MergeCell[]): void {
     this._mergeEngine.applyMergeCells(cells);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
    * 자동 병합: 지정 필드 컬럼에서 연속 같은 값을 rowSpan으로 묶는다.
@@ -3872,7 +3867,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       if (ci >= 0) { colIndexes.push(ci); fieldNames.push(f); }
     }
     this._mergeEngine.applyAutoMerge(this._data.getData(), colIndexes, fieldNames);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
 
   /**
@@ -3886,7 +3881,7 @@ export class OpenGrid<T extends Record<string, any> = any>
    */
   clearMerge(): void {
     this._mergeEngine.clear();
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
    * @deprecated no-op stub — 행 고정(freeze rows) 미구현. 컬럼 고정만 지원하며 `freeze(n)` 사용.
@@ -4232,18 +4227,18 @@ export class OpenGrid<T extends Record<string, any> = any>
   jumpToRow(rowIndex: number): void {
     this._rowMgr.selectSingle(rowIndex);
     this._vs?.scrollToRow(rowIndex);
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
-   * @deprecated no-op stub — 특정 컬럼으로 가로 스크롤 이동 미구현. 행 이동은 `jumpToRow(rowIndex)` 사용.
+   * 필드 이름의 컬럼이 보이게 가로로 스크롤한다(가로 가상화로 칸이 DOM 에 없어도 됨). 없는 필드·숨은 컬럼이면 아무 일 없음.
    *
-   * no-op stub — horizontal jump-to-column is not implemented; use `jumpToRow(rowIndex)`.
+   * Scroll horizontally so the column with this field is visible (works even when column virtualization keeps its cells out of the DOM). Unknown or hidden fields do nothing.
    *
-   * no-op スタブ — 特定の列への横スクロール移動は未実装です。行の移動は `jumpToRow(rowIndex)` を使ってください。
+   * フィールド名の列が見えるように横スクロールします(列の仮想化でセルが DOM に無くても動きます)。存在しない・非表示の列なら何もしません。
    *
-   * no-op 桩 — 向特定列的横向滚动移动未实现。行的移动请用 `jumpToRow(rowIndex)`。
+   * 横向滚动使该字段的列可见(即使列虚拟化使其单元格不在 DOM 中也可)。不存在或隐藏的字段不做任何事。
    */
-  jumpToCol(_field: string): void {}
+  jumpToCol(field: string): void { this._render?.revealColumn(this._colLayout.visibleLeaves.findIndex((c) => c.field === field)); }
   /**
    * 현재 스크롤 좌표.
    *
@@ -4363,7 +4358,7 @@ export class OpenGrid<T extends Record<string, any> = any>
       ? '1px solid var(--og-border-color, #e0e0e0)'
       : (this._appearance ? this._appearance.border() : '1px solid var(--og-border-color, #e0e0e0)');
     this._renderHeader();
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
   }
   /**
    * 지금 적용된 스킨 id 를 돌려준다('default' = 기본 형태). 어떤 스킨이 걸려 있는지 확인하거나 토글할 때 쓴다.
@@ -4488,7 +4483,7 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._findMgr?.refreshLabels();
     this._filterPanel = null; // 다음 open 때 새 로케일로 재구축 / rebuilt with the new locale on next open
     this._renderHeader();
-    this._doRender(...this._visRange());
+    this._scheduler.submit(RenderRequest.REPAINT_VISIBLE);
     this.emit('localeChange', { locale, prev });
   }
 
@@ -4856,10 +4851,13 @@ export class OpenGrid<T extends Record<string, any> = any>
     this._trigMgr.clear();
     this._ro?.disconnect();
     this._vs?.destroy();
+    this._scheduler?.destroy();
+    this._render?.destroy();
     this._rt?.detach();                // DD-07: 실시간 구독·타이머·소켓 누수 방지. / Detach realtime subscriptions/timers/sockets.
     this._rt = null;
     this._chartMgr?.destroyCharts();   // F4: 열린 차트 패널·구독 누수 방지(§5.2)
     this._detailMgr?.destroy();
+    this._footerMgr?.destroy();
     this._filterPanel?.destroy();
     this._dnd?.destroy();
     if (this._cmHandler)    this._container.removeEventListener('contextmenu', this._cmHandler);

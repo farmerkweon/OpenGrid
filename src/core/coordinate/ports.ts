@@ -38,6 +38,14 @@ export const SLICE_OWNERSHIP = {
   rowHeight: 'AppearanceResolver',
   measured: 'MeasurementSeam',
   selection: 'SelectionModel',
+  // 넓은 그리드에서 다시 그리기를 줄이려고 지식마다 주인을 하나씩 정한다: 컬럼 폭·위치, 보이는 컬럼 창,
+  // 그리기 요청 모으기, 정렬 키·등수 보관, 지금 그려진 본문.
+  // One owner per piece of knowledge used to avoid full redraws on wide grids.
+  colGeometry: 'ColumnGeometry',
+  colWindow: 'ColumnWindowPolicy',
+  renderRequest: 'RenderScheduler',
+  sortRanks: 'SortKeyStore',
+  drawnBody: 'BodyView',
 } as const;
 
 /** 슬라이스 키. / Slice key. */

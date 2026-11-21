@@ -3,6 +3,9 @@ import type { ColumnLayout } from './ColumnLayout.js';
 import type { VirtualScroll } from './VirtualScroll.js';
 import type { Pagination } from './Pagination.js';
 import type { SortItem, FilterItem } from './types.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderRequest } from './domain/render/ports.js';
+import type { IHeaderSortIndicator } from './render/ports.js';
 
 /**
  * {@link SortFilterManager} 의존성 주입 계약. / Dependency-injection contract for {@link SortFilterManager}.
@@ -26,8 +29,9 @@ export interface SortFilterDeps<T extends Record<string, any>> {
   getOptions: () => any;
   /** 헤더(정렬/필터 표시)를 다시 그린다. / Re-render the header (sort/filter indicators). */
   renderHeader: () => void;
-  /** 바디를 다시 그린다. / Re-render the body. */
-  doRender: () => void;
+  /** 그리기 요청을 낸다 — 정렬·필터 뒤 보이는 범위를 다시 그린다. 그리기는 요청 통로 하나로만 들어가 횟수·범위를 한곳에서 정한다.
+   * / Submit a render request — after sort/filter, repaint the visible range. Rendering enters through a single request channel so count and range are decided in one place. */
+  submitRender: (req: IRenderRequest) => void;
   /** 스크린리더용 상태 안내. / Announce a status message for screen readers. */
   announce: (msg: string) => void;
   /** i18n: 정렬 상태어 + announce 해석. / i18n: resolve sort state words + announce. */
@@ -38,6 +42,9 @@ export interface SortFilterDeps<T extends Record<string, any>> {
    * / C0.5/§2.5: after sort/filter, re-project the F1 range selection by its rowId
    * set instead of clearing it. */
   onReproject?: () => void;
+  /** 머리글 정렬 표시만 고치는 곳. 있으면 정렬 때 머리글을 다시 만들지 않고 이것에 정렬 목록을 알린다(없으면 renderHeader).
+   * / Patches header sort marks only; when given, sorting notifies it instead of rebuilding the header (otherwise renderHeader). */
+  sortIndicator?: IHeaderSortIndicator;
 }
 
 /**
@@ -92,8 +99,8 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     }
     this._d.getData().applySort(this._sortList);
     this._d.onReproject?.();
-    this._d.renderHeader();
-    this._d.doRender();
+    this._showSort();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
     const sortedItem = this._sortList.find(s => s.field === field);
     const dirLabel = this._d.t(sortedItem ? (sortedItem.dir === 'asc' ? 'sort.asc' : 'sort.desc') : 'sort.none');
     this._d.announce(this._d.t('sort.announce', { field, dir: dirLabel }));
@@ -120,8 +127,8 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     }
     this._d.getData().applySort(this._sortList);
     this._d.onReproject?.();
-    this._d.renderHeader();
-    this._d.doRender();
+    this._showSort();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
     this._emitSortChange(Array.isArray(fieldOrList) ? fieldOrList[0]?.field : fieldOrList);
   }
 
@@ -142,14 +149,21 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     this._d.emit('sortChange', evt);
   }
 
+  /** 정렬 표시를 지금 목록에 맞춘다 — 표시 객체가 있으면 그것만, 없으면 머리글을 다시 그림. / Sync sort marks to the list. */
+  private _showSort(): void {
+    const ind = this._d.sortIndicator;
+    if (ind) ind.update(this._sortList);
+    else this._d.renderHeader();
+  }
+
   /** 모든 정렬을 해제한다. / Clear all sorting. */
   resetSort(): void {
     const hadSort = this._sortList.length > 0;
     this._sortList = [];
     this._d.getData().applySort([]);
     this._d.onReproject?.();
-    this._d.renderHeader();
-    this._d.doRender();
+    this._showSort();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
     if (hadSort) this._emitSortChange(undefined); // 없던 정렬을 풀 때는 조용히 / silent when nothing was sorted
   }
 
@@ -178,7 +192,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     this._filters[field] = filterItems;
     this.applyFilters();
     this._d.renderHeader();
-    this._d.doRender();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
     this._d.emit('filterChange', { field, filterItems, allFilters: this._filters });
   }
 
@@ -192,7 +206,7 @@ export class SortFilterManager<T extends Record<string, any> = any> {
     else this._filters = {};
     this.applyFilters();
     this._d.renderHeader();
-    this._d.doRender();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   /** 현재 컬럼별 필터 상태의 복사본을 반환한다. / Return a copy of the current per-column filter state. */

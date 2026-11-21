@@ -1,0 +1,331 @@
+# 공개 API 더한 목록(AR-20) — T0 지금 값. 기존 public_api_surface.txt(OpenGrid 공개 메서드)가 못 지키는 몫만.
+# 형식: <구역>\t<이름>[\t<종류>]. 사라지면 안 됨(더하는 것만 — 허용: virtualColumns·cellTextLimit·pageVirtualization·maxChars).
+# 만든 명령: npx vite-node sessions/widegrid-perf-2026-11/steps/T0/L20/scripts/gen_inventory.ts -- api
+export	A11yTableModel	interface
+export	AllCheckEvent	interface
+export	CFCondition	type
+export	CFEncodeSpec	type
+export	CFInlineStyle	interface
+export	CFRule	interface
+export	CFScope	interface
+export	CFStyleRef	interface
+export	CellEvent	interface
+export	CellKeyEvent	interface
+export	CellRange	interface
+export	ChartAdapter	interface
+export	ChartConfig	interface
+export	ChartDataModel	interface
+export	ChartGlobalOptions	interface
+export	ChartInstance	interface
+export	ChartPoint	interface
+export	ChartRenderSpec	interface
+export	ChartSeries	interface
+export	ChartSeriesSpec	interface
+export	ChartSource	type
+export	ChartTheme	interface
+export	ChartType	type
+export	ColumnDef	interface
+export	ColumnGroupDef	interface
+export	ColumnOrGroup	type
+export	DEFAULT_ICON_ROLES	const
+export	DataType	type
+export	DeprecationInfo	interface
+export	DuplicatePolicy	type
+export	EditEvent	interface
+export	EditorDef	interface
+export	EntryOrigin	type
+export	ExportOptions	interface
+export	FilterEvent	interface
+export	FilterItem	interface
+export	FilterSelectColumn	interface
+export	FilterSelectConfig	interface
+export	FlatRowRef	interface
+export	FooterDef	interface
+export	FormulaChangeEvent	interface
+export	FormulaErrorEvent	interface
+export	FormulaRecalcEvent	interface
+export	GridDropEvent	interface
+export	GridEventMap	interface
+export	GridMappingEvent	interface
+export	GridOptions	interface
+export	GridShuttle	class
+export	GridShuttleOptions	interface
+export	IRegistry	interface
+export	IconRegistry	class
+export	IconRenderOptions	interface
+export	LocaleChangeEvent	interface
+export	LocaleMessageKey	type
+export	LocaleMessages	interface
+export	LocaleMeta	interface
+export	LocaleRegisterResult	interface
+export	LocaleRegistry	class
+export	MergeCell	interface
+export	MessageValue	type
+export	OpenGrid	class
+export	OpenGridInstance	interface
+export	OrgChart	class
+export	OrgChartColumnDef	interface
+export	OrgChartOptions	interface
+export	OverrideCallOptions	interface
+export	OverrideLayerFn	type
+export	PageChangeEvent	interface
+export	PartialLocaleMessages	type
+export	Position	type
+export	PrintOptions	interface
+export	RESERVED_PREFIXES	const
+export	RangeChangeEvent	interface
+export	RangeCopyEvent	interface
+export	RangeFillEvent	interface
+export	RegisterAction	type
+export	RegisterOptions	interface
+export	RegisterReason	type
+export	RegisterResult	interface
+export	RegistryEntry	interface
+export	RendererDef	interface
+export	RendererName	type
+export	RendererType	type
+export	RowCheckEvent	interface
+export	RowDropEvent	interface
+export	RowEvent	interface
+export	RowExpandEvent	interface
+export	SapParseResult	interface
+export	ScrollEvent	interface
+export	SelectionEvent	interface
+export	SelectionMode	type
+export	SkinRegistry	class
+export	SkinTokenDelta	type
+export	SortDir	type
+export	SortEvent	interface
+export	SortItem	interface
+export	SummaryOp	type
+export	SummaryOpName	type
+export	SummaryOptions	interface
+export	TreeNodeIconDef	interface
+export	TriggerContext	interface
+export	TriggerEvent	type
+export	TriggerHandler	type
+export	TypedRegistry	class
+export	TypedRegistryConfig	interface
+export	WriteCellsSkipEvent	interface
+export	XmlConverter	class
+export	XmlParseOptions	interface
+export	XmlStringifyOptions	interface
+export	createGridShuttle	function
+export	iconRegistry	const
+export	isReserved	function
+export	localeRegistry	const
+export	renderIcon	function
+export	skinRegistry	const
+export	t	function
+GridOptions	ariaLabel
+GridOptions	autoHeight
+GridOptions	calcPrecision
+GridOptions	chart
+GridOptions	checkColumn
+GridOptions	clipboard
+GridOptions	columnReorder
+GridOptions	columns
+GridOptions	conditionalFormat
+GridOptions	contextMenu
+GridOptions	crossGrid
+GridOptions	crossGridMapping
+GridOptions	cssVars
+GridOptions	defaultColumnWidth
+GridOptions	defaultSort
+GridOptions	density
+GridOptions	draggable
+GridOptions	editMode
+GridOptions	editable
+GridOptions	expandOnLoad
+GridOptions	fallbackViewportHeight
+GridOptions	fillWidth
+GridOptions	filterable
+GridOptions	footer
+GridOptions	footerHeight
+GridOptions	footerPosition
+GridOptions	formula
+GridOptions	frozenColumns
+GridOptions	frozenRows
+GridOptions	groupBy
+GridOptions	headerHeight
+GridOptions	height
+GridOptions	history
+GridOptions	historySize
+GridOptions	locale
+GridOptions	masterDetail
+GridOptions	mergeCells
+GridOptions	messages
+GridOptions	multiSort
+GridOptions	onCellClick
+GridOptions	onCellDblClick
+GridOptions	onCellKeyDown
+GridOptions	onCellKeyPress
+GridOptions	onCellKeyUp
+GridOptions	onCellMouseDown
+GridOptions	onCellMouseMove
+GridOptions	onCellMouseOut
+GridOptions	onCellMouseOver
+GridOptions	onCellMouseUp
+GridOptions	onColumnReorder
+GridOptions	onDataChange
+GridOptions	onDrop
+GridOptions	onEditBefore
+GridOptions	onEditEnd
+GridOptions	onEditStart
+GridOptions	onFilterChange
+GridOptions	onGridDropAfter
+GridOptions	onGridDropBefore
+GridOptions	onGridDropComplete
+GridOptions	onGridDropMapping
+GridOptions	onRangeChange
+GridOptions	onRangeCopy
+GridOptions	onRangeFill
+GridOptions	onReady
+GridOptions	onRowClick
+GridOptions	onRowCollapse
+GridOptions	onRowDblClick
+GridOptions	onRowDrop
+GridOptions	onRowExpand
+GridOptions	onRowMouseDown
+GridOptions	onRowMouseMove
+GridOptions	onRowMouseOut
+GridOptions	onRowMouseOver
+GridOptions	onRowMouseUp
+GridOptions	onScroll
+GridOptions	onSelectionChange
+GridOptions	onSortChange
+GridOptions	overrideStrict
+GridOptions	pageSize
+GridOptions	pagination
+GridOptions	rangeSelection
+GridOptions	rowHeight
+GridOptions	rowNumber
+GridOptions	selection
+GridOptions	skin
+GridOptions	sortable
+GridOptions	stateColumn
+GridOptions	summary
+GridOptions	texture
+GridOptions	theme
+GridOptions	tooltips
+GridOptions	treeId
+GridOptions	treeMode
+GridOptions	treeParentId
+GridOptions	width
+GridOptions	worksheets
+ColumnDef	_colIndex
+ColumnDef	_depth
+ColumnDef	_leaf
+ColumnDef	_maskRevealed
+ColumnDef	_maskRevealedRows
+ColumnDef	align
+ColumnDef	alt
+ColumnDef	ariaLabel
+ColumnDef	barcodeHeight
+ColumnDef	cellStyle
+ColumnDef	children
+ColumnDef	colSpan
+ColumnDef	currency
+ColumnDef	editable
+ColumnDef	editor
+ColumnDef	field
+ColumnDef	filterable
+ColumnDef	flex
+ColumnDef	format
+ColumnDef	formula
+ColumnDef	formulaPrecision
+ColumnDef	frozen
+ColumnDef	group
+ColumnDef	header
+ColumnDef	headerAlign
+ColumnDef	headerStyle
+ColumnDef	headerWrap
+ColumnDef	hidden
+ColumnDef	mask
+ColumnDef	maxWidth
+ColumnDef	minWidth
+ColumnDef	options
+ColumnDef	optionsFn
+ColumnDef	precision
+ColumnDef	renderer
+ColumnDef	resizable
+ColumnDef	rowSpan
+ColumnDef	sanitize
+ColumnDef	sortable
+ColumnDef	tooltip
+ColumnDef	treeNodeIcon
+ColumnDef	type
+ColumnDef	valueMap
+ColumnDef	width
+ColumnDef	wrap
+GridEventMap	allCheck
+GridEventMap	cellClick
+GridEventMap	cellDblClick
+GridEventMap	cellKeyDown
+GridEventMap	cellKeyPress
+GridEventMap	cellKeyUp
+GridEventMap	cellMouseDown
+GridEventMap	cellMouseMove
+GridEventMap	cellMouseOut
+GridEventMap	cellMouseOver
+GridEventMap	cellMouseUp
+GridEventMap	chartCreate
+GridEventMap	chartDestroy
+GridEventMap	chartPointClick
+GridEventMap	chartRender
+GridEventMap	dataChange
+GridEventMap	editEnd
+GridEventMap	editStart
+GridEventMap	filterChange
+GridEventMap	formulaChange
+GridEventMap	formulaError
+GridEventMap	formulaRecalc
+GridEventMap	gridDropAfter
+GridEventMap	gridDropBefore
+GridEventMap	gridDropComplete
+GridEventMap	gridDropMapping
+GridEventMap	localeChange
+GridEventMap	pageChange
+GridEventMap	rangeChange
+GridEventMap	rangeCopy
+GridEventMap	rangeFill
+GridEventMap	ready
+GridEventMap	rowCheck
+GridEventMap	rowClick
+GridEventMap	rowCollapse
+GridEventMap	rowDblClick
+GridEventMap	rowDrop
+GridEventMap	rowExpand
+GridEventMap	rowMouseDown
+GridEventMap	rowMouseMove
+GridEventMap	rowMouseOut
+GridEventMap	rowMouseOver
+GridEventMap	rowMouseUp
+GridEventMap	scroll
+GridEventMap	selectionChange
+GridEventMap	sortChange
+GridEventMap	writeCellsSkip
+RenderContext	colIndex
+RenderContext	column
+RenderContext	displayFormatter
+RenderContext	displayValue
+RenderContext	hasCellFormula
+RenderContext	isSelected
+RenderContext	row
+RenderContext	rowIndex
+RenderContext	rowState
+RenderContext	t
+RenderContext	value
+OpenGrid	get extensions
+OpenGrid	prop override
+OpenGrid	static method addDefaultOverride
+OpenGrid	static method addDefaultStrategy
+OpenGrid	static method defaultOverride
+OpenGrid	static method defineIconSet
+OpenGrid	static method defineLocale
+OpenGrid	static method defineSkin
+OpenGrid	static method destroyAllIn
+OpenGrid	static method instancesIn
+OpenGrid	static method registerEditor
+OpenGrid	static method registerRenderer
+OpenGrid	static prop defaults

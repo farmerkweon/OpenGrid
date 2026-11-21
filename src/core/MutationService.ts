@@ -7,6 +7,8 @@ import type { RowManager } from './RowManager.js';
 import type { GroupTreeManager } from './GroupTreeManager.js';
 import type { TriggerManager } from './TriggerManager.js';
 import type { GridOptions, EditEvent, Position } from './types.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderRequest } from './domain/render/ports.js';
 
 /**
  * R4(§3.4, R-9a/R-9b): 모든 데이터 변경의 mutate→render→emit 꼬리를 단일 초크포인트
@@ -24,12 +26,12 @@ import type { GridOptions, EditEvent, Position } from './types.js';
  *               / Updates the VS/Pagination row count. `'count'` = current row count
  *               (insert/delete/push/unshift), `'zero'` = 0 (clearData). Omitted = no update
  *               (writeCell/setData — row count unchanged, or handled inline).
- * - `renderMode` : 'sync-window'=`_doRender(...visRange)`(insert/delete/write/endBatch),
- *               'full'=`_doRender(0,-1)`(clearData),
+ * - `renderMode` : 'sync-window'=보이는 범위 그리기 요청(insert/delete/write/endBatch),
+ *               'full'=본문 비우기 요청 rows:'clear'(clearData),
  *               'async-vs'=명령형 렌더 없음. setData 는 setTotalRows/rebuild 로 VS 가
  *               rAF 스케줄(비동기)하므로 `commit` 은 동기 `_doRender` 를 **하지 않는다**.
- *               / `'sync-window'` = `_doRender(...visRange)` (insert/delete/write/endBatch),
- *               `'full'` = `_doRender(0,-1)` (clearData), `'async-vs'` = no imperative render.
+ *               / `'sync-window'` = a visible-range render request (insert/delete/write/endBatch),
+ *               `'full'` = a clear-body request, rows:'clear' (clearData), `'async-vs'` = no imperative render.
  *               For setData, VS schedules via rAF through setTotalRows/rebuild, so `commit`
  *               **does not** invoke a synchronous `_doRender`.
  * - `emitBeforeRender` : true=emit 을 render 앞에(writeCell/endBatch — 현행 순서), 기본 false=render 먼저(insert/delete).
@@ -110,10 +112,11 @@ export interface MutationServiceDeps<T extends Record<string, any> = any> {
   applyFilters: () => void;
   /** writeCell/endBatch 커밋 emit 직전 수식 dirty seed 소비. / Consume formula dirty seeds right before the writeCell/endBatch commit emit. */
   flushFormula: () => void;
-  /** 현재 가시 범위 렌더(this._doRender(...this._visRange())). 서비스는 렌더 내부를 모른다. / Render the current visible range (this._doRender(...this._visRange())). The service has no knowledge of render internals. */
-  doRenderWindow: () => void;
-  /** 전체 렌더(this._doRender(0, -1)) — clearData full 모드. / Full render (this._doRender(0, -1)) — clearData's full mode. */
-  doRenderFull: () => void;
+  /**
+   * 그리기 요청을 낸다. 'sync-window' 는 보이는 범위, 'full'(clearData) 은 본문 비우기 요청. 서비스는 렌더 내부를 모른다.
+   * / Submit a render request: 'sync-window' = visible range, 'full' (clearData) = clear the body. The service has no knowledge of render internals.
+   */
+  submitRender: (req: IRenderRequest) => void;
   /** setData: 수식 dirty seed clear + RecalcCoordinator 재생성(rowId 재발급 대응). / setData: clears formula dirty seeds and recreates the RecalcCoordinator (to cope with rowId reissuance). */
   resetFormulaState: () => void;
   /** writeCell: 값이 바뀐 셀을 수식 dirty seed 로 적립(kind==='data' 일 때만). / writeCell: accumulates a changed cell as a formula dirty seed (only when kind === 'data'). */
@@ -177,8 +180,8 @@ export class MutationService<T extends Record<string, any> = any> {
     if (spec.flushFormula) this._deps.flushFormula();
 
     const doRender = (): void => {
-      if (spec.renderMode === 'sync-window') this._deps.doRenderWindow();
-      else if (spec.renderMode === 'full') this._deps.doRenderFull();
+      if (spec.renderMode === 'sync-window') this._deps.submitRender(RenderRequest.REPAINT_VISIBLE);
+      else if (spec.renderMode === 'full') this._deps.submitRender(RenderRequest.REPAINT_CLEAR);
       // 'async-vs' → 명령형 렌더 없음(setData: VS setTotalRows/rebuild 가 rAF 로 스케줄).
     };
     const doEmit = (): void => {

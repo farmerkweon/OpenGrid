@@ -44,6 +44,14 @@ export class ColumnLayout<T = any> {
   private _flatLeaves: FlatColumn<T>[] = [];
   private _maxDepth: number = 1;
   private _frozenCount: number = 0;
+  /**
+   * 표시 잎 배열의 캐시. 그리기마다 여러 번 묻는 값이라 구성이 바뀔 때만 새로 만들고, 그 사이에는 같은 배열(같은 참조)을 돌려준다.
+   * 구성을 바꾸는 곳(잎을 다시 만드는 _process, 숨김, 보임)이 이것을 비운다.
+   *
+   * Cache of the visible-leaf array. Asked many times per paint, so it is rebuilt only when the column set changes and
+   * the same array (same reference) is returned in between. Every place that changes the set (_process, hide, show) clears it.
+   */
+  private _visibleCache: FlatColumn<T>[] | null = null;
 
   /**
    * 컬럼 정의로 배치 엔진 생성 후 즉시 리프·깊이를 계산. / Create the layout engine and immediately compute leaves/depth.
@@ -77,6 +85,7 @@ export class ColumnLayout<T = any> {
     this._maxDepth = 1;
     walk(this._columns, 1);
     this._flatLeaves = leaves;
+    this._visibleCache = null;
   }
 
   /** 전체 리프 컬럼(숨김 포함). / All leaf columns (including hidden ones). */
@@ -86,7 +95,7 @@ export class ColumnLayout<T = any> {
 
   /** 표시 리프 컬럼(hidden 제외). / Visible leaf columns (excluding hidden). */
   get visibleLeaves(): FlatColumn<T>[] {
-    return this._flatLeaves.filter(c => !c.hidden);
+    return this._visibleCache ??= this._flatLeaves.filter(c => !c.hidden);
   }
 
   /** 헤더 트리 최대 깊이(=헤더 행 수). / Maximum header tree depth (= header row count). */
@@ -128,6 +137,7 @@ export class ColumnLayout<T = any> {
     this._flatLeaves.forEach(c => {
       if (fields.includes(c.field)) c.hidden = true;
     });
+    this._visibleCache = null;
   }
 
   /**
@@ -140,6 +150,7 @@ export class ColumnLayout<T = any> {
     this._flatLeaves.forEach(c => {
       if (fields.includes(c.field)) c.hidden = false;
     });
+    this._visibleCache = null;
   }
 
   /**

@@ -18,6 +18,13 @@ import { ChartManager } from './ChartManager.js';
 import { OverrideKernel } from './OverrideKernel.js';
 import { localeRegistry, LocaleRegistry } from './i18n/LocaleRegistry.js';
 import type { GridRenderer } from './GridRenderer.js';
+import { RenderScheduler, RAF_FRAME } from './render/RenderScheduler.js';
+import type { IRenderScheduler } from './render/ports.js';
+import { HeaderSortIndicator } from './render/header/HeaderSortIndicator.js';
+import { ResizeSinkAdapter } from './render/ResizeSinkAdapter.js';
+import type { IColumnWindow } from './coordinate/geometryPorts.js';
+import { RenderPlanner } from './domain/render/RenderPlanner.js';
+import type { RenderController } from './RenderController.js';
 import type { VirtualScroll } from './VirtualScroll.js';
 import type { Pagination } from './Pagination.js';
 import type { WorksheetManager } from './WorksheetManager.js';
@@ -42,6 +49,9 @@ const ROW_ID_FIELD = '_ogRowId';
  * `_mount` (renderer/vs/pagination DOM wiring, etc.) is still owned by `OpenGrid` — the
  * composer only calls `_mount()` at the mount phase.
  */
+
+
+
 export interface ComposerHost<T extends Record<string, any> = any> {
   _container: HTMLElement;
   _options: Required<GridOptions<T>>;
@@ -73,6 +83,8 @@ export interface ComposerHost<T extends Record<string, any> = any> {
   _pagination: Pagination | null;
   _wsManager: WorksheetManager<T> | null;
   _colWidths: number[];
+  /** 렌더 루프(컬럼 기하의 주인). 마운트 때 채워짐. / Render loop (owner of the column geometry); set at mount. */
+  _render: RenderController<T> | null;
   _formulaDirtySeeds: Set<string>;
   // ── 조립된 매니저 deps 클로저가 위임하는 파사드 메서드 ──
   emit(event: string, ...args: any[]): any;
@@ -82,7 +94,11 @@ export interface ComposerHost<T extends Record<string, any> = any> {
   _announce(msg: string): void;
   /** i18n: 메시지 해석(인스턴스 오버라이드 우선 → 활성 로케일 → ko → 키). / i18n: resolve a message (instance override first, then active locale, then ko, then the raw key). */
   t(key: string, params?: Record<string, string | number>): string;
-  _doRender(startIndex: number, endIndex: number): void;
+  _doRender(startIndex: number, endIndex: number, columns?: IColumnWindow, rowWork?: 'diff'): void;
+  /** 그리기 요청을 받아 계획대로 실행하는 곳(그리드마다 하나). / Takes render requests and runs them per plan (one per grid). */
+  _scheduler: IRenderScheduler;
+  /** 머리글 정렬 표시만 고치는 객체(그리드마다 하나). / Patches only header sort marks (one per grid). */
+  _sortIndicator: HeaderSortIndicator;
   _visRange(): [number, number];
   _renderHeader(): void;
   _setFocusCell(ri: number, ci: number): void;
@@ -200,7 +216,7 @@ export class GridComposer {
     host._options = {
       height: '100%', width: '100%',
       rowHeight: 32, headerHeight: 34, footerHeight: 30,
-      autoHeight: false, fillWidth: false, defaultColumnWidth: 100,
+      autoHeight: false, fillWidth: false, defaultColumnWidth: 100, virtualColumns: true,
       editable: false, editMode: 'dblclick', history: true, historySize: 100,
       selection: 'single', clipboard: true,
       sortable: true, multiSort: true, filterable: true, defaultSort: [],
@@ -238,6 +254,47 @@ export class GridComposer {
       host._locales = null;
     }
 
+    // 그리기 요청의 유일한 입구. 행은 옛 그리기 길(_doRender)로, 푸터는 계획이 말할 때만 푸터 관리자로 시킨다.
+    // _doRender 는 부를 때마다 host 에서 찾는다(시험이 인스턴스의 _doRender 를 갈아 끼워 횟수를 세므로).
+    // 푸터 관리자는 이 뒤 단계에서 만들어지므로 부를 때 찾는 작은 어댑터로 넘긴다.
+    //
+    // The single entry for render requests: rows through the old paint path (_doRender), the footer only when the plan says so.
+    // _doRender is looked up on host each time (tests swap the instance's _doRender to count calls). The footer manager
+    // is built in a later phase, so it is passed as a small adapter that looks it up at call time.
+    // 머리글 정렬 표시만 고치는 객체 — 그리드마다 하나, 머리글 그리개와 정렬 관리자가 같은 것을 쓴다.
+    // / The header sort-indicator object — one per grid, shared by the header painter and the sort manager.
+    host._sortIndicator = new HeaderSortIndicator();
+    host._scheduler = new RenderScheduler(RAF_FRAME, {
+      planner: new RenderPlanner({ features: { footerGating: true, sortIndicatorOnly: true, scrollSkip: true, geometryOnly: true, columnWindow: true, rowDiff: true } }),
+      paint: {
+        paintRows: (s, e, cols, rw) => host._doRender(s, e, cols, rw),
+        visibleRows: () => host._visRange(),
+      },
+      // 정렬 표시 객체와 지금 정렬 목록 — 계획이 「정렬 표시만」 이라 하면 머리글을 다시 만들지 않고 이것으로 고친다.
+      // / Sort-indicator object and current sort list — when the plan says indicator-only, the header is patched instead of rebuilt.
+      sort: host._sortIndicator,
+      sortList: () => host._sfMgr.sortList,
+      // 기하·등록기·창 정책·스크롤 관찰자·본문 그리개는 이 뒤 단계(마운트)에서 생기므로 「지금 것(없으면 null)」을 돌려주는 함수로 넘긴다.
+      // / Geometry, writer, window policy, scroll observer and body painter appear at mount, so each is passed as a function returning the current one (or null).
+      geometry: () => host._render?.geometry ?? null,
+      applier: () => host._renderer?.applier ?? null,
+      headerLayout: () => host._render?.relayoutHeaderIfChanged(),
+      headerWraps: () => host._render?.hasWrappedHeader() ?? false,
+      overlay: { repaint: () => host._rangeMgr.repaint() },
+      // 가로 창 포트(창 정책·보이는 상자·모양·본문 창 옮김·붙들 컬럼). 옵션 virtualColumns 가 꺼져 있거나 규칙이 막으면 전 컬럼.
+      // / Column-window ports (policy, visible box, shape, body window shift, pinned columns). All columns when virtualColumns is off or a rule forbids.
+      window: () => host._render?.windowPolicy ?? null,
+      scroll: () => host._render?.scroll ?? null,
+      shape: () => host._render!.shape(),
+      pinnedColumns: () => host._editMgr.pinnedColumns(),
+      // 본문 그리개의 「창 옮김」 — 렌더러는 마운트 때 생기므로 부를 때 찾는다(그 전엔 그려 둔 창 없음).
+      // / The body painter's window shift — the renderer appears at mount, so it is looked up at call time (no drawn window before).
+      body: () => host._renderer?.bodyView ?? null,
+      footer: {
+        paint: () => host._footerMgr.paint(),
+        updateValues: () => host._footerMgr.updateValues(),
+      },
+    });
     return { _phase: 'core' };
   }
 
@@ -258,7 +315,7 @@ export class GridComposer {
       emit: (event, payload) => { host.emit(event, payload); },
       announce: (msg) => host._announce(msg),
       t: (key, params) => host.t(key, params),
-      doRenderWindow: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
     });
 
     // F3(11_design_F3_v2.md/15_cross_contracts.md): 헤드리스 재계산 오케스트레이터.
@@ -283,13 +340,15 @@ export class GridComposer {
     hooks: ComposerHooks,
   ): ManagerRegistryToken {
     host._editMgr = new CellEditManager<T>({
+      revealColumn: (ci) => host._render?.revealColumn(ci),
+      getBodyPin: () => host._renderer?.bodyView ?? null,
       data: host._data,
       colLayout: host._colLayout,
       getRenderer: () => host._renderer,
       getContainer: () => host._container,
       getOptions: () => host._options,
       emit: (ev, ...args) => host.emit(ev, ...args),
-      doRender: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
       announce: (msg) => host._announce(msg),
       t: (key, params) => host.t(key, params),
       writeCell: (ri, field, value) => host.writeCell(ri, field, value),
@@ -317,6 +376,8 @@ export class GridComposer {
       getData: () => host._data.getData(),
       getColLayout: () => host._colLayout,
       getColWidths: () => host._colWidths,
+      // 푸터를 그릴 때 컬럼 기하를 지금 입력에 맞춰 받는다. / The footer receives the column geometry aligned to current inputs.
+      getGeometry: () => host._render!.currentGeometry(),
       getOptions: () => host._options,
       getContainer: () => host._container,
       getStrategy: (slot, fb) => host._ovk.getStrategy(slot, fb),
@@ -329,7 +390,7 @@ export class GridComposer {
       getOptions: () => host._options,
       setFocusCell: (ri, ci) => host._setFocusCell(ri, ci),
       handleRowDrop: (from, to) => host._handleRowDrop(from, to),
-      doRender: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
       announce: (msg) => host._announce(msg),
       t: (key, params) => host.t(key, params),
       emit: (ev, ...args) => host.emit(ev, ...args),
@@ -339,6 +400,7 @@ export class GridComposer {
       getRangeHooks: () => host._rangeMgr,
     });
     host._sfMgr = new SortFilterManager<T>({
+      sortIndicator: host._sortIndicator,
       getData: () => host._data,
       getColLayout: () => host._colLayout,
       getFindFilter: () => host._findMgr.findFilter,
@@ -346,7 +408,7 @@ export class GridComposer {
       getPagination: () => host._pagination,
       getOptions: () => host._options,
       renderHeader: () => host._renderHeader(),
-      doRender: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
       announce: (msg) => host._announce(msg),
       t: (key, params) => host.t(key, params),
       emit: (ev, ...args) => host.emit(ev, ...args),
@@ -358,7 +420,7 @@ export class GridComposer {
       getFilters: () => host._sfMgr.filters,
       getVs: () => host._vs,
       getPagination: () => host._pagination,
-      doRender: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
       t: (key, params) => host.t(key, params),
     });
     host._cellEvt = new CellEventHandler<T>({
@@ -369,7 +431,7 @@ export class GridComposer {
       getRowMgr: () => host._rowMgr,
       emit: (ev, ...args) => host.emit(ev, ...args),
       writeCell: (ri, field, val) => host.writeCell(ri, field, val),
-      doRender: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
       getContainer: () => host._container,
       onCellsClick: (ri, ci, shift) => host._rangeMgr.handleClick(ri, ci, shift),
       rangeMouseDown: (ri, ci, e) => host._rangeMgr.handleCellMouseDown(ri, ci, e),
@@ -378,6 +440,7 @@ export class GridComposer {
     });
     // F1: 범위 선택 + 채우기 핸들(11_design_F1_v2.md). 헤드리스 코어(core/range/*)를 소비.
     host._rangeMgr = new RangeSelectionManager<T>({
+      rangeRect: (r) => host._render?.rangeRect(r) ?? null,
       getOptions: () => host._options,
       getData: () => host._data,
       getColLayout: () => host._colLayout,
@@ -388,7 +451,7 @@ export class GridComposer {
       writeCells: (patches) => host.writeCells(patches),
       getDisplayValue: (ri, field) => host.getDisplayValue(ri, field),
       emit: (ev, ...args) => host.emit(ev, ...args),
-      doRender: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
       announce: (msg) => host._announce(msg),
       t: (key, params) => host.t(key, params),
       // C3(15_cross_contracts.md): F3 이 제공하는 hasCellFormula/offsetFormula/setCellFormula 를
@@ -402,8 +465,7 @@ export class GridComposer {
       getDataLayer: () => host._data,
       getOptions: () => host._options,
       getVs: () => host._vs,
-      doRenderFull: (n) => host._doRender(0, n - 1),
-      doRender: () => host._doRender(...host._visRange()),
+      submitRender: (req) => host._scheduler.submit(req),
       getStrategy: (slot, fb) => host._ovk.getStrategy(slot, fb),
       setFlatBacking: (provider) => host._flatModel.setBacking(provider),
       getFlatCount: () => host._flatModel.count(),
@@ -416,7 +478,7 @@ export class GridComposer {
       getVs: () => host._vs,
       getRowId: (row) => (row as any)[ROW_ID_FIELD],
       getRowById: (rowId) => host._data.getRowById(rowId),
-      doRenderFull: (n) => host._doRender(0, n - 1),
+      submitRender: (req) => host._scheduler.submit(req),
       emit: (ev, payload) => host.emit(ev, payload),
       announce: (msg) => host._announce(msg),
       t: (key, params) => host.t(key, params),
@@ -485,6 +547,27 @@ export class GridComposer {
     _ovk: OverrideKernelToken,
   ): MountedViewToken {
     host._mount();
+    // 푸터 막대가 본문 가로 위치를 따라가게, 렌더러의 따라가기 객체를 푸터에 한 번 넘긴다(막대가 이미 있으면 그 자리에서 붙음).
+    // / Hand the renderer's follower to the footer once so the bar tracks the body's horizontal position (an existing bar attaches immediately).
+    if (host._renderer) host._footerMgr.setFollower(host._renderer.follower);
+    // 푸터 막대도 머리글과 같은 오른쪽 끝 여백(본문 세로 스크롤바 폭)을 받는다. / The footer bar gets the same end gutter as the header.
+    host._renderer?.onEndGutter((px) => { host._footerMgr.setEndGutter(px); host._render?.syncViewportWidth(); });
+    // 실시간 너비 조절 배선: 푸터도 같은 등록기에 폭 자리를 등록하고, 손잡이는 폭 쓰기·스케줄러·놓음 알림·기하를 받는다.
+    // / Live-resize wiring: the footer registers its width spots on the same writer; the handles get the width writer, scheduler, release sink and geometry.
+    if (host._renderer && host._render) {
+      const render = host._render;
+      host._footerMgr.setApplier(host._renderer.applier);
+      host._renderer.connectResize({
+        widths: { setWidth: (ci, w) => render.setUserWidth(ci, w) },
+        scheduler: host._scheduler,
+        sink: new ResizeSinkAdapter({
+          commitWidth: (ci, w) => host._renderer?.commitColumnResize(ci, w),
+          hasWrappedHeader: () => render.hasWrappedHeader(),
+          relayoutHeaderIfChanged: () => render.relayoutHeaderIfChanged(),
+        }),
+        geometry: render.geometry,
+      });
+    }
     return { _phase: 'mounted' };
   }
 }

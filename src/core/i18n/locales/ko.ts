@@ -172,6 +172,12 @@ export const KO_MESSAGES = {
   },
   export: {
     printSummary: '{rows}행 × {cols}열 · {date}',
+    preparing: '내보내기를 준비하고 있어요…',
+    exporting: '{done} / {total}행 내보내는 중 ({percent}%)',
+    cancel: '취소',
+    cancelled: '내보내기를 취소했어요',
+    done: '내보내기를 마쳤어요',
+    exportError: '내보내기에 실패했어요',
   },
 } satisfies LocaleMessages;
 

@@ -38,6 +38,15 @@ import {
 } from './range/ClipboardCodec.js';
 import { getRangeValues, getRangeStats, type RangeStats, type RangeQueryContext } from './range/RangeQuery.js';
 import type { CellRange, Direction, FillAxis, FillMode, FillPreview, RangeModelHost } from './range/types.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import { Change } from './domain/render/ports.js';
+import type { IRenderRequest } from './domain/render/ports.js';
+
+// 값은 그대로이고 선택·포커스·행 상태만 바뀌었다는 그리기 요청(불변 값이라 하나씩 나눠 씀). 푸터 합계를 다시 셈할 일이 아님을
+// 그리기 계획이 이 비트로 안다. / Render requests for selection/focus/row-state-only changes (shared immutable values);
+// the render plan uses these bits to know the footer totals need no recomputation.
+/** 범위 선택만 바뀜. / Only the range selection changed. */
+const RANGE_REPAINT = RenderRequest.of(Change.Range, { sync: true });
 
 /**
  * RangeSelectionManager 가 OpenGrid 서브시스템을 읽고 쓰기 위해 주입받는 클로저 묶음.
@@ -59,8 +68,8 @@ export interface RangeSelectionDeps<T extends Record<string, any>> {
   getDisplayValue: (ri: number, field: string) => string;
   /** 그리드 이벤트 발행. / Emit a grid event. */
   emit: (event: string, ...args: any[]) => void;
-  /** 현재 가시 범위를 재렌더. / Re-render the currently visible range. */
-  doRender: () => void;
+  /** 그리기 요청을 낸다(보이는 범위 다시 그리기 등). / Submit a render request (e.g. repaint the visible range). */
+  submitRender: (req: IRenderRequest) => void;
   /** aria-live 영역에 메시지를 공지. / Announce a message via the aria-live region. */
   announce: (msg: string) => void;
   /** i18n: 범위 선택/채우기 announce·aria 해석. / i18n: resolve range selection/fill announce & aria. */
@@ -71,7 +80,17 @@ export interface RangeSelectionDeps<T extends Record<string, any>> {
   hasCellFormula?: (rowId: string, field: string) => boolean;
   offsetFormula?: (rowId: string, field: string, dRow: number, dCol: number) => string;
   setCellFormulaByRowId?: (rowId: string, field: string, formula: string) => void;
+  /**
+   * 범위의 화면 사각형을 기하로 계산(본문 상자 보이는 왼쪽 위 기준, 두 모서리 칸의 합집합 — 칸을 재는 것과 같은 뜻).
+   * 모서리 칸이 가로 창 밖이라 DOM 에 없을 때 쓴다. 없으면 그때 테두리를 숨긴다(지금 동작).
+   * / Geometry-based screen rectangle of a range (body scroller's visible top-left, union of the corner cells);
+   * used when a corner cell is outside the column window. Without it the border is hidden then.
+   */
+  rangeRect?: (range: CellRange) => { left: number; top: number; width: number; height: number } | null;
 }
+
+/** 본문 상자 기준 사각형(왼쪽·위·오른쪽·아래). / Box in body-scroller coordinates. */
+interface Box { left: number; top: number; right: number; bottom: number }
 
 /** 정규화된 rangeSelection 옵션(§6.1 기본값). / Normalized rangeSelection options (§6.1 defaults). */
 interface ResolvedRangeOptions {
@@ -202,7 +221,7 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     this._model.beginDrag(ri, ci, { additive: e.ctrlKey || e.metaKey, shift: e.shiftKey });
     this._isDragging = true;
     this._d.setFocusCell(ri, ci);
-    this._d.doRender();
+    this._d.submitRender(RANGE_REPAINT);
     // 셀 영역 밖에서 마우스를 놓아도 드래그가 종료되도록 document 레벨 폴백(R-2류 방지).
     // GridRenderer 의 셀별 mouseup 과 중복 실행되어도 _isDragging 가드로 1회만 반영된다.
     const onDocUp = () => {
@@ -224,7 +243,7 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     if (this._isDragging) {
       if (ri >= 0 && ci >= 0) {
         this._model.updateFocus(ri, ci);
-        this._d.doRender();
+        this._d.submitRender(RANGE_REPAINT);
       }
       this._maybeAutoscroll(e);
     }
@@ -311,7 +330,7 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
   }
 
   private _afterModelChange(emit: boolean): void {
-    this._d.doRender();
+    this._d.submitRender(RANGE_REPAINT);
     if (!emit) return;
     const cells = this._model.getRangeSelection();
     const range = this._model.getActiveRange();
@@ -564,17 +583,9 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     const rect = this.getActiveRange();
     if (!renderer || !rect) { this._hideOverlay(); return; }
 
-    const wrapRect = renderer.bodyWrapper.getBoundingClientRect();
-    const startEl = renderer.getCellEl(rect.startRow, rect.startCol);
-    const endEl = renderer.getCellEl(rect.endRow, rect.endCol);
-    if (!startEl || !endEl) { this._hideOverlay(); return; }
-
-    const r1 = startEl.getBoundingClientRect();
-    const r2 = endEl.getBoundingClientRect();
-    const left = Math.min(r1.left, r2.left) - wrapRect.left;
-    const top = Math.min(r1.top, r2.top) - wrapRect.top;
-    const right = Math.max(r1.right, r2.right) - wrapRect.left;
-    const bottom = Math.max(r1.bottom, r2.bottom) - wrapRect.top;
+    const box = this._boxOf(renderer, rect);
+    if (!box) { this._hideOverlay(); return; }
+    const { left, top, right, bottom } = box;
 
     Object.assign(this._borderEl!.style, {
       display: 'block', left: `${left}px`, top: `${top}px`,
@@ -588,16 +599,9 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
     }
 
     if (this._fillPreview) {
-      const t = this._fillPreview.target;
-      const tsEl = renderer.getCellEl(t.startRow, t.startCol);
-      const teEl = renderer.getCellEl(t.endRow, t.endCol);
-      if (tsEl && teEl) {
-        const tr1 = tsEl.getBoundingClientRect();
-        const tr2 = teEl.getBoundingClientRect();
-        const pl = Math.min(tr1.left, tr2.left) - wrapRect.left;
-        const pt = Math.min(tr1.top, tr2.top) - wrapRect.top;
-        const pr = Math.max(tr1.right, tr2.right) - wrapRect.left;
-        const pb = Math.max(tr1.bottom, tr2.bottom) - wrapRect.top;
+      const pbox = this._boxOf(renderer, this._fillPreview.target);
+      if (pbox) {
+        const { left: pl, top: pt, right: pr, bottom: pb } = pbox;
         Object.assign(this._previewEl!.style, {
           display: 'block', left: `${pl}px`, top: `${pt}px`,
           width: `${Math.max(0, pr - pl)}px`, height: `${Math.max(0, pb - pt)}px`,
@@ -606,6 +610,31 @@ export class RangeSelectionManager<T extends Record<string, any> = any> {
       }
     }
     this._previewEl!.style.display = 'none';
+  }
+
+  /**
+   * 범위의 본문 상자 기준 사각형. 두 모서리 칸이 다 그려져 있으면 지금처럼 칸을 재고(창이 전 컬럼이면 결과가 지금과 같다),
+   * 하나라도 가로 창 밖이라 없으면 기하로 계산한다(넓은 범위의 테두리가 창 밖 모서리 때문에 사라지지 않게). 둘 다 안 되면 null.
+   *
+   * Body-scroller box of a range: measure the corner cells when both are rendered (identical to before for a full
+   * window); otherwise compute it from geometry so a wide range keeps its border. null when neither works.
+   */
+  private _boxOf(renderer: GridRenderer, r: CellRange): Box | null {
+    const startEl = renderer.getCellEl(r.startRow, r.startCol);
+    const endEl = renderer.getCellEl(r.endRow, r.endCol);
+    if (startEl && endEl) {
+      const wrapRect = renderer.bodyWrapper.getBoundingClientRect();
+      const r1 = startEl.getBoundingClientRect();
+      const r2 = endEl.getBoundingClientRect();
+      return {
+        left: Math.min(r1.left, r2.left) - wrapRect.left,
+        top: Math.min(r1.top, r2.top) - wrapRect.top,
+        right: Math.max(r1.right, r2.right) - wrapRect.left,
+        bottom: Math.max(r1.bottom, r2.bottom) - wrapRect.top,
+      };
+    }
+    const g = this._d.rangeRect?.(r);
+    return g ? { left: g.left, top: g.top, right: g.left + g.width, bottom: g.top + g.height } : null;
   }
 
   private _hideOverlay(): void {

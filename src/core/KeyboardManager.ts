@@ -2,6 +2,16 @@ import type { DataLayer } from './DataLayer.js';
 import type { ColumnLayout } from './ColumnLayout.js';
 import type { CellEditManager } from './CellEditManager.js';
 import type { RowManager } from './RowManager.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import { Change } from './domain/render/ports.js';
+import type { IRenderRequest } from './domain/render/ports.js';
+
+// 값은 그대로이고 선택·포커스·행 상태만 바뀌었다는 그리기 요청(불변 값이라 하나씩 나눠 씀). 푸터 합계를 다시 셈할 일이 아님을
+// 그리기 계획이 이 비트로 안다. / Render requests for selection/focus/row-state-only changes (shared immutable values);
+// the render plan uses these bits to know the footer totals need no recomputation.
+/** 포커스·범위가 함께 풀림. / Focus and range cleared together. */
+const FOCUS_RANGE_REPAINT = RenderRequest.of(Change.Focus | Change.Range, { sync: true });
+// 행의 선택·체크 상태만 바뀐 요청은 RenderRequest.ROW_STATE(공용 값)를 쓴다. / Row-state-only changes use the shared RenderRequest.ROW_STATE.
 
 /**
  * F1 범위 선택 배선 훅(M-3/M-4/M-5) — RangeSelectionManager 가 그대로 구현한다.
@@ -59,8 +69,8 @@ export interface KeyboardDeps<T extends Record<string, any>> {
   setFocusCell: (ri: number, ci: number) => void;
   /** 행 드래그(Ctrl+화살표) 이동을 처리한다. / Handle a row drag (Ctrl+Arrow) move. */
   handleRowDrop: (from: number, to: number) => void;
-  /** 바디를 다시 그린다. / Re-render the body. */
-  doRender: () => void;
+  /** 그리기 요청을 낸다(보이는 범위 다시 그리기 등). / Submit a render request (e.g. repaint the visible range). */
+  submitRender: (req: IRenderRequest) => void;
   /** 스크린리더용 상태 안내. / Announce a status message for screen readers. */
   announce: (msg: string) => void;
   /** i18n: 행 이동 announce 해석. / i18n: resolve row-move announce. */
@@ -273,10 +283,10 @@ export class KeyboardManager<T extends Record<string, any> = any> {
           const rowMgr = this._d.getRowMgr();
           if (this._d.getOptions().checkColumn) {
             rowMgr.check(ri, !rowMgr.checkedRows.has(ri));
-            this._d.doRender();
+            this._d.submitRender(RenderRequest.ROW_STATE);
           } else {
             rowMgr.selectToggle(ri);
-            this._d.doRender();
+            this._d.submitRender(RenderRequest.ROW_STATE);
           }
         }
         break;
@@ -294,7 +304,7 @@ export class KeyboardManager<T extends Record<string, any> = any> {
         // 편집 종료 후에만 범위 해제(M-3, 부록 B).
         this._d.getRangeHooks?.()?.clear();
         editMgr.clearFocusCell();
-        this._d.doRender();
+        this._d.submitRender(FOCUS_RANGE_REPAINT);
         break;
       }
     }

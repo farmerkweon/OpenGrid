@@ -19,6 +19,12 @@ export { ExportManifest } from './ExportManifest.js';
 // 스트리밍·싱크 / streaming & sinks
 export { StreamPump, STREAM_DEFAULTS, shouldStream } from './StreamPump.js';
 export { MemoryByteSink, DownloadByteSink } from './sinks.js';
+export {
+  FileSystemByteSink, BlobDownloadByteSink, pickExcelSink, canUseFileSystemAccess, XLSX_MIME,
+} from './sinks.js';
+export type {
+  IWritableLike, BlobDownloadOptions, PickExcelSinkOptions, ExcelSinkChoice,
+} from './sinks.js';
 
 // 소스 seam / source seam
 export { GridArtifactSource } from './GridArtifactSource.js';

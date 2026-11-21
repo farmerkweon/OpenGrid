@@ -2,6 +2,34 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.7.0] - 2026-11-21
+
+### Added
+- **대용량 엑셀 내보내기 스트리밍 + 진척바 + 취소** / **Streaming Excel export with a progress bar and cancel.**
+  수만~수십만 행을 내보낼 때 통째로 메모리에 쌓다 브라우저가 멈추던 문제를 없앴다. 행을 조금씩 흘려 쓰며,
+  지원 브라우저(Chromium 계열)에서는 **파일을 디스크로 바로 스트리밍**(File System Access)해 메모리를 거의 쓰지 않고,
+  없는 브라우저는 자동으로 기존 방식으로 떨어진다. 진행률 막대와 취소 버튼이 뜬다. 작은 표는 종전 스타일 경로 그대로.
+  옵션 `stream: 'auto' | 'force' | 'off'`(기본 `auto`, 큰 표만 스트리밍), `onProgress(done, total)`, `signal`(AbortSignal), `onError` 추가(전부 더하기).
+  / Exporting tens of thousands of rows no longer freezes the tab. Rows are flushed in chunks; on Chromium-based browsers the file
+  **streams straight to disk** (File System Access) so memory stays flat, with an automatic fallback elsewhere. A progress bar and
+  cancel button appear. Small tables keep the existing styled path. New `ExportOptions`: `stream`, `onProgress`, `signal`, `onError` (all additive).
+
+### Performance
+- **넓은 그리드(수만 행 × 수십 컬럼)가 크게 빨라졌다** / **Large wide grids are dramatically faster.**
+  10만 행 × 50컬럼(칸마다 200자) 기준 — 컬럼 너비 조절 손 뗌→반영 **3,489ms → 약 27ms**, 가로 한 걸음 **1,667ms → 약 17ms**,
+  세로 휠 **1,183ms → 약 17ms**, 푸터 50칸 첫 표시 **7.7초 → 약 0.7초**, 정렬(200자) **7,513ms → 약 205ms**. 동작은 그대로, 속도만.
+  가로·세로 가상화, 세로 행 차분(바뀐 행만 다시 그림), 실시간 너비 조절, 푸터 합계 스트리밍 계산이 들어갔다.
+  / At 100k rows × 50 columns (200 chars/cell): column-resize apply **3,489ms → ~27ms**, one horizontal step **1,667ms → ~17ms**,
+  vertical wheel **1,183ms → ~17ms**, 50-column footer **7.7s → ~0.7s**, sort (200-char) **7,513ms → ~205ms**. Same behavior, just faster.
+
+### Fixed
+- 너비 조절 손잡이 리스너가 파기 사이에 남던 누수, LTR 에서 일시적 음수 스크롤이 RTL 로 굳던 문제, 세로 행 차분 중 편집 중인 행이 다시 그려지던 문제, 스트리밍 엑셀의 지수표기 숫자 셀이 어긋나던 문제.
+  / Resize-handle listener leak across destroy; an LTR transient negative scroll latching as RTL; the row being edited getting rebuilt during vertical row-diff; exponential-form number cells in the streaming Excel path.
+
+### Note
+- 위 성능·내보내기 기능이 더해지며 코어 번들(gzip)이 권고 예산(108KB)을 넘어 약 119KB가 되었다. 무거운 부분(스트리밍 writer·싱크·xlsx)은 전부 **지연 로드**라 처음 받는 양에는 거의 영향이 없다.
+  / Adding the above pushed the core bundle (gzip) to ~119KB, over the 108KB advisory budget; the heavy parts (streaming writer, sinks, xlsx) are all **lazy-loaded**.
+
 ## [1.6.1] - 2026-09-24
 
 ### Fixed

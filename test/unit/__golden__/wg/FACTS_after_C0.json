@@ -1,0 +1,80 @@
+{
+  "_about": "걸음 C0(전 행 복사 제거, L21) 뒤 다시 잰 값. T0 값은 T0_FACTS.json 에 그대로(역사). L19(TEST).",
+  "_written": "2026-11-21 05:38:27",
+  "NR-14": {
+    "t0": {
+      "30000": {
+        "renderBody": 1,
+        "dataLayerCalls": {
+          "getDataIndexByRowId": 300,
+          "getData": 300,
+          "getRowByIndex": 60,
+          "getRowState": 30
+        }
+      },
+      "100000": {
+        "renderBody": 1,
+        "dataLayerCalls": {
+          "getDataIndexByRowId": 300,
+          "getData": 300,
+          "getRowByIndex": 60,
+          "getRowState": 30
+        }
+      }
+    },
+    "afterC0": {
+      "30000": {
+        "renderBody": 1,
+        "dataLayerCalls": {
+          "getRowByIndex": 60,
+          "getRowState": 30
+        }
+      },
+      "100000": {
+        "renderBody": 1,
+        "dataLayerCalls": {
+          "getRowByIndex": 60,
+          "getRowState": 30
+        }
+      }
+    },
+    "cmd": "WG_T0_RECORD=1 WG_EVID_DIR=steps/C0/TEST/evidence npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W 장면, 10컬럼, 3만/10만 행)",
+    "ts": "2026-11-21 05:38:27",
+    "change": "getData 300→0 · getDataIndexByRowId 300→0 · getRowByIndex 60·getRowState 30 그대로 · 3만=10만",
+    "designTarget": "0 · 둘이 같은 수 — 맞음"
+  },
+  "U-FLAT-02": {
+    "t0": {
+      "viaScroll": {
+        "getData": 1500,
+        "renderBody": 1,
+        "rows": 30
+      },
+      "viaWindow": {
+        "getData": 2953,
+        "renderBody": 1,
+        "rows": 59
+      },
+      "perCell": 1
+    },
+    "afterC0": {
+      "viaScroll": {
+        "getData": 0,
+        "renderBody": 1,
+        "rows": 30
+      },
+      "viaWindow": {
+        "getData": 1,
+        "renderBody": 1,
+        "rows": 59
+      },
+      "perCell": 0
+    },
+    "cmd": "WG_T0_RECORD=1 WG_EVID_DIR=steps/C0/TEST/evidence npx vitest run test/unit/wg-nr-facts.test.ts",
+    "env": "jsdom(100행×50컬럼)",
+    "ts": "2026-11-21 05:38:27",
+    "change": "스크롤 길 getData 1,500→0 · 통째 길 2,953→1(writeCell 자기 길) · 칸당 1→0"
+  },
+  "_unchanged": "NR-01~13·NR-15 jsdom 값은 T0 와 같음(같은 명령으로 다시 잼, remeasure_record.txt)"
+}

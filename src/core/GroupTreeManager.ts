@@ -8,6 +8,8 @@ import {
   buildTree, flattenTree, toggleTreeNode, collectAllTreeIds,
   type TreeNode,
 } from './TreeEngine.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderRequest } from './domain/render/ports.js';
 
 /**
  * {@link GroupTreeManager} 의존성 주입 계약. / Dependency-injection contract for {@link GroupTreeManager}.
@@ -25,10 +27,11 @@ export interface GroupTreeDeps<T extends Record<string, any>> {
   getOptions: () => any;
   /** 가상 스크롤 인스턴스 조회(없으면 `null`). / Look up the virtual-scroll instance (or `null`). */
   getVs: () => VirtualScroll | null;
-  /** 전체 재계산 렌더(총 행수 갱신 포함). / Full re-render including a total-row-count refresh. */
-  doRenderFull: (totalRows: number) => void;
-  /** 바디를 다시 그린다. / Re-render the body. */
-  doRender: () => void;
+  /**
+   * 그리기 요청을 낸다(받는 쪽이 계획대로 그린다). 이 객체는 무엇을 그릴지 정하지 않고 「무엇이 바뀌었나」만 알린다.
+   * / Submit a render request (the receiver paints per plan). This object reports what changed, not what to paint.
+   */
+  submitRender: (req: IRenderRequest) => void;
   /** Phase 2: OverrideKernel.getStrategy 주입(슬롯 groupKeyFn 도달용).
    * / Phase 2: injected `OverrideKernel.getStrategy` (reaches the `groupKeyFn` slot). */
   getStrategy?: <F extends Function>(slot: string, fallback: F) => F;
@@ -116,7 +119,7 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
     this._groupFlatRows = [];
     this._d.setFlatBacking(null);
     this._d.getVs()?.setTotalRows(this._d.getFlatCount());
-    this._d.doRender();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   /** 모든 그룹을 펼친다(그룹 모드가 아니면 무시). / Expand every group (no-op outside group mode). */
@@ -172,7 +175,7 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
     this._d.setFlatBacking(() => this._groupFlatRows);
     const n = this._d.getFlatCount();
     this._d.getVs()?.setTotalRows(n);
-    this._d.doRenderFull(n);
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   // ─── 트리 ─────────────────────────────────────────────────
@@ -204,7 +207,7 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
     this._treeExpandedKeys.clear();
     this._d.setFlatBacking(null);
     this._d.getVs()?.setTotalRows(this._d.getFlatCount());
-    this._d.doRender();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   /**
@@ -260,7 +263,7 @@ export class GroupTreeManager<T extends Record<string, any> = any> {
     this._d.setFlatBacking(() => this._treeFlatRows);
     const n = this._d.getFlatCount();
     this._d.getVs()?.setTotalRows(n);
-    this._d.doRenderFull(n);
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   // ─── 내부 헬퍼 ───────────────────────────────────────────

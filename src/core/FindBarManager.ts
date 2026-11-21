@@ -2,6 +2,8 @@ import type { ColumnLayout } from './ColumnLayout.js';
 import type { DataLayer } from './DataLayer.js';
 import type { Pagination } from './Pagination.js';
 import type { VirtualScroll } from './VirtualScroll.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderRequest } from './domain/render/ports.js';
 
 /**
  * FindBarManager 의존성 주입 인터페이스. / Dependency-injection interface for FindBarManager.
@@ -17,8 +19,11 @@ export interface FindBarDeps<T extends Record<string, any>> {
   getVs: () => VirtualScroll | null;
   /** 페이지네이션 인스턴스(행수 갱신용). 없으면 `null`. / Pagination instance (for updating row count); `null` if absent. */
   getPagination: () => Pagination | null;
-  /** 필터 적용 후 그리드 재렌더를 트리거. / Triggers a grid re-render after the filter is applied. */
-  doRender: () => void;
+  /**
+   * 그리기 요청을 낸다(받는 쪽이 계획대로 그린다). 이 객체는 무엇을 그릴지 정하지 않고 「무엇이 바뀌었나」만 알린다.
+   * / Submit a render request (the receiver paints per plan). This object reports what changed, not what to paint.
+   */
+  submitRender: (req: IRenderRequest) => void;
   /** i18n: 메시지 해석(라벨/placeholder/aria/카운트 배지). / i18n: resolve labels/placeholder/aria/count badge. */
   t: (key: string, params?: Record<string, string | number>) => string;
 }
@@ -139,6 +144,6 @@ export class FindBarManager<T extends Record<string, any> = any> {
     this._d.getVs()?.setTotalRows(n);
     this._d.getPagination()?.setTotalRows(n);
     if (this._count) this._count.textContent = this._filter ? this._d.t('findBar.countBadge', { n }) : '';
-    this._d.doRender();
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 }

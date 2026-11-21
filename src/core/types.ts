@@ -2759,6 +2759,46 @@ export interface ExportOptions {
    * 导出完成后调用的钩子。接收生成的文件 blob。
    */
   onAfter?: (blob: Blob) => void;
+  /**
+   * 대량 엑셀 내보내기 진척 콜백(done 행 / total 행).
+   *
+   * Progress callback for large Excel exports (done rows / total rows).
+   *
+   * 大量の Excel エクスポートの進捗コールバック（done 行 / total 行）。
+   *
+   * 大批量 Excel 导出的进度回调（done 行 / total 行）。
+   */
+  onProgress?: (done: number, total: number) => void;
+  /**
+   * 대량 엑셀 내보내기를 취소하는 신호.
+   *
+   * Signal to cancel a large Excel export.
+   *
+   * 大量の Excel エクスポートを取り消すシグナル。
+   *
+   * 取消大批量 Excel 导出的信号。
+   */
+  signal?: AbortSignal;
+  /**
+   * 엑셀 스트리밍 사용 방식. 기본 'auto'(5만 행 이상이면 스트리밍), 'force' 항상, 'off' 기존 방식.
+   *
+   * Excel streaming mode. Default 'auto' (stream from 50k rows), 'force' always, 'off' legacy path.
+   *
+   * Excel ストリーミングの方式。既定 'auto'（5万行以上でストリーミング）、'force' 常に、'off' 従来方式。
+   *
+   * Excel 流式导出方式。默认 'auto'（5 万行起流式），'force' 始终，'off' 旧方式。
+   */
+  stream?: 'auto' | 'force' | 'off';
+  /**
+   * 스트리밍 내보내기 중 오류가 났을 때 부를 훅.
+   *
+   * Hook called when a streaming export fails.
+   *
+   * ストリーミングのエクスポート中にエラーが起きたときに呼ぶフック。
+   *
+   * 流式导出出错时调用的钩子。
+   */
+  onError?: (error: unknown) => void;
 }
 
 /**
@@ -2898,6 +2938,36 @@ export interface GridOptions<T = any> {
    * 单元格内容过长而换行时，让行高随内容自动增高。与列的 wrap 配合使用。
    */
   autoHeight?: boolean;
+  /**
+   * 가로로 보이는 컬럼(과 앞뒤 여유)만 칸을 만듭니다(기본 켬). 컬럼이 많고 칸 글자가 길 때 가로 스크롤·너비 조절이 가벼워집니다.
+   * 화면 밖 컬럼은 칸 요소 대신 폭만 차지하는 빈 자리로 둡니다 — 칸 DOM 을 직접 찾는 바깥 코드가 화면 밖 칸을 꼭 찾아야 하면 끕니다.
+   * 켜 두어도 자동 높이(autoHeight)·셀 병합이 있거나 그리드 폭을 모를 때(숨은 컨테이너 등)는 저절로 전 컬럼을 그립니다.
+   * 끄면 지금까지처럼 보이는 행의 모든 컬럼 칸을 만듭니다.
+   * 주의: 행 안 자식 순서에 기대는 바깥 CSS(`.og-row > :nth-child(n)`)는 빈 자리 요소와 창 때문에 어긋납니다. 사용자 렌더러가 칸 안에 만든 임시 상태(입력 중 글자·열린 목록·포커스)는 그 컬럼이 창에서 나가면 사라집니다(들어올 때 다시 그림).
+   * 화면 밖 컬럼으로 가려면 `grid.jumpToCol(field)` 를 씁니다.
+   *
+   * Create cells only for horizontally visible columns (plus a margin on each side); on by default. Lighter horizontal scrolling
+   * and width resizing with many columns and long cell text. Off-screen columns become width-only gaps instead of cell elements —
+   * turn it off if outside code must find off-screen cell DOM. Even when on, all columns are painted automatically with autoHeight,
+   * cell merges, or an unknown grid width (e.g. a hidden container). When off, every column's cell is created for visible rows, as before.
+   * Caution: outside CSS that relies on child order inside a row (`.og-row > :nth-child(n)`) drifts because of gap elements and the window. Temporary state a custom renderer keeps inside a cell (typed text, an open list, focus) is lost when that column leaves the window (it is re-rendered on return).
+   * To bring an off-screen column into view use `grid.jumpToCol(field)`.
+   *
+   * 横に見えている列（と前後の余裕）だけセルを作ります（既定で有効）。列が多くセルの文字が長いとき、横スクロールや幅の調整が軽くなります。
+   * 画面外の列はセル要素の代わりに幅だけを占める空きにします — 画面外のセル DOM を外部コードが直接探す必要があるときは無効にします。
+   * 有効でも、autoHeight・セル結合があるとき、グリッドの幅が分からないとき（非表示のコンテナなど）は自動的に全列を描きます。
+   * 無効にすると、これまでどおり見えている行のすべての列のセルを作ります。
+   * 注意: 行内の子の順番に頼る外部 CSS（`.og-row > :nth-child(n)`）は空き要素と表示範囲のためずれます。カスタムレンダラーがセル内に持つ一時的な状態（入力中の文字・開いたリスト・フォーカス）は、その列が表示範囲から出ると消えます（戻ると描き直します）。
+   * 画面外の列へ移るには `grid.jumpToCol(field)` を使います。
+   *
+   * 只为横向可见的列（及前后余量）创建单元格（默认开启）。列多且单元格文字长时，横向滚动和调整列宽更轻快。
+   * 屏幕外的列不创建单元格元素，只留占宽度的空位 — 若外部代码必须直接查找屏幕外的单元格 DOM，请关闭。
+   * 即使开启，在 autoHeight、存在单元格合并、或不知道表格宽度时（如隐藏的容器）也会自动绘制全部列。
+   * 关闭时与以前一样，为可见行的所有列创建单元格。
+   * 注意：依赖行内子元素顺序的外部 CSS（`.og-row > :nth-child(n)`）会因空位元素和可见窗口而错位。自定义渲染器在单元格内保留的临时状态（输入中的文字、打开的列表、焦点）在该列离开窗口时会丢失（回来时重新绘制）。
+   * 要转到屏幕外的列，请用 `grid.jumpToCol(field)`。
+   */
+  virtualColumns?: boolean;
   /**
    * 컬럼 폭의 합이 컨테이너를 꽉 채우도록 늘립니다. 오른쪽에 빈 공간을 남기고 싶지 않을 때.
    *

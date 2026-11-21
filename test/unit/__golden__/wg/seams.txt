@@ -1,0 +1,110 @@
+# 지킬 이음새 목록(AR-12) — T0 지금 값. 테스트(기존 그물)가 부르는 내부 이름. 빼내기·변경 걸음에서 지우면 동작과 무관하게 기존 테스트가 깨진다.
+# 출처 칸: §3-6 = DESIGN.md §3-6 목록 그대로 / T0+ = L20 이 test/ 를 grep 으로 다시 세어 찾은, §3-6 에 없는 이름(NOTES.md 「설계에 알릴 것」).
+# 다시 센 명령: node sessions/widegrid-perf-2026-11/steps/T0/L20/scripts/seam_scan.mjs · seam_alias_scan.mjs (원자료 steps/T0/L20/evidence/seams_raw.tsv·seams_alias.tsv)
+# 형식: <종류>\t<파일>\t<이름>\t<출처>\t<기대는 테스트 예>
+# 종류: member = 그 파일에 그 이름의 선언(필드·메서드·게터)이 있어야 함 / cbkey = RendererCallbacks 키 / deps = deps 객체 키 / css = src 안 문자열 / aria = src/core 안 문자열 / rowmeta = 행 객체 메타 필드 이름(src 안 문자열)
+member	src/core/OpenGrid.ts	_doRender	§3-6	BatchWrite.test.ts:36 외 6파일
+member	src/core/OpenGrid.ts	_visRange	§3-6	cf/openGrid-cf.test.ts:40 외 5파일
+member	src/core/OpenGrid.ts	_renderHeader	§3-6	(설계 목록 — 지금 테스트 호출 0, OpenGrid 안 호출처가 이음새)
+member	src/core/OpenGrid.ts	_syncHeaderLayout	§3-6	viewport-safety.test.ts:79
+member	src/core/OpenGrid.ts	_renderer	§3-6	cf/openGrid-cf.test.ts:44 외 6파일
+member	src/core/OpenGrid.ts	_vs	§3-6	p9-p13-core.test.ts:113 · viewport-safety.test.ts
+member	src/core/VirtualScroll.ts	_viewportHeight	§3-6	viewport-safety.test.ts:63
+member	src/core/VirtualScroll.ts	getVisibleRange	§3-6	viewport-safety.test.ts:67
+member	src/core/GridRenderer.ts	getCellEl	§3-6	cf/openGrid-cf.test.ts:44 외 3파일
+member	src/core/GridRenderer.ts	renderHeader	§3-6	(OpenGrid·RenderController 가 부름)
+member	src/core/GridRenderer.ts	renderBody	§3-6	(RenderController 가 부름)
+member	src/core/GridRenderer.ts	bodyWrapper	§3-6	master-detail-wiring.test.ts:41 외 1
+member	src/core/GridRenderer.ts	getHeaderHeight	§3-6	(RenderController 가 부름)
+member	src/core/GridRenderer.ts	updateSize	§3-6	(RenderController 가 부름)
+member	src/core/GridRenderer.ts	_cbs	§3-6	extension-registry.test.ts:107·125
+deps	src/core/RenderController.ts	getColWidths	§3-6	OverrideStrategy.test.ts:197·262 · export/sheets-excel-style.test.ts:30 (F-U14)
+deps	src/core/FooterManager.ts	getColWidths	§3-6	(푸터 deps 같은 이름)
+deps	src/core/ExportManager.ts	getColWidths	§3-6	export/sheets-excel-style.test.ts:30
+cbkey	src/core/GridRenderer.ts	onHeaderClick	§3-6	RendererCallbacks 기존 키
+cbkey	src/core/GridRenderer.ts	onCellClick	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onCellDblClick	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onCellMouseOver	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onCellMouseOut	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onCellMouseDown	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onCellMouseUp	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onCellMouseMove	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onRowCheck	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onAllCheck	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onColResize	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onFilterIconClick	§3-6	〃
+cbkey	src/core/GridRenderer.ts	getDndManager	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onColDragStart	§3-6	〃
+cbkey	src/core/GridRenderer.ts	onColDrop	§3-6	〃
+cbkey	src/core/GridRenderer.ts	getColDragIdx	§3-6	〃
+cbkey	src/core/GridRenderer.ts	getDisplayText	§3-6	〃
+cbkey	src/core/GridRenderer.ts	resolveRenderHook	§3-6	〃 · extension-registry.test.ts:107 (_renderer._cbs.resolveRenderHook)
+cbkey	src/core/GridRenderer.ts	getDisplayFormatter	§3-6	〃
+cbkey	src/core/GridRenderer.ts	getFormulaMeta	§3-6	〃
+cbkey	src/core/GridRenderer.ts	t	§3-6	〃
+cbkey	src/core/GridRenderer.ts	applyCF	§3-6	〃
+css	src	og-cell	§3-6
+css	src	og-row	§3-6
+css	src	og-header-cell	§3-6
+css	src	og-resize-handle	§3-6
+css	src	og-body-wrapper	§3-6
+css	src	og-cell--wrap	§3-6
+css	src	og-cell--merge-ph	§3-6
+aria	src/core	aria-colindex	§3-6	뜻(ci+1)은 골든 DOM 이 지킴
+aria	src/core	aria-rowindex	§3-6	뜻(ri+1)은 골든 DOM 이 지킴
+member	src/core/OpenGrid.ts	_handleCellClick	T0+	option-callback-once.test.ts:51 (F-U11)
+member	src/core/OpenGrid.ts	_handleCellDblClick	T0+	option-callback-once.test.ts:69
+member	src/core/OpenGrid.ts	_handleSortClick	T0+	option-callback-once.test.ts:116 · p9-p13-core.test.ts:41
+member	src/core/OpenGrid.ts	_handleCellKeyEvt	T0+	option-callback-once.test.ts:93 · p9-p13-core.test.ts:101
+member	src/core/OpenGrid.ts	_setFocusCell	T0+	option-callback-once.test.ts:92
+member	src/core/OpenGrid.ts	_handleRowCheck	T0+	y1-y6-types.test.ts:42
+member	src/core/OpenGrid.ts	_options	T0+	p9-p13-core.test.ts:112 (_options.rowHeight)
+member	src/core/OpenGrid.ts	_container	T0+	RangeSelectionWiring.test.ts:133 외 9곳
+member	src/core/OpenGrid.ts	_data	T0+	master-detail-wiring.test.ts:274 (_data.getRowById)
+member	src/core/OpenGrid.ts	_editMgr	T0+	FormulaWiring.test.ts:250 · RangeSelectionWiring.test.ts:292 · p9-p13-core.test.ts:100
+member	src/core/OpenGrid.ts	_detailMgr	T0+	master-detail-wiring.test.ts:167
+member	src/core/OpenGrid.ts	_footerMgr	T0+	FormulaWiring.test.ts:183 (_footerMgr.computeValues → {_field,_value})
+member	src/core/OpenGrid.ts	_grpMgr	T0+	master-detail-wiring.test.ts:214
+member	src/core/OpenGrid.ts	_dnd	T0+	p9-p13-core.test.ts:131 (_dnd._rowHeight)
+member	src/core/OpenGrid.ts	_cf	T0+	cf/openGrid-cf.test.ts:162
+member	src/core/OpenGrid.ts	_rt	T0+	realtime/openGrid-realtime.test.ts:70
+member	src/core/OpenGrid.ts	_ovk	T0+	init-order-getStrategy.test.ts:4
+member	src/core/OpenGrid.ts	_mount	T0+	init-order-getStrategy.test.ts:4
+member	src/core/OpenGrid.ts	_defaultOverrides	T0+	default-registration-disposer.test.ts:121
+member	src/core/OpenGrid.ts	_defaultStrategies	T0+	default-registration-disposer.test.ts:122
+member	src/core/VirtualScroll.ts	rowHeight	T0+	p9-p13-core.test.ts:113 (_vs.rowHeight)
+member	src/core/RowDragDrop.ts	_rowHeight	T0+	p9-p13-core.test.ts:131
+member	src/core/OverrideKernel.ts	getStrategy	T0+	init-order-getStrategy.test.ts (_ovk.getStrategy)
+member	src/core/CellEditManager.ts	startEditByKey	T0+	FormulaWiring.test.ts · RangeSelectionWiring.test.ts:292
+member	src/core/CellEditManager.ts	commitEditWithValue	T0+	FormulaWiring.test.ts
+member	src/core/CellEditManager.ts	cancelEdit	T0+	FormulaWiring.test.ts
+member	src/core/CellEditManager.ts	activeEditor	T0+	FormulaWiring.test.ts
+member	src/core/CellEditManager.ts	focusCell	T0+	p9-p13-core.test.ts:100
+member	src/core/DetailManager.ts	getPanelHost	T0+	master-detail-wiring.test.ts:167
+member	src/core/GroupTreeManager.ts	enableTree	T0+	master-detail-wiring.test.ts:214
+member	src/core/FooterManager.ts	computeValues	T0+	FormulaWiring.test.ts:184 — R3 이 FooterValues 로 빼낼 때 이 이름과 {_field,_value} 모양을 지켜야 함
+member	src/core/DataLayer.ts	getRowById	T0+	master-detail-wiring.test.ts:274
+member	src/core/DataLayer.ts	getRowByIndex	T0+	(OpenGrid _data 체인)
+member	src/core/DataLayer.ts	getCellValueByRowId	T0+	(OpenGrid _data 체인)
+member	src/core/DataLayer.ts	getData	T0+	(OpenGrid _data 체인)
+rowmeta	src/core	_ogRowId	T0+	FlatRowModel.test.ts:56 (DataLayer 기본 id 필드)
+rowmeta	src/core	_field	T0+	FormulaWiring.test.ts:185 (FooterManager.computeValues 결과 모양)
+rowmeta	src/core	_value	T0+	FormulaWiring.test.ts:187 (〃)
+rowmeta	src/core	_isGroup	T0+	GroupEngine.test.ts:30
+rowmeta	src/core	_groupValue	T0+	GroupEngine.test.ts:35
+rowmeta	src/core	_childCount	T0+	GroupEngine.test.ts:37
+rowmeta	src/core	_depth	T0+	GroupEngine.test.ts:43
+rowmeta	src/core	_expanded	T0+	GroupEngine.test.ts:87
+rowmeta	src/core	_summary	T0+	GroupEngine.test.ts:58
+rowmeta	src/core	_treeId	T0+	TreeEngine.test.ts:36
+rowmeta	src/core	_isTree	T0+	TreeEngine.test.ts:31
+rowmeta	src/core	_hasChildren	T0+	TreeEngine.test.ts:60
+rowmeta	src/core	_isDetailHead	T0+	detail-splice.test.ts:10
+rowmeta	src/core	_isDetailFiller	T0+	detail-splice.test.ts:11
+rowmeta	src/core	_masterFlatBase	T0+	detail-splice.test.ts:96
+rowmeta	src/core	_span	T0+	detail-splice.test.ts:33
+rowmeta	src/core	_rowId	T0+	detail-splice.test.ts:33
+rowmeta	src/core	_state	T0+	DataLayer.test.ts:99
+member	src/core/FlatRowModel.ts	directHits	C0	wg-flat-c0.test.ts U-FLAT-01·02b·04·14·16 (@internal 진단 접근자 — 테스트 설계서 684행 「지킬 이음새에 더함」, 코드 검토 C0-2)
+srctext	src/core/GridRenderer.ts	_el('span', 'og-detail-expander')	S1	detail-expander-hit-target.test.ts:23 (날 소스 글자를 읽음 — S1 검토 찾은 것 5 ①, R5 가 이 몸통을 옮길 때 미리 빨개지게)
+srcre	src/core/GridRenderer.ts	min-width:(\d+)px;min-height:(\d+)px	S1	detail-expander-hit-target.test.ts:26 (첫 일치를 펼침 단추 크기로 읽음 — 바로 앞 srctext 뒤 20줄 안이어야 같은 뜻)

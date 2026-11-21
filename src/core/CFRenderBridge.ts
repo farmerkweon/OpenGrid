@@ -46,8 +46,15 @@ function clearCF(cellEl: HTMLElement): void {
  * @param specs - CFEngine.paintFor 산출 시각 스펙 배열 / The VisualSpec array from CFEngine.paintFor
  * @param cellW - 셀 콘텐츠 폭(px) — 데이터바 길이 산출 / Cell content width (px) for bar length
  * @param cellH - 셀 콘텐츠 높이(px) / Cell content height (px)
+ * @param track - (선택) 데이터 막대를 만들 때마다 막대와 비율을 알린다. 컬럼 폭이 바뀌면 막대 폭을 다시 쓸 객체가 그 자리를 기억하게 하려는 것 — 막대 폭은 여기서 지금처럼 쓴다.
+ *
+ * (Optional) notified with each data bar and its ratio, so the object that rewrites widths on a column-width change
+ * can remember the spot; the bar width is still written here as before.
  */
-export function applyVisualSpecs(cellEl: HTMLElement, specs: VisualSpec[], cellW: number, _cellH: number): void {
+export function applyVisualSpecs(
+  cellEl: HTMLElement, specs: VisualSpec[], cellW: number, _cellH: number,
+  track?: (bar: HTMLElement, ratio: number) => void,
+): void {
   clearCF(cellEl);
   if (specs.length === 0) return;
 
@@ -80,6 +87,7 @@ export function applyVisualSpecs(cellEl: HTMLElement, specs: VisualSpec[], cellW
         bar.style.zIndex = '0';
         bar.style.pointerEvents = 'none';
         cellEl.insertBefore(bar, cellEl.firstChild);
+        track?.(bar, ratio);
       }
       // 채움 위 텍스트 색(AA 보증 결과).
       cellEl.style.color = spec.inkColor;

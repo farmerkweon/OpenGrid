@@ -1,0 +1,974 @@
+{
+  "_how": "npx vite-node sessions/widegrid-perf-2026-11/steps/T0/L20/scripts/gen_inventory.ts -- owners",
+  "_source": "DESIGN.md §5-가 레인 표(소유) + §5-나 걸음 표 「바꾸는 파일·클래스(레인)」 칸(건드릴 파일) + §3-2·3-3 클래스 카드 「파일」 칸(새 파일)",
+  "_measuredAt": "2026-11-21 04:41:41",
+  "gitSrcFiles": 291,
+  "ownerEntries": 81,
+  "stepTokens": 226,
+  "tokenKinds": {
+    "path": 8,
+    "file": 11,
+    "class": 27,
+    "planned-class": 71,
+    "none": 109
+  },
+  "touchedExisting": [
+    {
+      "path": "scripts/arch-check.mjs",
+      "steps": [
+        "S0"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/CFRenderBridge.ts",
+      "steps": [
+        "R8"
+      ],
+      "owners": [
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/CellEditManager.ts",
+      "steps": [
+        "C12"
+      ],
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/CellEventHandler.ts",
+      "steps": [
+        "C12"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/ColumnLayout.ts",
+      "steps": [
+        "C7"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/DataLayer.ts",
+      "steps": [
+        "C0",
+        "C0b",
+        "C13b",
+        "R2"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/DetailManager.ts",
+      "steps": [
+        "C0",
+        "R7"
+      ],
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "src/core/FlatRowModel.ts",
+      "steps": [
+        "C0",
+        "C13b"
+      ],
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "src/core/FooterManager.ts",
+      "steps": [
+        "R3"
+      ],
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/FormulaController.ts",
+      "steps": [
+        "C0"
+      ],
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "src/core/GridComposer.ts",
+      "steps": [
+        "R7"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/GridRenderer.ts",
+      "steps": [
+        "R6",
+        "S0",
+        "S1"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/GroupTreeManager.ts",
+      "steps": [
+        "R7"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/MutationService.ts",
+      "steps": [
+        "C12"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/OpenGrid.ts",
+      "steps": [
+        "R4",
+        "R7",
+        "S0"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/RenderController.ts",
+      "steps": [
+        "C7",
+        "R4",
+        "S0"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/VirtualScroll.ts",
+      "steps": [
+        "C1",
+        "C14",
+        "R7"
+      ],
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/appearance/AppearanceProvider.ts",
+      "steps": [
+        "S0"
+      ],
+      "owners": []
+    },
+    {
+      "path": "src/core/chart/types.ts",
+      "steps": [
+        "S0"
+      ],
+      "owners": []
+    },
+    {
+      "path": "src/core/formula/FormulaStore.ts",
+      "steps": [
+        "C0"
+      ],
+      "owners": []
+    },
+    {
+      "path": "src/core/host/archCheck.ts",
+      "steps": [
+        "S0"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/styles/header.css",
+      "steps": [
+        "C4"
+      ],
+      "owners": [
+        "BODY"
+      ]
+    },
+    {
+      "path": "test/unit/host/archCheck.gate.test.ts",
+      "steps": [
+        "S0"
+      ],
+      "owners": [
+        "TEST"
+      ]
+    },
+    {
+      "path": "vite.config.ts",
+      "steps": [
+        "B-0"
+      ],
+      "owners": [
+        "STR"
+      ]
+    }
+  ],
+  "touchedPlanned": [
+    {
+      "path": "src/core/coordinate/CellTextPolicy.ts",
+      "steps": [
+        "C10",
+        "R1",
+        "S0"
+      ],
+      "owners": [
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ColumnGeometry.ts",
+      "steps": [
+        "R1",
+        "R4",
+        "S0"
+      ],
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ColumnWindow.ts",
+      "steps": [
+        "R1",
+        "S0"
+      ],
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ColumnWindowPolicy.ts",
+      "steps": [
+        "R1",
+        "S0"
+      ],
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ExtraColumns.ts",
+      "steps": [
+        "R1",
+        "S0"
+      ],
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/RangeRectCalculator.ts",
+      "steps": [
+        "C9",
+        "R1",
+        "S0"
+      ],
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ViewportHeightJudge.ts",
+      "steps": [
+        "C14",
+        "R1",
+        "S0"
+      ],
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "src/core/domain/footer/FooterValues.ts",
+      "steps": [
+        "R1",
+        "R3"
+      ],
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/domain/render/RenderPlanner.ts",
+      "steps": [
+        "R1"
+      ],
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/domain/render/RenderRequest.ts",
+      "steps": [
+        "R1"
+      ],
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/domain/resize/ResizeGesture.ts",
+      "steps": [
+        "C4",
+        "R1"
+      ],
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/ComparisonOrderer.ts",
+      "steps": [
+        "R1",
+        "R2"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/LcpMergeOrderer.ts",
+      "steps": [
+        "C3b"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/RankIndex.ts",
+      "steps": [
+        "C3",
+        "R1"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SlicedSortRunner.ts",
+      "steps": [
+        "C13"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SortCostEstimate.ts",
+      "steps": [
+        "C3b",
+        "R1"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SortKeyColumn.ts",
+      "steps": [
+        "C2",
+        "R1",
+        "R2"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SortKeyStore.ts",
+      "steps": [
+        "C3",
+        "R1"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/Sorter.ts",
+      "steps": [
+        "R1",
+        "R2"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SyncSortRunner.ts",
+      "steps": [
+        "R1",
+        "R2"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/render/FooterView.ts",
+      "steps": [
+        "R3",
+        "R4"
+      ],
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/render/GeometryApplier.ts",
+      "steps": [
+        "R8",
+        "S0"
+      ],
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/HorizontalReveal.ts",
+      "steps": [
+        "C9"
+      ],
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/RangeOverlayAdapter.ts",
+      "steps": [
+        "C9"
+      ],
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/render/RenderScheduler.ts",
+      "steps": [
+        "R7",
+        "S0"
+      ],
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/render/ResizeSinkAdapter.ts",
+      "steps": [
+        "C8"
+      ],
+      "owners": [
+        "STR"
+      ]
+    },
+    {
+      "path": "src/core/render/ScrollFollower.ts",
+      "steps": [
+        "R6"
+      ],
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/render/ScrollObserver.ts",
+      "steps": [
+        "S0"
+      ],
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/render/body/BodyEventRouter.ts",
+      "steps": [
+        "C6"
+      ],
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/BodyRowSet.ts",
+      "steps": [
+        "C11"
+      ],
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/BodyView.ts",
+      "steps": [
+        "C9",
+        "R4",
+        "R5",
+        "S1"
+      ],
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/CellRegistry.ts",
+      "steps": [
+        "S1"
+      ],
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/ColumnPaintPlan.ts",
+      "steps": [
+        "C10",
+        "C6"
+      ],
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/ExtraCellPainters.ts",
+      "steps": [
+        "R5"
+      ],
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/rows/*.ts",
+      "steps": [
+        "R5"
+      ],
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/header/HeaderSortIndicator.ts",
+      "steps": [
+        "C4"
+      ],
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/render/header/HeaderView.ts",
+      "steps": [
+        "R4",
+        "S0",
+        "S1"
+      ],
+      "owners": [
+        "STR",
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/header/ResizeHandleBinder.ts",
+      "steps": [
+        "C8",
+        "S1"
+      ],
+      "owners": [
+        "STR",
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/viewport/PageScrollObserver.ts",
+      "steps": [
+        "C14"
+      ],
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "src/core/render/viewport/ViewportSampler.ts",
+      "steps": [
+        "C14",
+        "S0"
+      ],
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "test/unit/host/wg-archcheck-rules.test.ts",
+      "steps": [
+        "S0"
+      ],
+      "owners": [
+        "TEST"
+      ]
+    }
+  ],
+  "classCardFiles": [
+    {
+      "path": "src/core/coordinate/ExtraColumns.ts",
+      "card": "H1",
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ColumnGeometry.ts",
+      "card": "H2",
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ColumnWindow.ts",
+      "card": "H3",
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ColumnWindowPolicy.ts",
+      "card": "H4",
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/CellTextPolicy.ts",
+      "card": "H5",
+      "owners": [
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/RangeRectCalculator.ts",
+      "card": "H6",
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/coordinate/ViewportHeightJudge.ts",
+      "card": "H7",
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "src/core/domain/render/RenderRequest.ts",
+      "card": "H8",
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/domain/render/RenderPlanner.ts",
+      "card": "H9",
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/domain/resize/ResizeGesture.ts",
+      "card": "H10",
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SortKeyColumn.ts",
+      "card": "H11",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/RankIndex.ts",
+      "card": "H12",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SortKeyStore.ts",
+      "card": "H12",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/ComparisonOrderer.ts",
+      "card": "H13",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/LcpMergeOrderer.ts",
+      "card": "H13",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SyncSortRunner.ts",
+      "card": "H14",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SlicedSortRunner.ts",
+      "card": "H14",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/SortCostEstimate.ts",
+      "card": "H15",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/sort/Sorter.ts",
+      "card": "H15",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/domain/footer/FooterValues.ts",
+      "card": "H16",
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/render/GeometryApplier.ts",
+      "card": "D1",
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/body/CellRegistry.ts",
+      "card": "D2",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/header/HeaderView.ts",
+      "card": "D3",
+      "owners": [
+        "STR",
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/header/ResizeHandleBinder.ts",
+      "card": "D4",
+      "owners": [
+        "STR",
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/header/HeaderSortIndicator.ts",
+      "card": "D5",
+      "owners": [
+        "SORT"
+      ]
+    },
+    {
+      "path": "src/core/render/body/BodyView.ts",
+      "card": "D6",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/BodyRowSet.ts",
+      "card": "D7",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/rows/*.ts",
+      "card": "D8",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/ExtraCellPainters.ts",
+      "card": "D9",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/ColumnPaintPlan.ts",
+      "card": "D10",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/CellPainter.ts",
+      "card": "D11",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/BodyEventRouter.ts",
+      "card": "D12",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/body/CellLocator.ts",
+      "card": "D12",
+      "owners": [
+        "STR",
+        "BODY"
+      ]
+    },
+    {
+      "path": "src/core/render/RenderScheduler.ts",
+      "card": "D13",
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/render/ScrollObserver.ts",
+      "card": "D14",
+      "owners": [
+        "WIN"
+      ]
+    },
+    {
+      "path": "src/core/render/ScrollFollower.ts",
+      "card": "D15",
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/render/HorizontalReveal.ts",
+      "card": "D16",
+      "owners": [
+        "GEO"
+      ]
+    },
+    {
+      "path": "src/core/render/FooterView.ts",
+      "card": "D17",
+      "owners": [
+        "EDGE"
+      ]
+    },
+    {
+      "path": "src/core/render/viewport/ViewportSampler.ts",
+      "card": "D18",
+      "owners": [
+        "VP"
+      ]
+    },
+    {
+      "path": "src/core/render/viewport/PageScrollObserver.ts",
+      "card": "D18",
+      "owners": [
+        "VP"
+      ]
+    }
+  ],
+  "unresolvedClassTokens": [
+    "C0:DirectFlatSource",
+    "S0:Change",
+    "S0:Element",
+    "S0:HTMLElement",
+    "R2:IRowSource",
+    "C0b:ComposedFlatSource",
+    "C5:RowSet",
+    "C5:CellValue",
+    "C5:All",
+    "C7:ColsScrolled",
+    "C8:IResizeSink.commit",
+    "C10:RenderContext.maxChars",
+    "C12:RowState",
+    "C12:CellValue",
+    "C12:Range",
+    "C12:Focus",
+    "C13b:WindowFirstSortRunner",
+    "C13b:IPaintRowSource",
+    "C16:StickyFollower"
+  ],
+  "duplicateOwners": [],
+  "touchedExistingWithoutOwner": [],
+  "mentionOnly": [
+    "src/core/appearance/AppearanceProvider.ts",
+    "src/core/chart/types.ts",
+    "src/core/formula/FormulaStore.ts"
+  ],
+  "plannedWithoutOwner": []
+}

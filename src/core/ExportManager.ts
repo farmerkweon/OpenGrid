@@ -3,6 +3,14 @@ import { _downloadText } from './GridRenderer.js';
 import { applyMask } from './MaskingEngine.js';
 import type { WorksheetManager } from './WorksheetManager.js';
 import type { ExportOptions, PrintOptions } from './types.js';
+import { shouldStream } from './export/StreamPump.js';
+import type { IArtifactSource, IByteSink, ExportRunCtx, ExportResult, RowChunk, RowArtifact, CellArtifact } from './export/types.js';
+
+/** 스트리밍 경로가 지연 로드하는 모듈 묶음(시험에서 교체 가능). / Lazily-loaded modules of the streaming path (swappable in tests). */
+export interface StreamModules {
+  pickExcelSink: (o: { fileName?: string; fsAccess?: 'auto' | 'off' }) => { kind: 'fs' | 'blob'; create(): Promise<IByteSink> };
+  createChannel: (o: { sheetName?: string; includeHeader?: boolean }) => { writeStreaming(src: IArtifactSource, sink: IByteSink, ctx?: ExportRunCtx): Promise<ExportResult> };
+}
 
 /**
  * ExportManager 의존성 주입 인터페이스. / Dependency-injection interface for ExportManager.
@@ -32,6 +40,20 @@ export interface ExportDeps<T extends Record<string, any>> {
   t?: (key: string, params?: Record<string, string | number>) => string;
   /** i18n: 로케일 포맷 메타(인쇄 lang·날짜 로케일·Excel 폰트). / i18n: locale format meta (print lang, date locale, Excel font). */
   getMeta?: () => { intlLocale: string; exportFont?: string };
+  /** 스트리밍 경로 모듈 로더(미주입 시 지연 import). / Streaming module loader (lazy import when absent). */
+  loadStreamModules?: () => Promise<StreamModules>;
+}
+
+async function defaultLoadStreamModules(): Promise<StreamModules> {
+  const [sinks, ch, wr] = await Promise.all([
+    import('./export/sinks.js'),
+    import('./export/channels/XlsxChannel.js'),
+    import('./export/channels/XlsxWorkbookWriter.js'),
+  ]);
+  return {
+    pickExcelSink: sinks.pickExcelSink,
+    createChannel: (o) => new ch.XlsxChannel(new wr.XlsxWorkbookWriter({}), o),
+  };
 }
 
 /**
@@ -167,6 +189,8 @@ export class ExportManager<T extends Record<string, any> = any> {
     const data  = this._d.getData();
     const cols  = this._d.getColLayout().visibleLeaves.filter(c => !opts.exceptFields?.includes(c.field));
     const includeHeader = opts.includeHeader !== false;
+    const streamMode = opts.stream ?? 'auto';
+    const useStream = streamMode === 'force' || (streamMode === 'auto' && shouldStream(data.length));
 
     // Phase 2 슬롯 #4: cellSerializer. default = 현행 인라인(number→v, boolean→✓, object→'', else String).
     const serialize = (this._d.getStrategy ?? ((_s: string, fb: any) => fb))(
@@ -179,19 +203,26 @@ export class ExportManager<T extends Record<string, any> = any> {
       },
     );
 
+    const cellValue = (row: any, c: any): any => {
+      const raw = row[c.field];
+      if (opts.maskOnExport && c.mask && this._d.getMaskEnabled(c.field)) {
+        return applyMask(raw == null ? '' : String(raw), c.mask);
+      }
+      const v = raw;
+      if (v == null || v === '') return '';
+      return serialize(v, c, row);
+    };
+
+    if (useStream) {
+      void this._exportExcelStreaming(opts, fname, sheetName, data, cols, cellValue, includeHeader);
+      return;
+    }
+
     import('xlsx-js-style').then(({ utils, writeFile }) => {
       const rows: any[][] = [];
       if (includeHeader) rows.push(cols.map(c => c.header));
       for (const row of data) {
-        rows.push(cols.map(c => {
-          const raw = (row as any)[c.field];
-          if (opts.maskOnExport && c.mask && this._d.getMaskEnabled(c.field)) {
-            return applyMask(raw == null ? '' : String(raw), c.mask);
-          }
-          const v = raw;
-          if (v == null || v === '') return '';
-          return serialize(v, c, row);
-        }));
+        rows.push(cols.map(c => cellValue(row, c)));
       }
 
       const ws = utils.aoa_to_sheet(rows);
@@ -212,6 +243,95 @@ export class ExportManager<T extends Record<string, any> = any> {
     }).catch(() => {
       console.error('Excel 내보내기 실패: xlsx 패키지를 확인하세요.');
     });
+  }
+
+  /**
+   * @internal 대량 엑셀 스트리밍 경로: 행 청크를 흘려 쓰며 진척바·취소를 제공한다.
+   * / Large-export streaming path: flows row chunks, with progress bar and cancel.
+   */
+  private async _exportExcelStreaming(
+    opts: ExportOptions, fname: string, sheetName: string,
+    data: T[], cols: any[], cellValue: (row: any, c: any) => any, includeHeader: boolean,
+  ): Promise<void> {
+    const colWidths = this._d.getColWidths();
+    const colLayout = this._d.getColLayout();
+    const source: IArtifactSource = {
+      projectHeader: () => [cols.map(c => ({
+        text: c.header, field: c.field, colSpan: 1, rowSpan: 1,
+        widthPx: colWidths[colLayout.getColumnIndex(c.field)] ?? 100,
+        align: (c.align ?? 'left') as 'left' | 'right' | 'center',
+      }))],
+      totalRows: () => data.length,
+      dataState: () => 'ready',
+      projectRows: (): AsyncIterable<RowChunk> => {
+        const chunkSize = 2_000;
+        return (async function* () {
+          let buf: RowArtifact[] = [];
+          for (let i = 0; i < data.length; i++) {
+            const row = data[i] as any;
+            const cells = cols.map<CellArtifact>(c => {
+              const v = cellValue(row, c);
+              const isNum = typeof v === 'number' && c.type === 'number';
+              // rawText: 숫자는 원수치 그대로(지수표기 포함) — 채널이 정규식으로 되파싱하지 않게. / raw numeric text so the channel never re-parses via regex.
+              return {
+                text: String(v), ...(isNum ? { rawText: String(v) } : {}), applied: [], rowSpan: 1, colSpan: 1, hidden: false,
+                align: isNum || c.align === 'right' ? 'right' : (c.align ?? 'left'),
+                type: isNum ? 'number' : 'text',
+              };
+            });
+            buf.push({ modelIndex: i, cells });
+            if (buf.length >= chunkSize) { yield { rows: buf, done: false }; buf = []; }
+          }
+          yield { rows: buf, done: true };
+        })();
+      },
+    };
+
+    const ac = new AbortController();
+    const outer = opts.signal;
+    if (outer) { if (outer.aborted) ac.abort(); else outer.addEventListener('abort', () => ac.abort(), { once: true }); }
+    const { ExportProgressView } = await import('./export/ExportProgressView.js');
+    const view = new ExportProgressView({ t: this._d.t, onCancel: () => ac.abort() });
+    try {
+      const mods = await (this._d.loadStreamModules ?? defaultLoadStreamModules)();
+      let sink: IByteSink;
+      let kind: 'fs' | 'blob';
+      try {
+        const choice = mods.pickExcelSink({ fileName: fname });
+        kind = choice.kind;
+        sink = await choice.create();
+      } catch (e: any) {
+        if (e?.name === 'AbortError') { view.close(); return; }
+        if (e?.name !== 'SecurityError' && e?.name !== 'NotAllowedError') throw e;
+        const choice = mods.pickExcelSink({ fileName: fname, fsAccess: 'off' });
+        kind = choice.kind;
+        sink = await choice.create();
+      }
+      // Blob 경로만 onAfter 에 실제 blob 을 주기 위해 조각을 함께 모은다(FS 경로는 디스크로 직행 — blob 없음).
+      // / Blob path only: tee pieces so onAfter gets the real blob (FS path streams to disk — no blob).
+      const parts: BlobPart[] = [];
+      if (kind === 'blob' && opts.onAfter) {
+        const inner = sink;
+        sink = {
+          write: (c) => { parts.push(typeof c === 'string' ? c : c.slice()); return inner.write(c); },
+          close: () => inner.close(),
+          abort: (r) => inner.abort(r),
+          get desiredSize() { return inner.desiredSize; },
+        };
+      }
+      const total = data.length;
+      const res = await mods.createChannel({ sheetName, includeHeader }).writeStreaming(source, sink, {
+        signal: ac.signal,
+        onProgress: (done, tot) => { view.update(done, tot || total); opts.onProgress?.(done, tot || total); },
+      });
+      view.close();
+      if (!res.aborted && kind === 'blob') opts.onAfter?.(new Blob(parts, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    } catch (e) {
+      if (ac.signal.aborted) { view.close(); return; }
+      view.fail(e instanceof Error ? e.message : String(e));
+      opts.onError?.(e);
+      console.error('Excel 스트리밍 내보내기 실패', e);
+    }
   }
 
   /**

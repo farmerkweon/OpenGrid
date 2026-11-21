@@ -1,0 +1,57 @@
+{
+ "_about": "걸음 C7(그리는 범위를 세로 창 하나로 + 펼침의 명시 전 행 → 보이는 범위, 설계 §5-나 C7 rev3.2 · PACT_C7 §2-2) 뒤 바뀐 아홉 조작. 동기 그리기 범위 59행 → 30행(orderBy·writeCell·reorderRow), 묶음·디테일 펼침/접힘 전 행 → 보이는 범위, 뒤따르던 같은 범위 그리기 사라짐. clearData('clear')·세로 스크롤 구간은 바뀌지 않음.",
+ "A/orderBy": {
+  "sync": [
+   "D(0,29)@0"
+  ],
+  "async": []
+ },
+ "A/writeCell": {
+  "sync": [
+   "D(0,29)@0"
+  ],
+  "async": []
+ },
+ "A/reorderRow": {
+  "sync": [
+   "D(0,29)@0"
+  ],
+  "async": []
+ },
+ "G/groupBy": {
+  "sync": [
+   "D(0,2)@0"
+  ],
+  "async": []
+ },
+ "G/clickGroup": {
+  "sync": [
+   "D(0,29)@0"
+  ],
+  "async": []
+ },
+ "G/expandAll": {
+  "sync": [
+   "D(0,29)@0"
+  ],
+  "async": []
+ },
+ "G/collapseAll": {
+  "sync": [
+   "D(0,2)@0"
+  ],
+  "async": []
+ },
+ "D/expandRow1": {
+  "sync": [
+   "D(0,29)@0"
+  ],
+  "async": []
+ },
+ "D/collapseRow1": {
+  "sync": [
+   "D(0,29)@0"
+  ],
+  "async": []
+ }
+}

@@ -1,0 +1,160 @@
+{
+ "basic": {
+  "click 칸 글자": [
+   "onCellClick(1,2)"
+  ],
+  "click 칸": [
+   "onCellClick(2,0)"
+  ],
+  "dblclick 칸": [
+   "onCellDblClick(1,3)"
+  ],
+  "mousedown/up/move 칸": [
+   "onCellMouseDown(0,1)",
+   "onCellMouseMove(0,1)",
+   "onCellMouseUp(0,1)"
+  ],
+  "over/out 칸 A→B": [
+   "onCellMouseOut(1,1)",
+   "onCellMouseOver(1,2)"
+  ],
+  "over 바깥→칸": [
+   "onCellMouseOver(3,4)"
+  ],
+  "out 칸→바깥": [
+   "onCellMouseOut(3,4)"
+  ],
+  "click 행번호 칸": [
+   "onCellClick(2,-1)",
+   "outer:click"
+  ],
+  "click 상태 칸": [
+   "onCellClick(2,-1)",
+   "outer:click"
+  ],
+  "click 체크 상자": [
+   "onRowCheck(3,true)"
+  ],
+  "click 체크 칸 여백": [
+   "onCellClick(3,-1)",
+   "outer:click"
+  ],
+  "mousedown 행번호 칸": [
+   "outer:mousedown"
+  ],
+  "click 행 자체": [
+   "onCellClick(4,-1)",
+   "outer:click"
+  ],
+  "click 본문 빈 곳": [
+   "outer:click"
+  ],
+  "click 머리글 칸": [
+   "outer:mousemove"
+  ]
+ },
+ "frozen": {
+  "click 고정 칸": [
+   "onCellClick(1,0)"
+  ],
+  "over/out 고정→보통": [
+   "onCellMouseOut(1,1)",
+   "onCellMouseOver(1,2)"
+  ],
+  "dblclick 고정 칸": [
+   "onCellDblClick(2,1)"
+  ]
+ },
+ "merge": {
+  "click 가로 병합 칸": [
+   "onCellClick(0,1)"
+  ],
+  "click 병합 자리채움": [
+   "onCellClick(0,-1)",
+   "outer:click"
+  ],
+  "click 세로 병합 마스터": [
+   "onCellClick(2,4)"
+  ],
+  "mousemove 세로 병합 마스터": [
+   "onCellMouseMove(2,4)"
+  ],
+  "over 마스터 바깥→칸": [
+   "onCellMouseOver(2,4)"
+  ]
+ },
+ "group": {
+  "click 묶음 행 칸": [
+   "groupToggle(__c0:A)",
+   "outer:click"
+  ],
+  "click 묶음 행 이름": [
+   "groupToggle(__c0:A)",
+   "outer:click"
+  ],
+  "mousedown 묶음 행": [
+   "outer:mousedown"
+  ],
+  "over 묶음 행 칸": [
+   "outer:mouseover"
+  ]
+ },
+ "detail": {
+  "click 디테일 패널 안": [
+   "outer:click"
+  ],
+  "mousedown 디테일 패널 안": [
+   "outer:mousedown"
+  ],
+  "click 펼침 단추": [],
+  "click 펼침 칸": [
+   "onCellClick(0,-1)",
+   "outer:click"
+  ],
+  "click 자료 칸": [
+   "onCellClick(0,1)"
+  ]
+ },
+ "tree": {
+  "click 나무 아이콘": [
+   "treeToggle(n0)"
+  ],
+  "keydown Enter 나무 아이콘": [
+   "treeToggle(n0)"
+  ],
+  "keydown a 나무 아이콘": [
+   "outer:keydown"
+  ],
+  "click 나무 칸 글자": [
+   "onCellClick(0,0)"
+  ],
+  "click 잎 아이콘": [
+   "onCellClick(1,0)"
+  ]
+ },
+ "kids": {
+  "click 자식 A": [
+   "onCellClick(1,2)"
+  ],
+  "click 자식 B(사용자 리스너)": [
+   "user:k-b",
+   "onCellClick(1,2)"
+  ],
+  "click 자식 S(사용자가 전파 막음)": [
+   "user:k-s"
+  ],
+  "over 바깥→자식 A": [
+   "onCellMouseOver(1,2)"
+  ],
+  "over/out 자식 A→B(같은 칸)": [
+   "onCellMouseOut(1,2)",
+   "onCellMouseOver(1,2)"
+  ],
+  "out 자식 B→바깥": [
+   "onCellMouseOut(1,2)"
+  ],
+  "mousemove 자식 A": [
+   "onCellMouseMove(1,2)"
+  ]
+ }
+}

@@ -1,0 +1,1622 @@
+{
+  "_about": "T0 사실 파일(합본). L19 가 합침: L19 측정 + L18 T0_FACTS.golden.json + L20 T0_FACTS.inventory.json. 각 항목 = {value, cmd, env, ts, by}. ts 는 원자료 파일 시각(date 실측과 같은 시계).",
+  "_merged": "2026-11-21 05:01:21",
+  "_sources": {
+    "L18": true,
+    "L20": true
+  },
+  "GD-sizes": {
+    "value": {
+      "GD-01": {
+        "fileBytes": 89702,
+        "lines": 1115,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-02": {
+        "fileBytes": 122378,
+        "lines": 1516,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 13,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-03": {
+        "fileBytes": 100436,
+        "lines": 1177,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 9,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-04": {
+        "fileBytes": 89393,
+        "lines": 1111,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 238,
+        "headerCell": 8,
+        "mergePh": 2,
+        "ariaRowspan": 0
+      },
+      "GD-05": {
+        "fileBytes": 89761,
+        "lines": 1113,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 238,
+        "headerCell": 8,
+        "mergePh": 2,
+        "ariaRowspan": 1
+      },
+      "GD-06": {
+        "fileBytes": 89748,
+        "lines": 1103,
+        "ogRow": 29,
+        "groupRow": 1,
+        "gridcell": 232,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-07": {
+        "fileBytes": 99995,
+        "lines": 1457,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-08": {
+        "fileBytes": 100520,
+        "lines": 1165,
+        "ogRow": 28,
+        "groupRow": 0,
+        "gridcell": 224,
+        "headerCell": 9,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-09": {
+        "fileBytes": 91863,
+        "lines": 1121,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-10": {
+        "fileBytes": 193869,
+        "lines": 2219,
+        "ogRow": 59,
+        "groupRow": 0,
+        "gridcell": 472,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-11": {
+        "fileBytes": 92046,
+        "lines": 1116,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-12": {
+        "fileBytes": 91437,
+        "lines": 1129,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 10,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-13": {
+        "fileBytes": 64085,
+        "lines": 775,
+        "ogRow": 20,
+        "groupRow": 0,
+        "gridcell": 160,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-14": {
+        "fileBytes": 89748,
+        "lines": 1103,
+        "ogRow": 29,
+        "groupRow": 1,
+        "gridcell": 232,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      },
+      "GD-15": {
+        "fileBytes": 90110,
+        "lines": 1117,
+        "ogRow": 30,
+        "groupRow": 0,
+        "gridcell": 240,
+        "headerCell": 8,
+        "mergePh": 0,
+        "ariaRowspan": 0
+      }
+    },
+    "cmd": "WG_GOLDEN_UPDATE=1 npx vitest run test/unit/wg-golden-dom.test.ts (저장) → 파일을 node 로 세어 냄(og-row·gridcell·header-cell 정규식)",
+    "ts": "2026-11-21 04:35:03",
+    "note": "장면 공통 컨테이너 1200x640, 본문 상자 주입 1200x600. 첫 그림은 30행(VirtualScroll onRender 길) — GD-10 은 CF 적용 뒤 통째 수단으로 다시 그려 59행.",
+    "by": "L18"
+  },
+  "GD-masking": {
+    "value": [
+      "og-r-<n> → og-r-@k (처음 나온 순서)"
+    ],
+    "cmd": "두 번 그린 사진 비교 15/15 바이트 같음 (wg-golden-dom.test.ts 「결정적」 시험)",
+    "ts": "2026-11-21 04:49:09",
+    "by": "L18"
+  },
+  "U-REG-08": {
+    "value": {
+      "scene": "GD-05",
+      "gridcellWithAriaColindex": 238,
+      "mergePlaceholders": 2,
+      "rowSpanMasterHasAriaColindex": true
+    },
+    "cmd": "GD-05.html 에서 role=\"gridcell\"(aria-colindex 를 가짐)·og-cell--merge-ph 셈",
+    "ts": "2026-11-21 04:35:03",
+    "note": "세로 병합 마스터 칸은 aria-colindex 를 가진 gridcell 로 세어지고(aria-rowspan=3), 가려진 두 자리(placeholder)는 aria-colindex 가 없다 → `.og-cell[aria-colindex]` 수 = 240 − 2 = 238.",
+    "by": "L18"
+  },
+  "NR-15/GD-14": {
+    "value": {
+      "ogRow": 29,
+      "groupRow": 1,
+      "bodyHeightPx": 4384
+    },
+    "cmd": "GD-14.html 셈 (묶음 200행, 두 그룹 펼침)",
+    "ts": "2026-11-21 04:35:03",
+    "note": "지금 코드는 묶음을 펼쳐도 전 행을 DOM 으로 그리지 않는다 — 그린 범위(.og-row 29 + 묶음 행 1)만. 본문 높이는 펼친 합(137행×32).",
+    "by": "L18"
+  },
+  "ST-08": {
+    "value": {
+      "existingNetCatches": true,
+      "existingNetFailed": [
+        "test/unit/appearance-resolver.test.ts > leaf 데이터 헤더 th 의 cssText 가 변경 전 골든과 정확히 동일",
+        "test/unit/appearance-resolver.test.ts > extra 컬럼(stateColumn) th 의 cssText 가 변경 전 골든과 정확히 동일"
+      ],
+      "existingNetCounts": "171 파일(1 실패) · 1941 통과 · 2 실패 · 2 건너뜀",
+      "gd01Catches": true,
+      "gd01Line": 13
+    },
+    "cmd": "npx vitest run --config sessions/widegrid-perf-2026-11/steps/T0/L18/st08/vitest.st08.config.mjs (setupFiles 로 실행 중에만 renderHeader 감쌈, wg-* 뺌) · wg-golden-dom.test.ts ST-08",
+    "ts": "2026-11-21 04:42:17",
+    "by": "L18"
+  },
+  "ST-20": {
+    "value": [
+      {
+        "variant": "ⓐ 자료만 바꿈",
+        "verdict": "A ≠ B (잡음)",
+        "line": 786
+      },
+      {
+        "variant": "ⓑ og-selected 지움(행)",
+        "verdict": "A ≠ B (잡음)",
+        "line": 615
+      },
+      {
+        "variant": "ⓑ' 칸 클래스 지움",
+        "verdict": "A ≠ B (잡음)",
+        "line": 933
+      },
+      {
+        "variant": "ⓒ 칸 폭 +1px",
+        "verdict": "A ≠ B (잡음)",
+        "line": 777
+      },
+      {
+        "variant": "ⓓ aria-selected 바꿈(행)",
+        "verdict": "A ≠ B (잡음)",
+        "line": 615
+      },
+      {
+        "variant": "ⓓ' 칸 aria-label 바꿈",
+        "verdict": "A ≠ B (잡음)",
+        "line": 1080
+      },
+      {
+        "variant": "ⓔ 칸 순서 맞바꿈",
+        "verdict": "A ≠ B (잡음)",
+        "line": 1230
+      }
+    ],
+    "cmd": "npx vitest run test/unit/wg-df-differential.test.ts (ST-20 묶음)",
+    "ts": "2026-11-21 04:49:09",
+    "note": "og-selected·aria-selected 는 지금 코드에서 행에 붙어 ⓑⓓ 는 행에, ⓑ'ⓓ' 는 칸 판(덧붙임).",
+    "by": "L18"
+  },
+  "DF-01": {
+    "value": {
+      "seeds": {
+        "1": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 30,
+            "kinds": {
+              "orderBy": 6,
+              "diagonal": 4,
+              "removeRow": 2,
+              "scrollLeft": 3,
+              "dragHandle": 3,
+              "setFilter": 3,
+              "scrollTop": 2,
+              "addRow": 2,
+              "headerClick": 5
+            }
+          },
+          "editorOpened": 8,
+          "editorNotOpened": 0
+        },
+        "2": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 22,
+            "kinds": {
+              "diagonal": 2,
+              "addRow": 3,
+              "removeRow": 2,
+              "scrollTop": 3,
+              "scrollLeft": 6,
+              "headerClick": 3,
+              "orderBy": 1,
+              "dragHandle": 2
+            }
+          },
+          "editorOpened": 3,
+          "editorNotOpened": 0
+        },
+        "3": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 28,
+            "kinds": {
+              "diagonal": 5,
+              "addRow": 4,
+              "orderBy": 3,
+              "setFilter": 1,
+              "scrollTop": 4,
+              "removeRow": 3,
+              "scrollLeft": 4,
+              "headerClick": 3,
+              "dragHandle": 1
+            }
+          },
+          "editorOpened": 4,
+          "editorNotOpened": 0
+        },
+        "4": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 21,
+            "kinds": {
+              "addRow": 4,
+              "removeRow": 3,
+              "orderBy": 2,
+              "scrollLeft": 2,
+              "dragHandle": 1,
+              "diagonal": 4,
+              "headerClick": 2,
+              "scrollTop": 3
+            }
+          },
+          "editorOpened": 4,
+          "editorNotOpened": 0
+        },
+        "5": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 15,
+            "kinds": {
+              "orderBy": 1,
+              "dragHandle": 2,
+              "scrollLeft": 2,
+              "setFilter": 1,
+              "headerClick": 2,
+              "addRow": 3,
+              "diagonal": 2,
+              "scrollTop": 1,
+              "removeRow": 1
+            }
+          },
+          "editorOpened": 0,
+          "editorNotOpened": 0
+        },
+        "6": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 16,
+            "kinds": {
+              "scrollLeft": 2,
+              "removeRow": 4,
+              "dragHandle": 1,
+              "diagonal": 2,
+              "scrollTop": 1,
+              "addRow": 3,
+              "headerClick": 1,
+              "orderBy": 2
+            }
+          },
+          "editorOpened": 1,
+          "editorNotOpened": 0
+        },
+        "7": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 21,
+            "kinds": {
+              "scrollTop": 1,
+              "dragHandle": 3,
+              "headerClick": 1,
+              "orderBy": 4,
+              "addRow": 4,
+              "removeRow": 3,
+              "setFilter": 2,
+              "scrollLeft": 2,
+              "diagonal": 1
+            }
+          },
+          "editorOpened": 0,
+          "editorNotOpened": 0
+        },
+        "8": {
+          "ops": 60,
+          "scope": "viewport",
+          "allSame": true,
+          "offscreenRangeMismatch": {
+            "ops": 33,
+            "kinds": {
+              "diagonal": 3,
+              "removeRow": 4,
+              "scrollLeft": 4,
+              "orderBy": 3,
+              "dragHandle": 5,
+              "setFilter": 2,
+              "headerClick": 4,
+              "addRow": 3,
+              "scrollTop": 5
+            }
+          },
+          "editorOpened": 3,
+          "editorNotOpened": 0
+        }
+      },
+      "rowScope": "viewport",
+      "fullRenderMeans": "grid._doRender(...grid._visRange())"
+    },
+    "cmd": "npx vitest run test/unit/wg-df-differential.test.ts",
+    "ts": "2026-11-21 04:49:09",
+    "note": "화면 밖 범위 차이 = 「그려진 행 전부」로 비교했다면 A≠B 였던 조작 수. 지금 코드의 두 통째 길(VirtualScroll onRender→_doRender(s,e) / _doRender(..._visRange()))이 화면 밖 여분 행 수만 다름. R7 뒤 rowScope all 로.",
+    "by": "L18"
+  },
+  "TR-28(L18 몫)": {
+    "value": {
+      "l18UnitFilesDurationSec": 364.56,
+      "tests": "50 passed (50)"
+    },
+    "cmd": "npx vitest run test/unit/wg-golden-dom.test.ts test/unit/wg-df-differential.test.ts",
+    "ts": "2026-11-21 04:49:09",
+    "by": "L18"
+  },
+  "EX-00": {
+    "value": {
+      "files": 14,
+      "match": 14,
+      "mismatch": 0
+    },
+    "how": "sha256sum -c steps/T0/L20/ex00_expected.txt (표 값을 옮긴 목록) · test/unit/wg-existing-net.test.ts",
+    "at": "2026-11-21 04:29:17",
+    "raw": "sessions\\widegrid-perf-2026-11\\steps\\T0\\L20\\evidence/ex00_sha256sum_check.txt",
+    "by": "L20"
+  },
+  "EX-03": {
+    "value": {
+      "gitDiffTestExit": 0,
+      "deletedTracked": 0
+    },
+    "how": "git diff --exit-code -- test/ ; git ls-files --deleted -- test/",
+    "at": "2026-11-21 04:29:25",
+    "raw": "sessions\\widegrid-perf-2026-11\\steps\\T0\\L20\\evidence/git_diff_test_exit.txt",
+    "by": "L20"
+  },
+  "AR-09": {
+    "value": {
+      "src/core/OpenGrid.ts": 4881,
+      "src/core/GridRenderer.ts": 1289
+    },
+    "how": "wc -l src/core/OpenGrid.ts src/core/GridRenderer.ts",
+    "at": "2026-09-24 12:33:38 (파일 수정 시각 — 이번 판 무수정)",
+    "by": "L20"
+  },
+  "AR-12": {
+    "value": {
+      "total": 102,
+      "fromDesign": 49,
+      "addedAtT0": 53
+    },
+    "how": "node steps/T0/L20/scripts/seam_scan.mjs · seam_alias_scan.mjs → test/unit/__golden__/wg/seams.txt",
+    "at": "2026-11-21 04:38:24",
+    "raw": "sessions\\widegrid-perf-2026-11\\steps\\T0\\L20\\evidence/seams_raw.tsv",
+    "by": "L20"
+  },
+  "AR-13": {
+    "value": {
+      "gitSrcFiles": 291,
+      "ownerEntries": 81,
+      "stepTokens": 226,
+      "touchedExisting": 24,
+      "touchedPlanned": 41,
+      "classCardFiles": 40,
+      "duplicateOwners": 0,
+      "touchedExistingWithoutOwner": 0,
+      "plannedWithoutOwner": 0,
+      "mentionOnly": [
+        "src/core/appearance/AppearanceProvider.ts",
+        "src/core/chart/types.ts",
+        "src/core/formula/FormulaStore.ts"
+      ]
+    },
+    "how": "npx vite-node steps/T0/L20/scripts/gen_inventory.ts -- owners (DESIGN.md §5-가·§5-나·§3-2/3-3 에서 추출)",
+    "at": "2026-11-21 04:42:22",
+    "raw": "test/unit/__golden__/wg/owners.json",
+    "by": "L20"
+  },
+  "AR-20": {
+    "value": {
+      "indexExports": 116,
+      "gridOptionsKeys": 96,
+      "columnDefKeys": 45,
+      "eventNames": 47,
+      "renderContextKeys": 11,
+      "openGridNonMethods": 13,
+      "openGridPublicMethods_existingFixture": 170
+    },
+    "how": "npx vite-node steps/T0/L20/scripts/gen_inventory.ts -- api (TypeScript 검사기로 src/index.ts·types.ts·CellRenderer.ts·OpenGrid.ts 를 읽음)",
+    "at": "2026-11-21 04:37:18",
+    "raw": "test/unit/__golden__/wg/public_api_extra.txt",
+    "by": "L20"
+  },
+  "I-ED-06": {
+    "value": {
+      "publicStartEditMethod": null,
+      "note": "공개 메서드 목록(public_api_surface.txt 170개)에 편집을 시작하는 메서드가 없다 — /edit/i 로 걸리는 것은 getEditedRows 하나뿐. 창 밖 칸 편집 시작은 공개 길로 못 함(I-ED-06 은 「없음」 갈래)"
+    },
+    "how": "grep -iE 'edit' test/unit/refactor-characterization/__fixtures__/public_api_surface.txt",
+    "at": "2026-09-24 13:56:23 (목록 파일 시각 — 무수정)",
+    "cross": "L19 도 재는 중(로그 04:48:18)",
+    "by": "L20"
+  },
+  "I-E2E-01": {
+    "value": {
+      "files": 19,
+      "tests": 210,
+      "passed": 92,
+      "failed": 118,
+      "skipped": 0,
+      "flaky": 0,
+      "failedEnv": 118,
+      "failedReal": 0,
+      "failedTimeoutKind": 112,
+      "failedAssertionKind": 6
+    },
+    "how": "npx playwright test <test/e2e 의 기존 19개 스펙을 이름으로> --reporter=json,line (두 번). 새 wg-* 스펙은 넣지 않음",
+    "at": "2026-11-21 04:52:09",
+    "raw": "sessions/widegrid-perf-2026-11/steps/T0/L20/e2e_baseline.json",
+    "by": "L20"
+  },
+  "TR-28": {
+    "value": {
+      "e2eAllOnce": {
+        "run1": {
+          "start": "2026-11-21 04:43:26",
+          "end": "2026-11-21 04:46:16"
+        },
+        "run2": {
+          "start": "2026-11-21 04:48:38",
+          "end": "2026-11-21 04:51:11"
+        },
+        "approx": "약 2분 30초~2분 50초 (210건, 다른 레인 부하 중)"
+      }
+    },
+    "how": "e2e 전량 두 번의 date 시작·끝(evidence/e2e_run*_start/end.txt)",
+    "at": "2026-11-21 04:51:11",
+    "by": "L20"
+  },
+  "TR-27": {
+    "value": {
+      "scrollbarOnGap": 8,
+      "defaultGap": 0,
+      "describeLevelUseRejected": true
+    },
+    "how": "test/e2e/wg-t0-shots.spec.ts T0-TR27(시험 안에서 chromium.launch ignoreDefaultArgs --hide-scrollbars)·T0-TR27c",
+    "at": "2026-11-21 04:55:35",
+    "cross": "L19 측정 8px 과 같음(L19 로그 04:46:44)",
+    "by": "L20"
+  },
+  "I-DT-04": {
+    "value": {
+      "footerFirstCellMinusH0Left": -28
+    },
+    "how": "test/e2e/wg-t0-shots.spec.ts T0-SHOT-DT04 (masterDetail height 64 + footer sum, 800×400)",
+    "at": "2026-11-21 04:55:34",
+    "cross": "L19 측정 −28 과 같음(L19 로그 04:46:44)",
+    "by": "L20"
+  },
+  "I-ML-07": {
+    "value": {
+      "gd13": {
+        "cell": {
+          "top": 56.5,
+          "bottom": 127.5,
+          "height": 71,
+          "width": 120
+        },
+        "totalLines": 1,
+        "visibleLineIdx": [
+          0
+        ],
+        "firstVisibleLine": 1,
+        "visibleMarker": "가나다 라마바",
+        "textCenterMinusCellCenter": 0,
+        "textLen": 7
+      },
+      "short2": {
+        "cell": {
+          "top": 56.5,
+          "bottom": 127.5,
+          "height": 71,
+          "width": 64
+        },
+        "totalLines": 2,
+        "visibleLineIdx": [
+          0,
+          1
+        ],
+        "firstVisibleLine": 1,
+        "visibleMarker": "가나다 라마바",
+        "textCenterMinusCellCenter": 0,
+        "textLen": 7
+      }
+    },
+    "how": "test/e2e/wg-t0-shots.spec.ts T0-SHOT-W01·W02 → shots/W02_gd13_wrap72_short.png · W01_*.png",
+    "at": "2026-11-21 04:55:33",
+    "by": "L20"
+  },
+  "§8-가⑤": {
+    "value": {
+      "long4000": {
+        "cell": {
+          "top": 56.5,
+          "bottom": 127.5,
+          "height": 71,
+          "width": 260
+        },
+        "totalLines": 177,
+        "visibleLineIdx": [
+          87,
+          88,
+          89
+        ],
+        "firstVisibleLine": 88,
+        "visibleMarker": "0117",
+        "textCenterMinusCellCenter": 0,
+        "textLen": 4000
+      },
+      "verdict": "긴 wrap 칸은 177줄 가운데 88~90번째 줄(마디 〔0117〕)이 보인다 = 가운데 줄. 짧은 wrap 칸은 세로 가운데(차 0px)"
+    },
+    "how": "test/e2e/wg-t0-shots.spec.ts T0-SHOT-W01 → shots/W01_wrap72_long4000_short2.png",
+    "at": "2026-11-21 04:55:33",
+    "by": "L20"
+  },
+  "I-VP-03": {
+    "value": {
+      "hostHeight": 997.5,
+      "rows": 30,
+      "lastRowIndex": 30
+    },
+    "how": "test/e2e/wg-t0-shots.spec.ts T0-SHOT-VP03 → shots/VP03_noheight_30rows.png",
+    "at": "2026-11-21 04:55:33",
+    "by": "L20"
+  },
+  "I-DT-05": {
+    "value": {
+      "rowsFile": "sessions/widegrid-perf-2026-11/steps/T0/L20/shots/facts/DT05.rows.json",
+      "rows": {
+        "expanded": {
+          "rows": [
+            "1|r0c0|0",
+            "4|r1c0|119",
+            "5|r2c0|238",
+            "8|r3c0|57",
+            "9|r4c0|176",
+            "10|r5c0|295",
+            "11|r6c0|114",
+            "12|r7c0|233",
+            "13|r8c0|52",
+            "14|r9c0|171",
+            "15|r10c0|290",
+            "16|r11c0|109",
+            "17|r12c0|228",
+            "18|r13c0|47",
+            "19|r14c0|166",
+            "20|r15c0|285",
+            "21|r16c0|104",
+            "22|r17c0|223",
+            "23|r18c0|42"
+          ],
+          "detailPanels": 2
+        },
+        "afterOrderBy": {
+          "rows": [
+            "1|r121c0|299",
+            "2|r242c0|298",
+            "3|r63c0|297",
+            "4|r184c0|296",
+            "5|r5c0|295",
+            "6|r126c0|294",
+            "7|r247c0|293",
+            "8|r68c0|292",
+            "9|r189c0|291",
+            "10|r10c0|290",
+            "11|r131c0|289",
+            "12|r252c0|288",
+            "13|r73c0|287",
+            "14|r194c0|286",
+            "15|r15c0|285",
+            "16|r136c0|284",
+            "17|r257c0|283",
+            "18|r78c0|282",
+            "19|r199c0|281",
+            "20|r20c0|280",
+            "21|r141c0|279",
+            "22|r262c0|278",
+            "23|r83c0|277"
+          ],
+          "detailPanels": 0
+        },
+        "afterFilter": {
+          "rows": [
+            "1|r1c0|119",
+            "2|r10c0|290",
+            "3|r11c0|109",
+            "4|r12c0|228",
+            "5|r13c0|47",
+            "6|r14c0|166",
+            "7|r15c0|285",
+            "8|r16c0|104",
+            "9|r17c0|223",
+            "10|r18c0|42",
+            "11|r19c0|161",
+            "12|r21c0|99",
+            "13|r31c0|89",
+            "14|r41c0|79",
+            "15|r51c0|69",
+            "16|r61c0|59",
+            "17|r71c0|49",
+            "18|r81c0|39",
+            "19|r91c0|29",
+            "20|r100c0|200",
+            "21|r101c0|19",
+            "22|r102c0|138",
+            "23|r103c0|257"
+          ],
+          "detailPanels": 0
+        }
+      },
+      "counts": {
+        "expanded": [
+          19,
+          2
+        ],
+        "afterOrderBy": [
+          23,
+          0
+        ],
+        "afterFilter": [
+          23,
+          0
+        ]
+      }
+    },
+    "how": "test/e2e/wg-t0-shots.spec.ts T0-SHOT-DT05 (expandRow(0)·expandRow(4) → orderBy c1 desc → setFilter c0 contains 1)",
+    "at": "2026-11-21 04:55:34",
+    "by": "L20"
+  },
+  "NR-01": {
+    "value": {
+      "jsdom": {
+        "renderBody": 2,
+        "renderer": 2225,
+        "rendererMaxPerCell": 2,
+        "bodyAdded": 89,
+        "bodyRemoved": 89,
+        "bodyAddedDeep": 8989,
+        "bodyAttr": 1
+      },
+      "chromium": {
+        "renderBody": 2,
+        "renderer": 3125,
+        "rendererMaxPerCell": 2,
+        "bodyAdded": 125,
+        "bodyRemoved": 125,
+        "bodyAddedDeep": 12625
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-01b": {
+    "value": {
+      "jsdom": {
+        "renderHeader": 1,
+        "thSame": 0,
+        "thTotal": 50,
+        "headerAdded": 1,
+        "headerRemoved": 1
+      },
+      "chromium": {
+        "renderHeader": 1,
+        "thSame": 0,
+        "thTotal": 50,
+        "headerAdded": 1,
+        "headerRemoved": 1
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-02": {
+    "value": {
+      "jsdom": {
+        "perStep": {
+          "renderBody": 1,
+          "renderer": 750,
+          "bodyAdded": 30,
+          "bodyRemoved": 30,
+          "bodyAddedDeep": 3030
+        },
+        "allStepsEqual": true,
+        "total": {
+          "renderBody": 10,
+          "renderer": 7500,
+          "bodyAdded": 300,
+          "bodyRemoved": 300,
+          "bodyAddedDeep": 30300
+        }
+      },
+      "chromium": {
+        "perStep": {
+          "renderBody": 1,
+          "renderer": 1050,
+          "bodyAdded": 42,
+          "bodyAddedDeep": 4242
+        },
+        "allStepsEqual": true,
+        "total": {
+          "renderBody": 10,
+          "renderer": 10500,
+          "bodyAdded": 420,
+          "bodyAddedDeep": 42420
+        }
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-02b": {
+    "value": {
+      "jsdom": {
+        "renderBody": 1,
+        "renderer": 750,
+        "bodyAdded": 30,
+        "bodyRemoved": 30,
+        "bodyAddedDeep": 3030
+      },
+      "chromium": {
+        "renderBody": 1,
+        "renderer": 1050,
+        "bodyAdded": 42,
+        "bodyAddedDeep": 4242
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-03": {
+    "value": {
+      "jsdom": {
+        "headerClick": {
+          "renderBody": 2,
+          "renderHeader": 1,
+          "renderer": 2225,
+          "rendererMaxPerCell": 2
+        },
+        "orderBy": {
+          "renderBody": 3,
+          "renderHeader": 1,
+          "renderer": 3700,
+          "rendererMaxPerCell": 3
+        }
+      },
+      "chromium": {
+        "headerClick": {
+          "renderBody": 2,
+          "renderHeader": 1,
+          "renderer": 3125,
+          "rendererMaxPerCell": 2
+        },
+        "orderBy": {
+          "renderBody": 3,
+          "renderHeader": 1,
+          "renderer": 5200,
+          "rendererMaxPerCell": 3
+        }
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-04": {
+    "value": {
+      "jsdom": {
+        "renderBody": 1,
+        "renderer": 750,
+        "bodyAdded": 30,
+        "bodyRemoved": 30,
+        "bodyAddedDeep": 3030
+      },
+      "chromium": {
+        "renderBody": 1,
+        "renderer": 1050,
+        "bodyAdded": 42,
+        "bodyAddedDeep": 4242
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-04b": {
+    "value": {
+      "jsdom": {
+        "renderBody": 1,
+        "renderer": 750,
+        "bodyAdded": 30,
+        "bodyRemoved": 30,
+        "bodyAddedDeep": 3030
+      },
+      "chromium": {
+        "scrollTop": 96,
+        "renderBody": 1,
+        "renderer": 1050,
+        "bodyAdded": 42,
+        "bodyAddedDeep": 4242
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-05": {
+    "value": {
+      "jsdom": {
+        "vScroll10": 10,
+        "hScroll10": 10,
+        "sort1": 3,
+        "drag40": 0
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입)",
+    "ts": "2026-11-21 04:56:01",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-06": {
+    "value": {
+      "jsdom": {
+        "thSame": 0,
+        "thTotal": 50,
+        "renderHeader": 1,
+        "headerAdded": 1,
+        "headerRemoved": 1
+      },
+      "chromium": {
+        "thSame": 0,
+        "thTotal": 50,
+        "renderHeader": 1,
+        "headerAdded": 1,
+        "headerRemoved": 1
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-07": {
+    "value": {
+      "jsdom": {
+        "renderHeader": 0,
+        "headerAdded": 0,
+        "headerRemoved": 0,
+        "thSame": 50,
+        "thTotal": 50,
+        "renderBody": 0
+      },
+      "chromium": {
+        "renderHeader": 0,
+        "headerAdded": 0,
+        "headerRemoved": 0,
+        "thSame": 50,
+        "thTotal": 50,
+        "renderBody": 0
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-08": {
+    "value": {
+      "jsdom": {
+        "renderBody": 2,
+        "renderer": 2950,
+        "bodyAdded": 118,
+        "bodyRemoved": 89,
+        "bodyAddedDeep": 11918
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입)",
+    "ts": "2026-11-21 04:56:01",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-09": {
+    "value": {
+      "jsdom": {
+        "renderBodySync": 10,
+        "renderer": 14750,
+        "bodyAdded": 590,
+        "bodyAddedDeep": 59590
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입)",
+    "ts": "2026-11-21 04:56:01",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-10": {
+    "value": {
+      "jsdom": {
+        "renderBody": 1,
+        "renderer": 1475,
+        "bodyAdded": 59,
+        "bodyAddedDeep": 5959
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입)",
+    "ts": "2026-11-21 04:56:01",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-11": {
+    "value": {
+      "jsdom": {
+        "renderBody": 1,
+        "renderer": 1475,
+        "bodyAdded": 59,
+        "bodyAddedDeep": 5959
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입)",
+    "ts": "2026-11-21 04:56:01",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-12": {
+    "value": {
+      "jsdom": {
+        "rows": 30,
+        "all": 3030,
+        "withoutRenderer": 2280,
+        "cells": 1500
+      },
+      "chromium": {
+        "rows": 42,
+        "cells": 2100,
+        "all": 4242,
+        "withoutRenderer": 3192,
+        "clientWidth": 1878,
+        "clientHeight": 963,
+        "scrollWidth": 6000
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-13": {
+    "value": {
+      "jsdom": {
+        "renderer": 0,
+        "bodyAdded": 0
+      },
+      "chromium": {
+        "renderer": 0,
+        "bodyAdded": 0
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입) + Chromium(1920×1080, 상자 1880×1000, 3만행×50컬럼)",
+    "ts": "2026-11-21 04:56:55",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-14": {
+    "value": {
+      "jsdom": {
+        "30000": {
+          "renderBody": 1,
+          "dataLayerCalls": {
+            "getDataIndexByRowId": 300,
+            "getData": 300,
+            "getRowByIndex": 60,
+            "getRowState": 30
+          }
+        },
+        "100000": {
+          "renderBody": 1,
+          "dataLayerCalls": {
+            "getDataIndexByRowId": 300,
+            "getData": 300,
+            "getRowByIndex": 60,
+            "getRowState": 30
+          }
+        }
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입)",
+    "ts": "2026-11-21 04:56:01",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-15": {
+    "value": {
+      "jsdom": {
+        "setData200": 30,
+        "clearData": 0,
+        "groupCollapsed": 0,
+        "groupCollapsedRoleRows": 3,
+        "groupExpandAll": 29,
+        "groupExpandAllRoleRows": 30,
+        "detailBefore": 30,
+        "detailExpanded": 23
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-baseline.test.ts",
+    "env": "jsdom(W: 1,000행×50컬럼, 1,200×640 주입)",
+    "ts": "2026-11-21 04:56:01",
+    "by": "L19",
+    "note": "세는 수단: renderer=사용자 렌더러 호출(짝수 컬럼 25개) · bodyAdded=본문 childList 붙은 노드(=행) · bodyAddedDeep=자손까지 · thSame/thTotal=머리글 th 동일성 · renderBody/renderHeader=프로토타입 감싸기(진단)"
+  },
+  "NR-L2": {
+    "value": {
+      "publicMeans": "hideColumn(field) → showColumn(field)",
+      "jsdom": {
+        "method": "hideColumn+showColumn",
+        "thSame": 0,
+        "thTotal": 50,
+        "headerAdded": 2,
+        "headerRemoved": 2,
+        "renderHeader": 2
+      },
+      "chromium": {
+        "renderBody": 3,
+        "renderHeader": 2,
+        "renderer": 5200,
+        "rendererMaxPerCell": 3,
+        "bodyAdded": 208,
+        "bodyRemoved": 208,
+        "bodyAddedDeep": 20842,
+        "headerAdded": 2,
+        "headerRemoved": 2,
+        "thSame": 0,
+        "thTotal": 50
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-alive.test.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1",
+    "env": "jsdom + Chromium",
+    "ts": "2026-11-21 04:55:46",
+    "by": "L19"
+  },
+  "U-FLAT-02": {
+    "value": {
+      "directHitsPerRender": 1500,
+      "detail": {
+        "viaScroll": {
+          "getData": 1500,
+          "renderBody": 1,
+          "rows": 30
+        },
+        "viaWindow": {
+          "getData": 2953,
+          "renderBody": 1,
+          "rows": 59
+        },
+        "perCell": 1
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-facts.test.ts",
+    "env": "jsdom(100행×50컬럼, 1,200×640)",
+    "ts": "2026-11-21 04:58:56",
+    "by": "L19",
+    "note": "칸마다 getData 1번. 스크롤 rAF 길 30행 → 1,500 · 통째 길(writeCell) 59행 → 2,950 + writeCell 자기 3"
+  },
+  "U-STORE-16": {
+    "value": {
+      "rule": "정렬 키 = 행 객체의 필드 값 = 수식 계산 결과(원문 자료 값 아님)",
+      "detail": {
+        "rawF": [
+          1,
+          50,
+          75
+        ],
+        "shownF": [
+          80,
+          50,
+          75
+        ],
+        "orderA": [
+          1,
+          3,
+          40
+        ],
+        "matchesRawRowValue": false,
+        "matchesComputed": true
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-facts.test.ts",
+    "env": "jsdom",
+    "ts": "2026-11-21 04:58:56",
+    "by": "L19"
+  },
+  "U-EST-03": {
+    "value": {
+      "env": "node(vitest jsdom 프로세스) · 5번 중앙값 ms · 옛 비교자 그대로",
+      "number": 20.1,
+      "string": 64.2,
+      "general": 21.6,
+      "slowToFast": [
+        "string",
+        "general",
+        "number"
+      ]
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-facts.test.ts",
+    "env": "node(vitest) 5번 중앙값",
+    "ts": "2026-11-21 04:58:56",
+    "by": "L19",
+    "note": "algo_bench 폴더에는 종류별(general/string/number) 시간이 없어 이 판에서 옛 비교자로 직접 잼. 시간은 기계마다 다르니 「순서」만 쓸 것"
+  },
+  "I-ED-06#L19": {
+    "value": {
+      "exists": false,
+      "found": [],
+      "publicMethodCount": 163,
+      "nearest": [
+        "activate",
+        "jumpToRow",
+        "jumpToCol"
+      ]
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-facts.test.ts",
+    "env": "jsdom(공개 메서드 이름 전수)",
+    "ts": "2026-11-21 04:58:56",
+    "by": "L19",
+    "note": "편집을 시작하는 공개 메서드 없음 → I-ED-06 은 조건부 경우의 「없으면」 갈래"
+  },
+  "I-ED-05": {
+    "value": {
+      "chromium": {
+        "editorOpened": true,
+        "editorOpenAfterHeaderClick": false,
+        "valueSaved": true,
+        "orderAfterB": [
+          1,
+          2,
+          3
+        ],
+        "rowsA": [
+          "x1",
+          "EDITED",
+          "x3"
+        ]
+      },
+      "jsdom": {
+        "lenBefore": 3,
+        "lenAfter": 3,
+        "sourceA": [
+          "x2",
+          "x1",
+          "x3"
+        ],
+        "editorOpened": true,
+        "editorOpenAfterHeaderClick": false,
+        "valueSaved": false,
+        "orderAfter": [
+          1,
+          2,
+          3
+        ],
+        "sortList": [
+          {
+            "field": "b",
+            "dir": "asc"
+          }
+        ]
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g I-ED-05c ; npx vitest run test/unit/wg-nr-facts.test.ts",
+    "env": "Chromium(판정) + jsdom(참고)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "Chromium: 편집기 닫힘 · 값 저장(blur 로 커밋) · 정렬됨. jsdom 은 click 만 보내 값이 버려짐 — 화면판이 이김"
+  },
+  "I-DT-04#L19": {
+    "value": {
+      "footerFirstMinusHeaderFirstLeafLeft": -28,
+      "detail": {
+        "headerFirstLeafLeft": 49,
+        "footerFirstCellLeft": 21,
+        "cellPadding": {
+          "top": "0px",
+          "right": "8px",
+          "bottom": "0px",
+          "left": "8px"
+        },
+        "cssVar": "0 8px",
+        "diff": -28
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g \"T0 사실\"",
+    "env": "Chromium(1200×500, masterDetail+footer)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "jsdom 판(CTL-EXT-03: 푸터 앞 빈칸 폭에 28 없음)과 맞음"
+  },
+  "U-TXT-32": {
+    "value": {
+      "padX": 8,
+      "padY": 0,
+      "computed": {
+        "padding": {
+          "top": "0px",
+          "right": "8px",
+          "bottom": "0px",
+          "left": "8px"
+        },
+        "cssVar": "0 8px"
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g \"T0 사실\"",
+    "env": "Chromium(기본 테마, getComputedStyle)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "--og-cell-padding: 0 8px (src/styles/base.css:61)"
+  },
+  "TR-27#L19": {
+    "value": {
+      "withoutHideScrollbars": {
+        "withScrollbars": {
+          "offsetHeight": 363,
+          "clientHeight": 355,
+          "offsetWidth": 798,
+          "clientWidth": 790
+        }
+      },
+      "defaultHeadless": {
+        "defaultHidden": {
+          "offsetHeight": 363,
+          "clientHeight": 363,
+          "offsetWidth": 798,
+          "clientWidth": 798
+        }
+      },
+      "works": true
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-scrollbar.spec.ts ; npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g \"TR-27 대조\"",
+    "env": "Chromium 헤드리스",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "ignoreDefaultArgs:[--hide-scrollbars] 가 먹음(가로·세로 스크롤바 8px). 기본 판은 0"
+  },
+  "U-RRC-01": {
+    "value": {
+      "scene": "1200×640, rowNumber, 50컬럼×120, 100행, selection cells",
+      "display": "block",
+      "style": {
+        "left": "404px",
+        "top": "64px",
+        "width": "360px",
+        "height": "95px"
+      },
+      "rectFromBodyWrap": {
+        "left": 404,
+        "top": 64,
+        "width": 360,
+        "height": 95
+      },
+      "headerHeight": 35.5,
+      "scrollLeft": 0,
+      "getActiveRange": {
+        "startRow": 2,
+        "endRow": 4,
+        "startCol": 3,
+        "endCol": 5
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g U-RRC",
+    "env": "Chromium(1200×640, rowNumber, 50×120, 100행)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "좌표 = bodyWrap 보이는 상자 기준(머리글 높이 안 더함). 셀 rect 로 잼 → 칸이 DOM 에 없으면 테두리 숨김(W12)"
+  },
+  "U-RRC-03": {
+    "value": {
+      "scene": "1200×640, rowNumber, 50컬럼×120, 100행, selection cells",
+      "display": "block",
+      "style": {
+        "left": "-2956px",
+        "top": "64px",
+        "width": "4920px",
+        "height": "95px"
+      },
+      "rectFromBodyWrap": {
+        "left": -2956,
+        "top": 64,
+        "width": 4920,
+        "height": 95
+      },
+      "headerHeight": 35.5,
+      "scrollLeft": 3000,
+      "getActiveRange": {
+        "startRow": 2,
+        "endRow": 4,
+        "startCol": 0,
+        "endCol": 40
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g U-RRC",
+    "env": "Chromium(1200×640, rowNumber, 50×120, 100행)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "좌표 = bodyWrap 보이는 상자 기준(머리글 높이 안 더함). 셀 rect 로 잼 → 칸이 DOM 에 없으면 테두리 숨김(W12)"
+  },
+  "U-RRC-04": {
+    "value": {
+      "scene": "1200×640, rowNumber, 50컬럼×120, 100행, selection cells",
+      "display": "block",
+      "style": {
+        "left": "404px",
+        "top": "64px",
+        "width": "360px",
+        "height": "95px"
+      },
+      "rectFromBodyWrap": {
+        "left": 404,
+        "top": 64,
+        "width": 360,
+        "height": 95
+      },
+      "headerHeight": 35.5,
+      "scrollLeft": 0,
+      "getActiveRange": {
+        "startRow": 4,
+        "endRow": 2,
+        "startCol": 5,
+        "endCol": 3
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g U-RRC",
+    "env": "Chromium(1200×640, rowNumber, 50×120, 100행)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "좌표 = bodyWrap 보이는 상자 기준(머리글 높이 안 더함). 셀 rect 로 잼 → 칸이 DOM 에 없으면 테두리 숨김(W12)"
+  },
+  "U-RRC-06": {
+    "value": {
+      "scene": "1200×640, rowNumber, 50컬럼×120, 100행, selection cells",
+      "display": "block",
+      "style": {
+        "left": "44px",
+        "top": "64px",
+        "width": "240px",
+        "height": "95px"
+      },
+      "rectFromBodyWrap": {
+        "left": 44,
+        "top": 64,
+        "width": 240,
+        "height": 95
+      },
+      "headerHeight": 35.5,
+      "scrollLeft": 1000,
+      "getActiveRange": {
+        "startRow": 2,
+        "endRow": 4,
+        "startCol": 0,
+        "endCol": 1
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g U-RRC",
+    "env": "Chromium(1200×640, rowNumber, 50×120, 100행)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "좌표 = bodyWrap 보이는 상자 기준(머리글 높이 안 더함). 셀 rect 로 잼 → 칸이 DOM 에 없으면 테두리 숨김(W12)"
+  },
+  "U-RRC-07": {
+    "value": {
+      "scene": "1200×640, rowNumber, 50컬럼×120, 100행, selection cells",
+      "display": "block",
+      "style": {
+        "left": "-356px",
+        "top": "64px",
+        "width": "640px",
+        "height": "95px"
+      },
+      "rectFromBodyWrap": {
+        "left": -356,
+        "top": 64,
+        "width": 640,
+        "height": 95
+      },
+      "headerHeight": 35.5,
+      "scrollLeft": 1000,
+      "getActiveRange": {
+        "startRow": 2,
+        "endRow": 4,
+        "startCol": 1,
+        "endCol": 5
+      }
+    },
+    "cmd": "npx playwright test test/e2e/wg-nr-baseline.spec.ts --workers=1 -g U-RRC",
+    "env": "Chromium(1200×640, rowNumber, 50×120, 100행)",
+    "ts": "2026-11-21 04:57:04",
+    "by": "L19",
+    "note": "좌표 = bodyWrap 보이는 상자 기준(머리글 높이 안 더함). 셀 rect 로 잼 → 칸이 DOM 에 없으면 테두리 숨김(W12)"
+  },
+  "U-EXT-09": {
+    "value": {
+      "legacyFn": "legacyExtraWidth(opts, detail) / legacyExtraWidthWithoutDetail(opts) / legacyRecalcWidthsInput",
+      "sites": "GridRenderer.ts renderHeader _extraW(288~294) · 머리글 고정 leftOff(410~414) · renderBody _ew(578~583) · 본문 고정 frozenLeftOff(896~901) · 세로 병합 leftOff(1129~1133) · 여분 컬럼 머리글/본문 누적(extraHeaderLeft/extraBodyLeft) · RenderController.recalcWidths(110~116, 디테일 없음) · FooterManager.render(181~185, 디테일 없음)",
+      "verified": "32조합 머리글 표 width·본문 min-width·recalcWidths 입력·푸터 빈칸 = 사본",
+      "file": "test/unit/wg-helpers/legacy-controls.ts"
+    },
+    "cmd": "npx vitest run test/unit/wg-controls-legacy.test.ts",
+    "env": "jsdom",
+    "ts": "2026-11-21 04:55:46",
+    "by": "L19"
+  },
+  "U-GEO-24": {
+    "value": {
+      "legacyFn": "legacyFrozenLeft(widths, opts, detail, i) / legacyTotalColWidth",
+      "verified": "32조합 × 고정 3컬럼 머리글 th left·본문 칸 left + 세로 병합 마스터 left = 사본",
+      "file": "test/unit/wg-helpers/legacy-controls.ts"
+    },
+    "cmd": "npx vitest run test/unit/wg-controls-legacy.test.ts",
+    "env": "jsdom",
+    "ts": "2026-11-21 04:55:46",
+    "by": "L19"
+  },
+  "ST-30": {
+    "value": {
+      "AR-01": {
+        "total": 36,
+        "byFile": {
+          "src/core/chart/scene.ts": 1,
+          "src/core/FooterManager.ts": 4,
+          "src/core/GridRenderer.ts": 29,
+          "src/core/RenderController.ts": 2
+        }
+      },
+      "AR-02": {
+        "total": 8,
+        "byFile": {
+          "src/core/GridRenderer.ts": 8
+        }
+      },
+      "AR-03": {
+        "total": 10,
+        "byFile": {
+          "src/core/FooterManager.ts": 1,
+          "src/core/GridRenderer.ts": 9
+        }
+      },
+      "AR-05": {
+        "total": 47,
+        "byFile": {
+          "src/core/FormulaController.ts": 2,
+          "src/core/GridComposer.ts": 10,
+          "src/core/MutationService.ts": 4,
+          "src/core/OpenGrid.ts": 31
+        },
+        "renderDirExists": true
+      }
+    },
+    "cmd": "npx vitest run test/unit/wg-nr-st30.test.ts",
+    "env": "node(정적 검색, 설계서 §9 정규식 글자 그대로)",
+    "ts": "2026-11-21 05:01:05",
+    "by": "L19",
+    "note": "AR-01 36(그중 src/core/chart/scene.ts 1건은 여분 폭과 무관한 + 24 — 정규식 오탐, AR-01 을 R4 에서 켤 때 범위·정규식 다듬을 것) · AR-02 8 · AR-03 10 · AR-05 47(정의·위임 포함 자리 수). 넷 다 0 이 아님 = 정규식 살아 있음. 설계서 「여분 7벌·고정 4벌·_doRender 30여 곳」은 자리(블록) 수, 이 값은 줄 안 일치 수"
+  }
+}

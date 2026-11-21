@@ -33,6 +33,8 @@ import { spliceDetails } from './detail/DetailSplice.js';
 import { SubgridCache, type SubgridAdapter } from './detail/SubgridCache.js';
 import type { VirtualScroll } from './VirtualScroll.js';
 import type { FlatRowModel } from './FlatRowModel.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderRequest } from './domain/render/ports.js';
 
 /** expandRow/collapseRow/toggleRow/isRowExpanded/getDetailInstance 공통 인자(§6.2, C0.2).
  * / Common argument shape for expandRow/collapseRow/toggleRow/isRowExpanded/getDetailInstance (§6.2, C0.2). */
@@ -58,8 +60,9 @@ export interface DetailManagerDeps<T extends Record<string, any> = any> {
   getRowId: (row: T) => string;
   /** stable rowId → 현재 행(삭제됐으면 undefined). DataLayer.getRowById 위임. / stable rowId → current row (undefined if deleted). Delegates to DataLayer.getRowById. */
   getRowById: (rowId: string) => T | undefined;
-  /** group/tree rebuild 와 동일한 관용구 — 전체(0..n-1) 재렌더. / Same idiom as group/tree rebuild — re-renders the full (0..n-1) range. */
-  doRenderFull: (n: number) => void;
+  /** 그리기 요청을 낸다 — 펼침·접힘 뒤 묶음·나무와 같은 관용구로 전 행(0..n-1)을 다시 그린다. 그리기는 요청 통로 하나로만 들어가 횟수·범위를 한곳에서 정한다.
+   * / Submit a render request — after expand/collapse, repaint every row (0..n-1), the same idiom as group/tree. Rendering enters through a single request channel so count and range are decided in one place. */
+  submitRender: (req: IRenderRequest) => void;
   /** 그리드 이벤트 발행. / Emit a grid event. */
   emit: (ev: string, payload: any) => void;
   /** aria-live 영역에 메시지를 공지. / Announce a message via the aria-live region. */
@@ -94,6 +97,17 @@ export class DetailManager<T extends Record<string, any> = any> {
   private _hosts = new Map<string, HTMLElement>();
   /** FR-9(UX-REVIEW-08): collapse 직전 패널 내부에 포커스가 있었는지 rowId 로 기억. */
   private _focusPendingRestore: string | null = null;
+  /** 펼침·접힘·디테일 높이 옵션이 바뀔 때마다 오르는 판 번호(합성 결과 재사용의 열쇠). */
+  private _activeVersion = 0;
+  /** 판 번호를 마지막으로 맞춰 본 디테일 높이 옵션 값들. */
+  private _seenRowHeight: unknown = undefined;
+  private _seenHeight: unknown = undefined;
+  private _seenSlots: unknown = undefined;
+  private _seenEnabled: unknown = undefined;
+  /** 「지금 자료에 있는 펼침이 있나」 메모와 그 메모를 만든 때의 두 판 번호. */
+  private _liveMemo = false;
+  private _liveMemoActive = -1;
+  private _liveMemoData = -1;
 
   constructor(deps: DetailManagerDeps<T>) {
     this._d = deps;
@@ -117,7 +131,13 @@ export class DetailManager<T extends Record<string, any> = any> {
     this._cache = new SubgridCache(adapter);
     // C0.3 정정: F2 는 baseline FlatRowModel 의 "등록자" — 합성 체인 마지막 단계에 detail
     // splice 를 끼운다. group/tree 가 setBacking 한 결과 위에서 동작(§3.2).
-    deps.getFlatModel().registerSplice((flat) => this._splice(flat));
+    // 펼친 행이 없으면 끼워 넣을 것이 없다 — 활성 술어를 같이 알려, 디테일을 안 쓰는(또는 다
+    // 접은) 그리드는 합성 없이 직통으로 행을 읽게 한다. 술어가 false 일 때 _splice 는 받은
+    // 배열을 그대로 돌려주므로 건너뛰어도 결과가 같다.
+    // With no row expanded there is nothing to insert — passing the activity predicate lets a grid
+    // that does not use details (or has collapsed them all) read rows directly without composing.
+    // When the predicate is false _splice returns its input unchanged, so skipping it is equivalent.
+    deps.getFlatModel().registerSplice((flat) => this._splice(flat), () => this._hasLiveExpansion(), () => this.activeVersion);
 
     const heightMode = opts.heightMode;
     if (heightMode === 'auto' && !_autoHeightWarned) {
@@ -143,6 +163,61 @@ export class DetailManager<T extends Record<string, any> = any> {
    *  FlatRowModel composition/rendering). */
   get isActive(): boolean {
     return this.enabled && this._state.size > 0;
+  }
+
+  /**
+   * 끼워 넣는 결과가 바뀔 수 있을 때마다 오르는 판 번호 — 펼침·접힘, 그리고 결과를 바꾸는 옵션
+   * (`masterDetail.enabled`·`height`·`detailRowCount`, 그리드 `rowHeight`). 행 모델은 이 번호가 같은
+   * 동안 합성 결과를 다시 쓴다. 옵션은 바뀌어도 알림이 없으므로 물을 때마다 지난 값과 맞대 본다
+   * (칸마다 불리므로 문자열·객체를 만들지 않고 값 넷만 견준다).
+   *
+   * A version bumped whenever the inserted result may change — expand/collapse and the options that shape
+   * the result (`masterDetail.enabled`·`height`·`detailRowCount`, grid `rowHeight`). The row model reuses
+   * its composed result while this number stays the same. Options change without notice, so each read
+   * compares them with the last seen values (it runs per cell, so it compares four values and allocates nothing).
+   * @internal
+   */
+  get activeVersion(): number {
+    const opts = this._mdOpts();
+    const rowHeight = this._d.getOptions()?.rowHeight;
+    if (opts.enabled !== this._seenEnabled || opts.height !== this._seenHeight ||
+        opts.detailRowCount !== this._seenSlots || rowHeight !== this._seenRowHeight) {
+      this._seenEnabled = opts.enabled;
+      this._seenHeight = opts.height;
+      this._seenSlots = opts.detailRowCount;
+      this._seenRowHeight = rowHeight;
+      this._activeVersion++;
+    }
+    return this._activeVersion;
+  }
+
+  /**
+   * 행 모델이 합성할지 고를 때 묻는 술어 — 기능이 켜져 있고, 펼쳐 둔 행 가운데 **지금 자료에 있는 것**이
+   * 하나라도 있으면 참. 펼침 상태는 행 id 로 보관하고 자료를 바꿔도 솎지 않는다(같은 id 로 다시 넣으면
+   * 그대로 펼쳐 보이게). 그래서 옛 자료의 id 만 남은 경우 끼워 넣을 행이 없는데도 늘 합성하던 것을,
+   * 여기서 「끼울 곳이 있나」로 가려 직통으로 돌린다. 결과는 같다 — 그 id 들은 어느 행과도 맞지 않는다.
+   * 펼침 판 번호와 자료 구조 판 번호가 그대로면 지난 답을 쓴다(칸마다 불림).
+   *
+   * Predicate the row model asks when choosing whether to compose — true when the feature is on and at
+   * least one expanded row is **present in the current data**. Expansion is kept by row id and is not
+   * pruned when data changes (re-adding the same id shows it expanded again). So when only ids from old
+   * data remain there is nothing to insert, yet the grid used to compose every time; this check sends it
+   * back to the direct path. The result is the same — those ids match no row. The last answer is reused
+   * while the expansion version and the data structure version are unchanged (it runs per cell).
+   */
+  private _hasLiveExpansion(): boolean {
+    if (!this.enabled || this._state.size === 0) return false;
+    const active = this._activeVersion;
+    const data = this._d.getFlatModel().dataStructureVersion;
+    if (active === this._liveMemoActive && data === this._liveMemoData) return this._liveMemo;
+    let live = false;
+    for (const id of this._state.expandedRowIds) {
+      if (this._d.getRowById(id) !== undefined) { live = true; break; }
+    }
+    this._liveMemo = live;
+    this._liveMemoActive = active;
+    this._liveMemoData = data;
+    return live;
   }
 
   /** 현재 설정된 최대 중첩 깊이. / Currently configured maximum nesting depth. */
@@ -191,6 +266,7 @@ export class DetailManager<T extends Record<string, any> = any> {
     const id = this._resolveRowId(ref);
     if (id == null || this._state.isExpanded(id)) return;
     const ok = this._state.expand(id);
+    this._activeVersion++;
     if (!ok) {
       // CON-4/FR-10: maxDepth 초과 — 렌더러 진입 전 거부, 자식 패널 미생성.
       this._d.announce(this._d.t('detail.depthLimitOpen', { max: this._state.maxDepth }));
@@ -213,6 +289,7 @@ export class DetailManager<T extends Record<string, any> = any> {
       this._focusPendingRestore = id;
     }
     this._state.collapse(id);
+    this._activeVersion++;
     this._releaseInstance(id);
     this._afterToggle(id, 'collapsed');
   }
@@ -233,6 +310,7 @@ export class DetailManager<T extends Record<string, any> = any> {
   collapseAllDetails(): void {
     const ids = this._state.collapseAll();
     if (ids.length === 0) return;
+    this._activeVersion++;
     for (const id of ids) this._releaseInstance(id);
     this._rebuildAndRender();
     for (const id of ids) {
@@ -403,7 +481,7 @@ export class DetailManager<T extends Record<string, any> = any> {
   private _rebuildAndRender(): void {
     const total = this._d.getFlatModel().count();
     this._d.getVs()?.setTotalRows(total);
-    this._d.doRenderFull(total);
+    this._d.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   /** 모든 서브그리드/커스텀 렌더러 인스턴스를 파괴하고 host 캐시를 비운다.

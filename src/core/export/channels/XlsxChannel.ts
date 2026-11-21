@@ -9,7 +9,7 @@
 // ============================================================
 
 import type {
-  ChannelCapabilities, ExportResult, ExportRunCtx, HeaderArtifact, IArtifactSource, IByteSink,
+  CellArtifact, ChannelCapabilities, ExportResult, ExportRunCtx, HeaderArtifact, IArtifactSource, IByteSink,
 } from '../types.js';
 import { XLSX_CAPS } from './capabilities.js';
 
@@ -50,10 +50,36 @@ export interface IWorkbookWriter {
   write(model: SheetModel, sink: IByteSink): Promise<number>;
 }
 
+/** 스트리밍 시트 개시 정보. / Streaming sheet init info. */
+export interface XlsxStreamInit {
+  readonly sheetName: string;
+  readonly header: ReadonlyArray<string>;
+  readonly colWidthsPx: ReadonlyArray<number>;
+  /** false 면 머리글 행을 쓰지 않는다(기본 true). / false omits the header row (default true). */
+  readonly includeHeader?: boolean;
+}
+
+/** 스트리밍 쓰기 세션(행 청크 단위). / Streaming write session (row-chunk granularity). */
+export interface IXlsxStreamSession {
+  /** 행 청크 추가(sink 쓰기를 await = 백프레셔). / Append a row chunk (awaits sink writes). */
+  appendRows(rows: ReadonlyArray<ReadonlyArray<SheetCell>>, merges?: ReadonlyArray<MergeRegion>): Promise<void>;
+  /** 마무리(총 바이트 반환). sink.close 는 호출자 몫. / Finish; returns total bytes (caller closes sink). */
+  finish(): Promise<number>;
+  /** 중단(이후 쓰기 없음). / Abort. */
+  abort(): void;
+}
+
+/** 스트리밍 가능한 쓰기기 SPI. / Streaming-capable writer SPI. */
+export interface IStreamingWorkbookWriter extends IWorkbookWriter {
+  openStream(init: XlsxStreamInit, sink: IByteSink): Promise<IXlsxStreamSession>;
+}
+
 /** xlsx 채널 옵션. / xlsx channel options. */
 export interface XlsxChannelOptions {
   readonly sheetName?: string;
   readonly includeProvenance?: boolean;
+  /** 스트리밍: false 면 머리글 행 제외(기본 true). / Streaming: false omits the header row (default true). */
+  readonly includeHeader?: boolean;
 }
 
 /** xlsx 직렬화 전략(순수 접기 + 주입 인코더). / xlsx serialization strategy (pure fold + injected writer). */
@@ -80,21 +106,7 @@ export class XlsxChannel {
         let colIdx = 0;
         for (const c of r.cells) {
           if (c.hidden) { colIdx++; continue; }
-          const cell: {
-            value: string; align: SheetCell['align']; rowSpan: number; colSpan: number;
-            num?: number; fill?: string; ink?: string;
-          } = {
-            value: c.text,
-            align: c.align,
-            rowSpan: c.rowSpan,
-            colSpan: c.colSpan,
-          };
-          if (c.type === 'number' || c.type === 'currency' || c.type === 'money' || c.type === 'percent') {
-            const n = Number(c.rawText ?? c.text.replace(/[^\d.-]/g, ''));
-            if (Number.isFinite(n)) cell.num = n;
-          }
-          if (c.cf?.fill) cell.fill = c.cf.fill.color;
-          if (c.cf) cell.ink = c.cf.inkColor;
+          const cell = toSheetCell(c);
           if (c.rowSpan > 1 || c.colSpan > 1) {
             // +1: 헤더 행 오프셋. / +1 for the header row offset.
             merges.push({ r: rowIdx + 1, c: colIdx, rs: c.rowSpan, cs: c.colSpan });
@@ -131,4 +143,89 @@ export class XlsxChannel {
     await sink.close();
     return { bytesWritten: bytes, rowsWritten: model.rows.length, aborted: false };
   }
+
+  /**
+   * 스트리밍 쓰기: 전 행을 적재하지 않고 청크 단위로 writer 에 흘린다(머리글 먼저).
+   * 취소(ctx.signal)·진척(ctx.onProgress)·백프레셔(sink.write await) 지원. 기존 write 는 불변.
+   * / Streaming write: flows row chunks to the writer without materializing all rows.
+   */
+  async writeStreaming(source: IArtifactSource, sink: IByteSink, ctx?: ExportRunCtx): Promise<ExportResult> {
+    const w = this.writer as Partial<IStreamingWorkbookWriter>;
+    if (typeof w.openStream !== 'function') throw new Error('xlsx writer does not support streaming');
+    const header = source.projectHeader();
+    const leaf: ReadonlyArray<HeaderArtifact> = header[header.length - 1] ?? [];
+    const total = source.totalRows();
+    const session = await w.openStream({
+      sheetName: this.opts.sheetName ?? 'Sheet1',
+      header: leaf.map(h => h.text),
+      colWidthsPx: leaf.map(h => h.widthPx),
+      ...(this.opts.includeHeader === false ? { includeHeader: false } : {}),
+    }, sink);
+    const headerRows = this.opts.includeHeader === false ? 0 : 1;
+
+    let rowsWritten = 0;
+    let aborted = false;
+    try {
+      for await (const chunk of source.projectRows()) {
+        if (ctx?.signal?.aborted) { aborted = true; break; }
+        if (chunk.rows.length > 0) {
+          const rows: SheetCell[][] = [];
+          const merges: MergeRegion[] = [];
+          for (const r of chunk.rows) {
+            const cells: SheetCell[] = [];
+            let colIdx = 0;
+            for (const c of r.cells) {
+              if (c.hidden) { colIdx++; continue; }
+              if (c.rowSpan > 1 || c.colSpan > 1) {
+                merges.push({ r: rowsWritten + rows.length + headerRows, c: colIdx, rs: c.rowSpan, cs: c.colSpan });
+              }
+              cells.push(toSheetCell(c));
+              colIdx++;
+            }
+            rows.push(cells);
+          }
+          await session.appendRows(rows, merges);
+          rowsWritten += rows.length;
+          ctx?.onProgress?.(rowsWritten, total);
+          // 진척바가 그려지도록 청크마다 메인스레드를 한 번 양보. / yield once per chunk so progress UI can paint.
+          await new Promise<void>(res => setTimeout(res, 0));
+        }
+        if (ctx?.signal?.aborted) { aborted = true; break; }
+        if (chunk.done) break;
+      }
+    } catch (e) {
+      session.abort();
+      sink.abort('error');
+      throw e;
+    }
+    if (!aborted && ctx?.signal?.aborted) aborted = true; // finish/close 직전 취소 한 번 더 확인
+    if (aborted) {
+      session.abort();
+      sink.abort('cancelled');
+      return { bytesWritten: 0, rowsWritten, aborted: true };
+    }
+    const bytes = await session.finish();
+    await sink.close();
+    return { bytesWritten: bytes, rowsWritten, aborted: false };
+  }
+}
+
+/** CellArtifact → SheetCell(buildModel·writeStreaming 공용 매핑). / Shared cell mapping. */
+function toSheetCell(c: CellArtifact): SheetCell {
+  const cell: {
+    value: string; align: SheetCell['align']; rowSpan: number; colSpan: number;
+    num?: number; fill?: string; ink?: string;
+  } = { value: c.text, align: c.align, rowSpan: c.rowSpan, colSpan: c.colSpan };
+  if (c.type === 'number' || c.type === 'currency' || c.type === 'money' || c.type === 'percent') {
+    // rawText 가 있으면 그것만 Number() — 정규식 재파싱은 rawText 없는 소스의 폴백일 뿐(지수표기를 깨뜨린다).
+    // 비유한(NaN/Infinity)은 숫자 셀로 쓰지 않고 텍스트로 남긴다(조용한 0 금지).
+    // / With rawText use Number() only; regex scrape is a fallback for sources without it. Non-finite stays text.
+    let n = NaN;
+    if (c.rawText !== undefined) n = Number(c.rawText);
+    else { const s = c.text.replace(/[^\d.-]/g, ''); if (s !== '') n = Number(s); }
+    if (Number.isFinite(n)) cell.num = n;
+  }
+  if (c.cf?.fill) cell.fill = c.cf.fill.color;
+  if (c.cf) cell.ink = c.cf.inkColor;
+  return cell;
 }

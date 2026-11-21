@@ -629,6 +629,14 @@ export interface LocaleMessages {
      * 打印的摘要行。参数 {rows} {cols} {date}。
      */
     printSummary: MessageValue;
+    /** 엑셀 내보내기 진척 문구. / Excel export progress strings. */
+    preparing: MessageValue;
+    /** 파라미터 {done} {total} {percent}. / Params {done} {total} {percent}. */
+    exporting: MessageValue;
+    cancel: MessageValue;
+    cancelled: MessageValue;
+    done: MessageValue;
+    exportError: MessageValue;
   };
 }
 

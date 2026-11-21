@@ -1,6 +1,9 @@
 import { ColumnLayout } from './ColumnLayout.js';
-import { OGDecimal } from './OGDecimal.js';
-import { isErrorToken } from './formula/types.js';
+import { FooterValues } from './domain/footer/FooterValues.js';
+import { FooterView } from './render/FooterView.js';
+import type { FooterSource } from './domain/footer/ports.js';
+import type { IColumnGeometry } from './coordinate/geometryPorts.js';
+import type { IFooterView, IGeometryApplier, IScrollFollower } from './render/ports.js';
 
 /**
  * FooterManager 의존성 주입 인터페이스. / Dependency-injection interface for FooterManager.
@@ -18,6 +21,11 @@ export interface FooterDeps<T extends Record<string, any>> {
   getContainer: () => HTMLElement;
   /** Phase 2: OverrideKernel.getStrategy 주입(슬롯 summaryOp 도달용). / Phase 2: injected via OverrideKernel.getStrategy (reaches the `summaryOp` slot). */
   getStrategy?: <F extends Function>(slot: string, fallback: F) => F;
+  /**
+   * 그리드의 컬럼 기하(폭·여분 컬럼). 막대를 그릴 때마다 한 번 묻는다(맞춘 뒤 돌려줌). 값 계산(computeValues·fmtNum)은 이것을 부르지 않는다.
+   * / The grid's column geometry, asked once per paint; value computation never calls it.
+   */
+  getGeometry: () => IColumnGeometry;
 }
 
 /**
@@ -29,11 +37,35 @@ export interface FooterDeps<T extends Record<string, any>> {
  * them as cells aligned to column widths. The `summaryOp` override slot lets custom
  * aggregates (MEDIAN/STDEV/…) intercept the default SUM/AVG/COUNT/MAX/MIN switch.
  */
-export class FooterManager<T extends Record<string, any> = any> {
+export class FooterManager<T extends Record<string, any> = any> implements IFooterView {
   private _d: FooterDeps<T>;
+  /** 값 계산(헤드리스). / Value computation (headless). */
+  private readonly _values: FooterValues;
+  /** 막대 DOM. / Bar DOM. */
+  private readonly _view: FooterView;
+  /** 합계 대상 행 원천 — 부를 때마다 deps.getData 를 읽는다. / Row source; reads deps.getData on every call. */
+  private readonly _source: FooterSource;
 
   constructor(deps: FooterDeps<T>) {
     this._d = deps;
+    // 계산은 FooterValues, 막대 DOM 은 FooterView 에 맡긴다. 이 클래스는 공개 이름(computeValues·render·fmtNum)과
+    // 생성자 deps 를 그대로 지키는 앞면이다. 전략 조회는 부를 때마다 deps 에서 다시 읽는다(지금 동작).
+    // Computation goes to FooterValues and the bar DOM to FooterView; this class keeps the public names and deps.
+    this._values = new FooterValues({
+      getStrategy: (slot, fb) => (this._d.getStrategy ?? ((_s: string, f: any) => f))(slot, fb),
+    });
+    this._source = { rows: () => this._d.getData() };
+    this._view = new FooterView({
+      container: () => this._d.getContainer(),
+      options: () => this._d.getOptions(),
+      leaves: () => this._d.getColLayout().visibleLeaves,
+      geometry: () => this._d.getGeometry(),
+      widths: () => this._d.getColWidths(),
+      // 막대는 결과만 받는다. 결과는 지금처럼 이 클래스의 computeValues() 를 거친다(그 이름이 지킬 이음새라 길을 하나로) —
+      // 어떤 정의·행으로 셈할지는 이 앞면이 알고, 막대는 계산 계약을 흉내 내지 않는다.
+      // The bar only receives results, which go through computeValues() (the kept seam); the facade owns defs and rows.
+      values: () => this.computeValues(),
+    });
   }
 
   /**
@@ -52,30 +84,7 @@ export class FooterManager<T extends Record<string, any> = any> {
    * @returns 포맷된 표시 문자열 / The formatted display string
    */
   fmtNum(value: number, fmt?: string): string {
-    if (!fmt) {
-      return Math.round(value).toLocaleString('ko-KR');
-    }
-    // 통화 기호 등 접두/접미 분리 (숫자 토큰: #,0,콤마,소수 또는 레거시 정수)
-    const tok = fmt.match(/[#0][#0,]*(?:\.[#0]+)?|\d+/);
-    const prefix  = tok ? fmt.slice(0, tok.index) : '';
-    const suffix  = tok ? fmt.slice(tok.index! + tok[0].length) : '';
-    const numFmt  = tok ? tok[0] : fmt;
-
-    const useComma = numFmt.includes('#') || numFmt.includes(',');
-    const dpMatch  = numFmt.match(/\.(\d+)$/);
-    const dp = dpMatch
-      ? parseInt(dpMatch[1]!, 10)
-      : /^\d+$/.test(numFmt) ? parseInt(numFmt, 10) : 0;
-
-    const fixed = Math.abs(value).toFixed(dp);
-    const [intPart = '0', decPart] = fixed.split('.');
-    const intStr = useComma
-      ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-      : intPart;
-
-    const body = decPart !== undefined ? `${intStr}.${decPart}` : intStr;
-    const result = `${prefix}${body}${suffix}`;
-    return value < 0 ? `-${result}` : result;
+    return this._values.format(value, fmt);
   }
 
   /**
@@ -92,58 +101,7 @@ export class FooterManager<T extends Record<string, any> = any> {
    * @returns 정의 순서대로 `{ _field, _value, _formatted }` 배열 / Array of `{ _field, _value, _formatted }`, in definition order
    */
   computeValues(): any[] {
-    const footerDefs = this._d.getOptions().footer;
-    if (!footerDefs || footerDefs.length === 0) return [];
-
-    const allData = this._d.getData();
-
-    return footerDefs
-      .filter((d: any) => d.field && d.op)
-      .map((def: any) => {
-        const field  = def.field!;
-        const op     = def.op!;
-        // C11/UX-REVIEW-10(P0): 수식 에러 셀(#REF 등)은 집계에서 '제외'(0 아님) — 오염 차단.
-        const nums   = allData
-          .map((r: any) => r[field])
-          .filter((v: any) => v !== null && v !== undefined && v !== '' && !isErrorToken(v));
-
-        let result: OGDecimal | null = null;
-        const opUC = (op as string).toUpperCase();
-
-        // Phase 2 슬롯 #6: summaryOp. default = null(미가로챔 → 기존 SUM/AVG/COUNT/MAX/MIN switch).
-        //   슬롯이 number 반환 시 그 값을 사용(MEDIAN/STDEV 등만 가로챔), null 반환 시 기본 분기 폴백.
-        const customOp = (this._d.getStrategy ?? ((_s: string, fb: any) => fb))(
-          'summaryOp',
-          null as ((op: string, nums: any[], field: string) => number | null) | null,
-        );
-        if (customOp) {
-          const cv = customOp(opUC, nums, field);
-          if (cv != null) {
-            return { _field: field, _value: cv, _formatted: this.fmtNum(cv, def.format) };
-          }
-        }
-
-        if (opUC === 'SUM') {
-          result = nums.length > 0 ? OGDecimal.sum(nums.map((v: any) => String(v))) : null;
-        } else if (opUC === 'AVG') {
-          result = nums.length > 0
-            ? OGDecimal.sum(nums.map((v: any) => String(v))).div(OGDecimal.from(String(nums.length)))
-            : null;
-        } else if (opUC === 'COUNT') {
-          const cnt = nums.length;
-          return { _field: field, _value: cnt, _formatted: cnt.toLocaleString('ko-KR') };
-        } else if (opUC === 'MAX') {
-          result = nums.length > 0 ? OGDecimal.max(nums.map((v: any) => String(v))) : null;
-        } else if (opUC === 'MIN') {
-          result = nums.length > 0 ? OGDecimal.min(nums.map((v: any) => String(v))) : null;
-        }
-
-        if (!result) return { _field: field, _value: null, _formatted: '' };
-
-        const numVal    = result.toNumber();
-        const formatted = this.fmtNum(numVal, def.format);
-        return { _field: field, _value: numVal, _formatted: formatted };
-      });
+    return this._values.compute(this._d.getOptions().footer, this._source);
   }
 
   /**
@@ -154,84 +112,53 @@ export class FooterManager<T extends Record<string, any> = any> {
    * redraws it, inserting at the top or bottom of the container per `options.footerPosition`.
    */
   render(): void {
-    const container = this._d.getContainer();
-    const old = container.querySelector('.og-footer-bar');
-    old?.remove();
+    this._view.paint();
+  }
 
-    const opts = this._d.getOptions();
-    const footerDefs = opts.footer;
-    if (!footerDefs || footerDefs.length === 0) return;
+  /**
+   * 그리기 계획이 「푸터 막대 다시」를 말할 때(컬럼 구성·겉모양이 바뀜). render 와 같다.
+   * / Called when the render plan asks to rebuild the footer bar (columns or appearance changed). Same as render.
+   */
+  paint(): void {
+    this._view.paint();
+  }
 
-    const leaves = this._d.getColLayout().visibleLeaves;
-    const widths = this._d.getColWidths() ?? leaves.map((l: any) => l.width ?? 100);
-    const valMap = new Map(
-      this.computeValues().map((v: any) => [v._field, v])
-    );
+  /**
+   * 그리기 계획이 「푸터 값 다시」를 말할 때(행 집합·칸 값이 바뀜). 합계를 다시 셈하고 값 칸 글자만 고친다.
+   * 스크롤·정렬·폭 조절·선택에는 계획이 이것을 부르지 않는다 — 그래서 그때는 합계를 셈하지 않는다.
+   * / Called when the plan asks for new footer values (row set or cell values changed): recompute and rewrite
+   * value text only. Scrolling, sorting, resizing and selection never ask for it.
+   */
+  updateValues(): void {
+    this._view.updateValues();
+  }
 
-    const bar = document.createElement('div');
-    bar.className = 'og-footer-bar';
-    bar.style.cssText = [
-      'display:flex;align-items:stretch;',
-      `min-height:${opts.footerHeight}px;`,
-      'border-top:2px solid var(--og-primary,#1976d2);',
-      'background:var(--og-header-bg,#f5f5f5);',
-      'overflow:hidden;flex-shrink:0;font-size:13px;font-weight:600;',
-    ].join('');
+  /**
+   * 본문 가로 위치를 따라가게 할 객체를 넘겨 받는다(그리드가 렌더러를 만든 뒤 한 번). 그린 막대가 그 객체를 따라간다.
+   * / Receives the horizontal scroll follower; the painted bar follows the body's horizontal position.
+   */
+  setFollower(f: IScrollFollower | null): void {
+    this._view.setFollower(f);
+  }
 
-    let extraW = 0;
-    if (opts.stateColumn) extraW += 24;
-    if (opts.draggable)   extraW += 18;
-    if (opts.rowNumber)   extraW += 44;
-    if (opts.checkColumn) extraW += 36;
-    if (extraW > 0) {
-      const spacer = document.createElement('div');
-      spacer.style.cssText = `width:${extraW}px;flex-shrink:0;border-right:1px solid var(--og-border-color,#e0e0e0);`;
-      bar.appendChild(spacer);
-    }
+  /**
+   * 컬럼 폭 등록기를 넘겨 받는다(그리드가 기하·등록기를 만든 뒤). 푸터 칸 폭이 끄는 동안 머리글·본문과 같은 프레임에 따라간다.
+   * / Receives the geometry applier so footer cell widths follow a column drag in the same frame as header and body.
+   */
+  setApplier(a: IGeometryApplier | null): void {
+    this._view.setApplier(a);
+  }
 
-    let leafCursor = 0;
+  /**
+   * 막대 끝 여백(본문 세로 스크롤바 폭)을 넘겨 받는다 — 가로로 끝까지 긁어도 푸터가 본문과 같이 가게. 0 이면 아무것도 안 씀.
+   * / Receives the end gutter (body vertical scrollbar width) so the footer scrolls as far as the body; 0 writes nothing.
+   */
+  setEndGutter(px: number): void {
+    this._view.setEndGutter(px);
+  }
 
-    for (const def of footerDefs) {
-      const colspan = Math.max(1, def.colspan ?? 1);
-
-      let cellW = 0;
-      for (let c = 0; c < colspan; c++) {
-        cellW += widths[leafCursor + c] ?? 100;
-      }
-      const targetLeaf = leaves[leafCursor];
-      leafCursor += colspan;
-
-      const cell = document.createElement('div');
-      cell.style.cssText = [
-        `width:${cellW}px;min-width:${cellW}px;flex-shrink:0;`,
-        'padding:4px 8px;box-sizing:border-box;overflow:hidden;',
-        'border-right:1px solid var(--og-border-color,#e0e0e0);',
-        'white-space:nowrap;text-overflow:ellipsis;',
-      ].join('');
-
-      const field = def.field;
-      const val   = field ? valMap.get(field) : null;
-
-      if (val) {
-        const displayVal = val._formatted ?? String(val._value ?? '');
-        const prefix = def.label ? `${def.label}: ` : '';
-        cell.textContent = prefix + displayVal;
-        cell.title = `${(def.op as string)?.toUpperCase() ?? ''} = ${displayVal}`;
-        cell.style.color = 'var(--og-primary,#1976d2)';
-        cell.style.textAlign = def.align ?? (targetLeaf?.type === 'number' ? 'right' : 'right');
-      } else if (def.label) {
-        cell.textContent = def.label;
-        cell.style.textAlign = def.align ?? 'left';
-        cell.style.color = 'var(--og-row-color,#212121)';
-      }
-
-      bar.appendChild(cell);
-    }
-
-    if (opts.footerPosition === 'top') {
-      container.insertBefore(bar, container.firstChild);
-    } else {
-      container.appendChild(bar);
-    }
+  /** 따라가기를 푼다(그리드를 없앨 때). / Releases the follower when the grid is destroyed. */
+  destroy(): void {
+    this._view.destroy();
   }
 }

@@ -2,6 +2,8 @@ import type { DataLayer } from './DataLayer.js';
 import type { ColumnLayout } from './ColumnLayout.js';
 import type { FlatRowModel } from './FlatRowModel.js';
 import type { GridOptions } from './types.js';
+import { RenderRequest } from './domain/render/RenderRequest.js';
+import type { IRenderRequest } from './domain/render/ports.js';
 import { RecalcCoordinator, type RecalcSummary } from './formula/RecalcCoordinator.js';
 import { cellKey, parseCellKey, type FormulaErrorCode, type FormulaGridAccessor } from './formula/types.js';
 
@@ -56,10 +58,9 @@ export interface FormulaControllerDeps<T extends Record<string, any> = any> {
   announce: (msg: string) => void;
   /** i18n: 수식 오류 announce/셀 라벨 해석(formulaError.* 통합 키). / i18n: resolve formula error announce/labels. */
   t: (key: string, params?: Record<string, string | number>) => string;
-  /** 현재 가시 범위 렌더(this._doRender(...this._visRange())). afterRecalc 가 !skipRender 시 유발.
-   * / Renders the currently visible range (this._doRender(...this._visRange())). Triggered by
-   * afterRecalc when !skipRender. */
-  doRenderWindow: () => void;
+  /** 그리기 요청을 낸다 — 재계산 뒤(afterRecalc 가 !skipRender 일 때) 보이는 범위를 다시 그린다. 그리기는 요청 통로 하나로만 들어가 횟수·범위를 한곳에서 정한다.
+   * / Submit a render request — after a recalc (afterRecalc with !skipRender), repaint the visible range. Rendering enters through a single request channel so count and range are decided in one place. */
+  submitRender: (req: IRenderRequest) => void;
 }
 
 /** F3: 에러코드 → 카탈로그 키(GridRenderer 와 동일 formulaError.* 통합, 중복 맵 해소).
@@ -126,7 +127,7 @@ export class FormulaController<T extends Record<string, any> = any> {
       this._deps.emit('formulaRecalc', evt);
       this._deps.getOptions().formula?.onFormulaRecalc?.(evt);
     }
-    if (!opts.skipRender) this._deps.doRenderWindow();
+    if (!opts.skipRender) this._deps.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   /** 수식 평가 오류를 표면화: `formulaError` emit + aria-live 공지. / Surface a formula evaluation
@@ -249,7 +250,7 @@ export class FormulaController<T extends Record<string, any> = any> {
     const recalc = this._deps.getRecalc();
     const dependents = recalc.clearCellFormula(ref.rowId, field);
     if (dependents.length) this.afterRecalc(recalc.onValuesChanged(dependents));
-    else this._deps.doRenderWindow();
+    else this._deps.submitRender(RenderRequest.REPAINT_VISIBLE);
   }
 
   /** 셀의 마지막 수식 평가 오류를 조회한다(정상이면 `null`). / Get a cell's last formula evaluation error (`null` if healthy).
@@ -329,9 +330,14 @@ export class FormulaController<T extends Record<string, any> = any> {
    * @returns 수식 원문/오류/근사 여부, 없으면 `null` / Formula source, error, and approximation flag; or `null`
    */
   getFormulaMeta(rowIndex: number, field: string): { src: string; error: FormulaErrorCode | null; approx: boolean } | null {
+    // 렌더러가 칸마다 부른다. 저장소가 비면 어느 칸에도 수식이 없으니 행을 해석하지 않고 끝낸다.
+    // The renderer calls this for every cell. With an empty store no cell has a formula, so we
+    // return before resolving the row at all.
+    const store = this._deps.getRecalc().store;
+    if (store.size() === 0) return null;
     const ref = this._deps.getFlatModel().resolveFlatRow(rowIndex);
     if (ref.kind !== 'data' || !ref.rowId) return null;
-    const cell = this._deps.getRecalc().store.getFormula(ref.rowId, field);
+    const cell = store.getFormula(ref.rowId, field);
     if (!cell) return null;
     return { src: cell.src, error: cell.error, approx: !!cell.approx };
   }
@@ -340,6 +346,12 @@ export class FormulaController<T extends Record<string, any> = any> {
    * / F3-R13/REVIEW-03 (P0): after sort/filter, marks every range-referencing (hasRangeRef)
    * formula dirty (§3.5). */
   recalcRangeBearingFormulas(): void {
-    this.afterRecalc(this._deps.getRecalc().recalcRangeBearing());
+    // 정렬·필터는 자기 그리기 요청을 이미 냈다. 다시 계산해 바뀐 수식이 없으면 같은 화면을 한 번 더
+    // 그릴 뿐이므로 그리기 요청을 내지 않는다(바뀐 것이 있으면 지금처럼 그림 — 이벤트 규칙도 그대로).
+    // Sort/filter has already submitted its own render request. If the recalc changed no formula,
+    // another paint would only redraw the same screen, so no request is made (when something changed
+    // it paints as before — the event rule is unchanged too).
+    const summary = this._deps.getRecalc().recalcRangeBearing();
+    this.afterRecalc(summary, { skipRender: summary.changed.length === 0 && summary.cycles === 0 });
   }
 }

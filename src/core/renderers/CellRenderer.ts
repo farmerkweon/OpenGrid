@@ -923,6 +923,29 @@ registerRenderer('sparkline', (_col, def) => def ? new SparklineRenderer(def as 
 registerRenderer('rating',    (_col, def) => def ? new RatingRenderer(def as RatingRendererDef) : new TextRenderer());
 registerRenderer('template',  (_col, def) => def ? new TemplateRenderer(def.templateFn) : new TextRenderer());
 
+/**
+ * 모듈을 읽을 때 등록된 내장 팩토리. 내장 렌더러는 그리기 중에 상태를 들지 않아(생성자에서 받은 설정만) 한 컬럼의 칸들이
+ * 인스턴스 하나를 나눠 써도 된다. 사용자가 나중에 같은 이름으로 다시 등록하면 그 이름의 팩토리는 이 목록에 없으므로
+ * 사용자 팩토리로 본다(사용자 코드가 보는 호출 수 — 칸마다 한 번 — 를 바꾸지 않으려고).
+ *
+ * Factories registered at module load. Built-in renderers hold no per-render state (only constructor settings), so
+ * the cells of one column may share an instance. A later user registration under the same name is not in this set,
+ * so it is treated as a user factory (its call count — once per cell — stays as before).
+ */
+const _builtinFactories = new Set<RendererFactory>(_rendererRegistry.values());
+
+/** 컬럼이 고른 렌더러 이름. / Renderer name chosen by the column. */
+function _rendererName(col: ColumnDef): string {
+  const r = col.renderer;
+  return !r ? String(col.type ?? '') : typeof r === 'string' ? r : r.type;
+}
+
+/** 객체로 준 렌더러 설정(문자열·type 경로면 undefined). / Renderer settings object (undefined for the string/type paths). */
+function _rendererDef(col: ColumnDef): RendererDef | undefined {
+  const r = col.renderer;
+  return r && typeof r !== 'string' ? r : undefined;
+}
+
 // ─── Renderer 팩토리 ──────────────────────────────────────
 /**
  * 컬럼 정의로부터 셀 렌더러를 생성한다(레지스트리 해석, 미등록 시 TextRenderer 폴백).
@@ -932,12 +955,18 @@ registerRenderer('template',  (_col, def) => def ? new TemplateRenderer(def.temp
  * @returns 셀 렌더러 / A cell renderer
  */
 export function createRenderer(col: ColumnDef): CellRenderer {
-  const renderer = col.renderer;
-  let name: string;
-  let def: RendererDef | undefined;
-  if (!renderer)                     { name = String(col.type ?? ''); def = undefined; }
-  else if (typeof renderer === 'string') { name = renderer;               def = undefined; }
-  else                               { name = renderer.type;         def = renderer; }
-  const factory = _rendererRegistry.get(name);
-  return factory ? factory(col, def) : new TextRenderer();
+  const factory = _rendererRegistry.get(_rendererName(col));
+  return factory ? factory(col, _rendererDef(col)) : new TextRenderer();
+}
+
+/**
+ * 내장 렌더러면 새 인스턴스를(그 컬럼 칸들이 나눠 쓸 것), 사용자가 등록한 팩토리면 null 을 돌려준다(그때는 칸마다 createRenderer).
+ *
+ * A fresh built-in renderer (to be shared by that column's cells), or null for a user-registered factory (then createRenderer per cell).
+ * @internal
+ */
+export function createBuiltinRenderer(col: ColumnDef): CellRenderer | null {
+  const factory = _rendererRegistry.get(_rendererName(col));
+  if (!factory) return new TextRenderer();
+  return _builtinFactories.has(factory) ? factory(col, _rendererDef(col)) : null;
 }
