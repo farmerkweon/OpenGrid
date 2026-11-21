@@ -25,8 +25,8 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Upgrade npm (OIDC Trusted Publishing 지원 = npm >= 11.5.1)
-        run: npm install -g npm@latest
+      - name: Upgrade npm (OIDC Trusted Publishing 지원 = npm >= 11.5.1, node20 호환 = 11.x)
+        run: npm install -g npm@11
 
       - name: Install
         run: npm install --legacy-peer-deps
