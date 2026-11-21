@@ -1,28 +1,24 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 import { copyFileSync, existsSync } from 'fs';
-import { transform } from 'esbuild';
+import { ogMinifyAllChunks } from './scripts/build/minify-plugin.mjs';
 import dts from 'vite-plugin-dts';
 import vue from '@vitejs/plugin-vue';
 import react from '@vitejs/plugin-react';
+
+// 압축·비공개 이름 줄이기 플러그인은 scripts/build/minify-plugin.mjs 한 곳에 있다(다섯 설정이 같이 씀 — 설명은 그 파일).
+// 이름 줄이기를 끄려면 OG_MANGLE=0.
+// The minify + private-name mangling plugin lives in scripts/build/minify-plugin.mjs (shared by all five configs;
+// see the notes there). Set OG_MANGLE=0 to turn mangling off.
 
 export default defineConfig({
   plugins: [
     vue(),
     react(),
     dts({ include: ['src'], outDir: 'dist/types' }),
-    // Vite lib 모드가 ES 포맷 청크에 minify 를 적용하지 않는 문제 우회 —
-    // 모든 청크를 esbuild 로 직접 압축하고 주석(JSDoc 포함)을 제거한다.
-    // Works around Vite lib mode not minifying ES-format chunks; minify every
-    // chunk via esbuild and strip all comments (including JSDoc) from the bundle.
-    {
-      name: 'og-minify-all-chunks',
-      enforce: 'post' as const,
-      async renderChunk(code: string) {
-        const out = await transform(code, { minify: true, legalComments: 'none' });
-        return { code: out.code, map: out.map || null };
-      },
-    },
+    // Vite lib 모드가 청크를 압축하지 않는 문제 우회(ES·CJS 둘 다) — 위 ogMinifyAllChunks 설명 참조.
+    // Works around vite lib mode not minifying chunks (ES and CJS); see ogMinifyAllChunks above.
+    ogMinifyAllChunks({ srcDir: resolve(__dirname, 'src') }),
     {
       name: 'copy-themes-css',
       closeBundle() {
@@ -85,6 +81,9 @@ export default defineConfig({
       external: ['vue', 'react', 'react-dom', 'react/jsx-runtime'],
       output: {
         globals: { vue: 'Vue', react: 'React', 'react-dom': 'ReactDOM' },
+        // 남의 코드(fflate)는 우리 모듈과 한 덩어리로 섞지 않는다(비공개 이름 변환 안전선).
+        // Keep third-party fflate in its own chunk (private-name mangling safety).
+        manualChunks: (id) => (id.split('\\').join('/').includes('/node_modules/fflate/') ? 'fflate' : undefined),
         assetFileNames: (assetInfo) => {
           if (assetInfo.name === 'style.css') return 'open-grid-base.css';
           return '[name].[ext]';

@@ -1944,6 +1944,16 @@ export interface ColumnDef<T = any> {
    */
   cellStyle?: CSSProperties | ((value: any, row: T, rowIndex: number) => CSSProperties);
   /**
+   * 엑셀 내보내기에서 셀 안 낱말별 색·굵기를 살리는 조각 목록. `null`/빈 배열이면 일반 셀. 화면 표시에는 영향 없음.
+   *
+   * Rich-text runs for Excel export, keeping per-word color/bold inside a cell. `null`/empty = plain cell. Does not affect on-screen rendering.
+   *
+   * Excel 書き出しでセル内の語ごとの色・太字を残す断片のリスト。`null`／空配列なら通常のセル。画面表示には影響しません。
+   *
+   * 导出 Excel 时保留单元格内逐词颜色／加粗的片段列表。`null`／空数组表示普通单元格。不影响屏幕显示。
+   */
+  cellRuns?: (value: any, row: T, rowIndex: number) => ReadonlyArray<import('./export/types.js').XlsxRichTextRun> | null | undefined;
+  /**
    * 헤더 인라인 스타일.
    *
    * Header inline style.
@@ -2689,6 +2699,20 @@ export interface ExportOptions {
    * 是否包含表头行。默认 true。
    */
   includeHeader?: boolean;
+  /**
+   * 대용량 엑셀(스트리밍) 내보내기의 압축 수준. 0 = 압축 없음(가장 빠르고 큼), 9 = 가장 작음(느림). 기본 6.
+   * 범위 밖의 값은 6 으로 본다. 소형(비스트리밍) 경로에는 영향이 없다.
+   *
+   * Compression level for large (streaming) Excel exports. 0 = stored (fastest, largest), 9 = smallest (slowest). Default 6.
+   * Values outside 0..9 are treated as 6. Has no effect on the small (non-streaming) path.
+   *
+   * 大容量 Excel（ストリーミング）出力の圧縮レベル。0 = 圧縮なし（最速・最大）、9 = 最小（低速）。既定 6。
+   * 範囲外の値は 6 として扱います。小規模（非ストリーミング）経路には影響しません。
+   *
+   * 大容量 Excel（流式）导出的压缩级别。0 = 不压缩（最快、最大），9 = 最小（较慢）。默认 6。
+   * 超出范围的值按 6 处理。对小型（非流式）路径无影响。
+   */
+  compressionLevel?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   /**
    * 내보내기에서 뺄 컬럼들의 field.
    *

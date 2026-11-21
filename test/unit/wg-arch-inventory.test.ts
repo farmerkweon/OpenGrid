@@ -224,6 +224,8 @@ describe('AR-13 파일 주인 기계 확인(설계서 §5-가 · §5-나 · §3-
 // ── AR-20 ─────────────────────────────────────────────────────────────────────────────────
 const ALLOWED_ADDITIONS = new Set([
   'GridOptions\tvirtualColumns', 'GridOptions\tcellTextLimit', 'GridOptions\tpageVirtualization', 'RenderContext\tmaxChars',
+  'export\tXlsxCellStyleSpec\tinterface', // 1.7.1 엑셀 셀 스타일 입력 타입(더하기만)
+  'export\tXlsxRichTextRun\tinterface', 'ColumnDef\tcellRuns', // 1.7.1 엑셀 셀 안 낱말 서식(더하기만)
 ]);
 
 function currentApi(): string[] {

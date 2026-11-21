@@ -4,12 +4,12 @@ import { applyMask } from './MaskingEngine.js';
 import type { WorksheetManager } from './WorksheetManager.js';
 import type { ExportOptions, PrintOptions } from './types.js';
 import { shouldStream } from './export/StreamPump.js';
-import type { IArtifactSource, IByteSink, ExportRunCtx, ExportResult, RowChunk, RowArtifact, CellArtifact } from './export/types.js';
+import type { IArtifactSource, IByteSink, ExportRunCtx, ExportResult, RowChunk, RowArtifact, CellArtifact, XlsxCellStyleSpec, XlsxRichTextRun } from './export/types.js';
 
 /** 스트리밍 경로가 지연 로드하는 모듈 묶음(시험에서 교체 가능). / Lazily-loaded modules of the streaming path (swappable in tests). */
 export interface StreamModules {
   pickExcelSink: (o: { fileName?: string; fsAccess?: 'auto' | 'off' }) => { kind: 'fs' | 'blob'; create(): Promise<IByteSink> };
-  createChannel: (o: { sheetName?: string; includeHeader?: boolean }) => { writeStreaming(src: IArtifactSource, sink: IByteSink, ctx?: ExportRunCtx): Promise<ExportResult> };
+  createChannel: (o: { sheetName?: string; includeHeader?: boolean; compressionLevel?: ExportOptions['compressionLevel'] }) => { writeStreaming(src: IArtifactSource, sink: IByteSink, ctx?: ExportRunCtx): Promise<ExportResult> };
 }
 
 /**
@@ -52,7 +52,7 @@ async function defaultLoadStreamModules(): Promise<StreamModules> {
   ]);
   return {
     pickExcelSink: sinks.pickExcelSink,
-    createChannel: (o) => new ch.XlsxChannel(new wr.XlsxWorkbookWriter({}), o),
+    createChannel: (o) => new ch.XlsxChannel(new wr.XlsxWorkbookWriter({ level: o.compressionLevel }), o),
   };
 }
 
@@ -255,6 +255,27 @@ export class ExportManager<T extends Record<string, any> = any> {
   ): Promise<void> {
     const colWidths = this._d.getColWidths();
     const colLayout = this._d.getColLayout();
+    // 셀 스타일(열 cellStyle 의 배경·글자색·굵기·기울임 + 숫자 서식) → 스트리밍 xlsx 스타일 명세. 정적 값은 열마다 한 번만 만든다.
+    // / Column cellStyle (background, color, weight, italic) + number format -> streaming xlsx style spec; static ones built once per column.
+    const toRgb = (v: unknown): string | undefined => (typeof v === 'string' ? this._hexToXlsxRgb(v) || undefined : undefined);
+    const specOf = (css: any, numFmt: string | undefined): XlsxCellStyleSpec | undefined => {
+      const fill = toRgb(css?.backgroundColor ?? css?.background);
+      const color = toRgb(css?.color);
+      const fw = css?.fontWeight;
+      const bold = fw === 'bold' || fw === 'bolder' || (Number(fw) >= 600);
+      const italic = css?.fontStyle === 'italic';
+      if (!fill && !color && !bold && !italic && !numFmt) return undefined;
+      return {
+        ...(fill ? { fill: { rgb: fill } } : {}),
+        ...(color || bold || italic ? { font: { ...(bold ? { bold: true } : {}), ...(italic ? { italic: true } : {}), ...(color ? { color: { rgb: color } } : {}) } } : {}),
+        ...(numFmt ? { numFmt } : {}),
+      };
+    };
+    const colStyle = cols.map(c => ({
+      fn: typeof c.cellStyle === 'function' ? (c.cellStyle as (v: any, r: any, i: number) => any) : undefined,
+      fmt: this._xlsxNumFmt(c.format),
+      fixed: typeof c.cellStyle === 'function' ? undefined : specOf(c.cellStyle, this._xlsxNumFmt(c.format)),
+    }));
     const source: IArtifactSource = {
       projectHeader: () => [cols.map(c => ({
         text: c.header, field: c.field, colSpan: 1, rowSpan: 1,
@@ -269,14 +290,20 @@ export class ExportManager<T extends Record<string, any> = any> {
           let buf: RowArtifact[] = [];
           for (let i = 0; i < data.length; i++) {
             const row = data[i] as any;
-            const cells = cols.map<CellArtifact>(c => {
+            const cells = cols.map<CellArtifact>((c, ci) => {
               const v = cellValue(row, c);
               const isNum = typeof v === 'number' && c.type === 'number';
+              const cs = colStyle[ci]!;
+              const xs = cs.fn ? specOf(cs.fn(row[c.field], row, i), isNum ? cs.fmt : undefined) : cs.fixed;
+              // 셀 안 낱말 서식: 열 cellRuns 가 조각을 돌려주면 글자 대신 그 조각을 쓴다(숫자 셀 제외). / Column cellRuns, when it returns runs, replace the text (not for numeric cells).
+              const runs: ReadonlyArray<XlsxRichTextRun> | null | undefined = !isNum && typeof c.cellRuns === 'function' ? c.cellRuns(row[c.field], row, i) : undefined;
               // rawText: 숫자는 원수치 그대로(지수표기 포함) — 채널이 정규식으로 되파싱하지 않게. / raw numeric text so the channel never re-parses via regex.
               return {
                 text: String(v), ...(isNum ? { rawText: String(v) } : {}), applied: [], rowSpan: 1, colSpan: 1, hidden: false,
                 align: isNum || c.align === 'right' ? 'right' : (c.align ?? 'left'),
                 type: isNum ? 'number' : 'text',
+                ...(xs ? { xlsxStyle: xs } : {}),
+                ...(runs && runs.length > 0 ? { xlsxRuns: runs } : {}),
               };
             });
             buf.push({ modelIndex: i, cells });
@@ -320,7 +347,7 @@ export class ExportManager<T extends Record<string, any> = any> {
         };
       }
       const total = data.length;
-      const res = await mods.createChannel({ sheetName, includeHeader }).writeStreaming(source, sink, {
+      const res = await mods.createChannel({ sheetName, includeHeader, compressionLevel: opts.compressionLevel }).writeStreaming(source, sink, {
         signal: ac.signal,
         onProgress: (done, tot) => { view.update(done, tot || total); opts.onProgress?.(done, tot || total); },
       });

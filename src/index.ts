@@ -111,6 +111,7 @@ export { SkinRegistry, skinRegistry } from './core/SkinRegistry.js';
  * FORM 专用皮肤令牌增量(拒绝颜色字面量)。
  */
 export type { SkinTokenDelta } from './core/types.js';
+export type { XlsxCellStyleSpec, XlsxRichTextRun } from './core/export/types.js';
 // i18n: 다국어 로케일 메시지 카탈로그 + 레지스트리(IconRegistry 동형)
 // / i18n: multilingual locale message catalog + registry (isomorphic to IconRegistry)
 /**

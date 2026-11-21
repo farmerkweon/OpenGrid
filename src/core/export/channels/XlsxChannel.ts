@@ -10,6 +10,7 @@
 
 import type {
   CellArtifact, ChannelCapabilities, ExportResult, ExportRunCtx, HeaderArtifact, IArtifactSource, IByteSink,
+  XlsxCellStyleSpec, XlsxRichTextRun,
 } from '../types.js';
 import { XLSX_CAPS } from './capabilities.js';
 
@@ -24,6 +25,12 @@ export interface SheetCell {
   /** 채움 위 잉크색(= cf.inkColor). / Ink color from cf.inkColor. */
   readonly ink?: string;
   readonly align: 'left' | 'right' | 'center';
+  /** 미리 등록한 스타일 번호(session.addStyle 반환값). 있으면 그대로 쓴다. / Pre-registered style index; used as-is when present. */
+  readonly s?: number;
+  /** 셀 스타일 명세(쓰기기가 등록·중복 제거). / Cell style spec (registered and de-duplicated by the writer). */
+  readonly style?: XlsxCellStyleSpec;
+  /** 셀 안 서식 조각(있으면 글자 대신 이 조각들을 쓴다). / In-cell rich-text runs (replace the plain text when present). */
+  readonly runs?: ReadonlyArray<XlsxRichTextRun>;
   readonly rowSpan: number;
   readonly colSpan: number;
 }
@@ -63,6 +70,8 @@ export interface XlsxStreamInit {
 export interface IXlsxStreamSession {
   /** 행 청크 추가(sink 쓰기를 await = 백프레셔). / Append a row chunk (awaits sink writes). */
   appendRows(rows: ReadonlyArray<ReadonlyArray<SheetCell>>, merges?: ReadonlyArray<MergeRegion>): Promise<void>;
+  /** 스타일 등록 후 번호 반환(같은 조합은 같은 번호). / Register a style and return its index (equal combos share one). */
+  addStyle?(spec: XlsxCellStyleSpec): number;
   /** 마무리(총 바이트 반환). sink.close 는 호출자 몫. / Finish; returns total bytes (caller closes sink). */
   finish(): Promise<number>;
   /** 중단(이후 쓰기 없음). / Abort. */
@@ -214,7 +223,7 @@ export class XlsxChannel {
 function toSheetCell(c: CellArtifact): SheetCell {
   const cell: {
     value: string; align: SheetCell['align']; rowSpan: number; colSpan: number;
-    num?: number; fill?: string; ink?: string;
+    num?: number; fill?: string; ink?: string; style?: XlsxCellStyleSpec; runs?: ReadonlyArray<XlsxRichTextRun>;
   } = { value: c.text, align: c.align, rowSpan: c.rowSpan, colSpan: c.colSpan };
   if (c.type === 'number' || c.type === 'currency' || c.type === 'money' || c.type === 'percent') {
     // rawText 가 있으면 그것만 Number() — 정규식 재파싱은 rawText 없는 소스의 폴백일 뿐(지수표기를 깨뜨린다).
@@ -225,6 +234,8 @@ function toSheetCell(c: CellArtifact): SheetCell {
     else { const s = c.text.replace(/[^\d.-]/g, ''); if (s !== '') n = Number(s); }
     if (Number.isFinite(n)) cell.num = n;
   }
+  if (c.xlsxStyle) cell.style = c.xlsxStyle;
+  if (c.xlsxRuns) cell.runs = c.xlsxRuns;
   if (c.cf?.fill) cell.fill = c.cf.fill.color;
   if (c.cf) cell.ink = c.cf.inkColor;
   return cell;

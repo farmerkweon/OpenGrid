@@ -51,6 +51,54 @@ export interface CellArtifact {
   readonly align: CellAlign;
   /** 채널별 셀 타입 매핑용(xlsx number vs string). / Domain kind for per-channel typing. */
   readonly type: DomainKind;
+  /** 스트리밍 xlsx 셀 스타일(채움·글자색·굵기·숫자 서식 등). 없으면 기본 줄무늬. / Streaming-xlsx cell style; none = default banding. */
+  readonly xlsxStyle?: XlsxCellStyleSpec;
+  /** 스트리밍 xlsx 셀 안 서식 조각(낱말별 색·굵기). 있으면 `text` 대신 이 조각들을 이어 쓴다. / Rich-text runs; when present they replace `text` in the streaming xlsx. */
+  readonly xlsxRuns?: ReadonlyArray<XlsxRichTextRun>;
+}
+
+/**
+ * 셀 안 서식 조각 한 토막. 이어 붙인 글자가 셀 값이다.
+ *
+ * One rich-text run inside a cell; the concatenated texts form the cell value.
+ *
+ * セル内の書式付き断片。つなげた文字がセルの値になります。
+ *
+ * 单元格内的一段富文本；各段文字连起来就是单元格的值。
+ */
+export interface XlsxRichTextRun {
+  /** 이 토막의 글자. / Text of this run. */
+  readonly text: string;
+  /** 이 토막의 글자 서식. 없으면 셀 기본. / Font of this run; none = cell default. */
+  readonly style?: {
+    readonly color?: { readonly rgb: string };
+    readonly bold?: boolean;
+    readonly italic?: boolean;
+    /** 글자 크기(pt). / Font size in points. */
+    readonly size?: number;
+  };
+}
+
+/**
+ * 스트리밍 xlsx 셀 스타일 명세. 색은 `RRGGBB` 또는 `AARRGGBB`(# 없이). 같은 조합은 같은 스타일 번호를 공유한다.
+ *
+ * Streaming-xlsx cell style spec. Colors are `RRGGBB` or `AARRGGBB` (no `#`). Equal combinations share one style index.
+ *
+ * ストリーミング xlsx のセルスタイル指定。色は `RRGGBB` または `AARRGGBB`（# なし）。同じ組み合わせは同じ番号を共有します。
+ *
+ * 流式 xlsx 的单元格样式。颜色为 `RRGGBB` 或 `AARRGGBB`（不带 #）。相同组合共用同一样式编号。
+ */
+export interface XlsxCellStyleSpec {
+  /** 배경 채움색. / Background fill. */
+  readonly fill?: { readonly rgb: string };
+  /** 글자 서식. / Font. */
+  readonly font?: { readonly bold?: boolean; readonly italic?: boolean; readonly color?: { readonly rgb: string } };
+  /** 숫자 서식(예: `#,##0.00`). / Number format. */
+  readonly numFmt?: string;
+  /** 사방 테두리. / Border on all four sides. */
+  readonly border?: { readonly style: 'thin' | 'medium' | 'thick' | 'hair' | 'dotted' | 'dashed'; readonly color?: { readonly rgb: string } };
+  /** 가로 정렬. / Horizontal alignment. */
+  readonly align?: { readonly horizontal: 'left' | 'center' | 'right' };
 }
 
 /** 한 논리 행의 아티팩트. 화면 밖 행도 동일 구조(전량 순회, REQ-T3-805). / One logical row's artifact. */

@@ -2,6 +2,40 @@
 
 All notable changes to OPEN_GRID will be documented in this file.
 
+## [1.7.1] - 2026-11-22
+
+### Added
+- **엑셀 셀 컬러링** / **Excel cell coloring.**
+  스트리밍 경로에서도 셀 단위 스타일이 엑셀에 그대로 간다 — 배경색(fill) · 글자색(font color) · 굵기(bold) · 숫자 서식(numFmt).
+  스타일 등록소(`XlsxStylesRegistry`)가 중복 조합을 한 인덱스로 뭉치고, 시트 XML 조립기(`XlsxSheetXml`)가 셀마다 그 인덱스를 참조한다.
+  / Cell-level styles (fill, font color, bold, numFmt) now go into the streamed `.xlsx` as-is.
+  A styles registry deduplicates combinations and the sheet-XML assembler references them per cell.
+- **rich text runs — 한 셀 안에서 낱말마다 다른 색** / **Rich text runs: per-word colors inside one cell.**
+  `ColumnDef.cellRuns?(value, row, rowIndex)` 콜백으로 `XlsxRichTextRun[]` 반환. 시트 XML 이 `<c t="inlineStr"><is><r><rPr>…</rPr><t>…</t></r>…</is></c>` 로 조립한다.
+  / New `ColumnDef.cellRuns` returns `XlsxRichTextRun[]`. The sheet XML emits `inlineStr` runs so Excel honors mixed colors inside a single cell.
+
+### Changed
+- **엑셀 압축 엔진 교체** / **Excel compression engine replaced.**
+  손수 구현한 deflate 를 폐기하고 fflate 0.3.11 → **0.8.3** 로 직접 올렸다(네이티브 스트리밍 Zip + Deflate).
+  10만 행 × 50 컬럼 × 200자 실측 — **파일 크기 492MB → 326MB(-33.7%)**, **소요 시간 76.1초 → 64.6초(-15.1%)**, **압축률 4.12:1 → 6.22:1(+51%)**.
+  / Dropped the hand-rolled deflate, moved fflate 0.3.11 → **0.8.3** (native streaming Zip + Deflate).
+  100k × 50 × 200-char benchmark — **file 492MB → 326MB (-33.7%)**, **time 76.1s → 64.6s (-15.1%)**, **ratio 4.12:1 → 6.22:1 (+51%)**.
+- **엑셀 조립부 OOP 재설계** / **Excel writer OOP refactor.**
+  `XlsxStylesRegistry` · `XlsxStyleEntries`(값 객체) · `XlsxSheetXml` · `XlsxRichTextRun` · `XlsxXml`(zip 출력) 각자 책임 하나로 분리. writer 는 합성으로 조립.
+  / Split the writer into single-responsibility classes: a styles registry, value-object style entries, a sheet-XML assembler, a rich-text-run type, and a zip-output module. The writer composes them.
+
+### API (additive only — 적용 시 기존 것 별도 수정 필요 없음)
+- `ExportOptions.compressionLevel?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9` (기본 6 / default 6)
+- `ColumnDef.cellRuns?(value, row, rowIndex): XlsxRichTextRun[] | null`
+- `XlsxRichTextRun` · `XlsxCellStyleSpec` 공개 타입 추가.
+
+### Note
+- 코어 번들(gzip) +368B(1.7.0 대비). 무거운 writer·레지스트리·fflate 는 **지연 로드 청크**로 분리돼 처음 받는 양에 영향 없음.
+- 선존 1건 미처리 — `AR-13`(doRender 호출 파일 수 감시). 변경 전·후 결과 동일.
+- / Core bundle (gzip) +368B over 1.7.0. The heavy writer, registry, and fflate stay in **lazy chunks**, so the initial payload is unchanged. One pre-existing `AR-13` failure is untouched this release.
+
+---
+
 ## [1.7.0] - 2026-11-21
 
 ### Added
