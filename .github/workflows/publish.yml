@@ -1,0 +1,50 @@
+name: Publish to npm
+
+# 수동 실행 전용(workflow_dispatch) — 태그 자동발행은 .map/AUI 수동검사를 우회하므로 쓰지 않는다.
+# Manual dispatch only; tag-based auto-publish is intentionally avoided.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry-run (발행 안 함)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install
+        run: npm install --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Strip source maps (npm 패키지엔 .map 미포함)
+        run: find dist -name '*.map' -delete
+
+      - name: Guard — 금지 문자열(AUI) 0건
+        run: |
+          if grep -rniE 'aui[ _-]?grid|auigrid' dist src 2>/dev/null; then
+            echo "::error::금지 문자열(AUI) 발견 — 발행 중단"; exit 1
+          fi
+          echo "AUI 0건 확인"
+
+      - name: Pack 확인(발행될 파일)
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: ${{ inputs.dry_run == false }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
