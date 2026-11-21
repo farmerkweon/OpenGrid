@@ -1,7 +1,7 @@
 name: Publish to npm
 
-# 수동 실행 전용(workflow_dispatch) — 태그 자동발행은 .map/AUI 수동검사를 우회하므로 쓰지 않는다.
-# Manual dispatch only; tag-based auto-publish is intentionally avoided.
+# 수동 실행 전용(workflow_dispatch). Trusted Publishing(OIDC) — 토큰·OTP 불필요.
+# npm 패키지 설정에서 이 repo+워크플로를 Trusted Publisher 로 연결해야 동작한다.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write   # OIDC — Trusted Publishing
 
 jobs:
   publish:
@@ -23,6 +24,9 @@ jobs:
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm (OIDC Trusted Publishing 지원 = npm >= 11.5.1)
+        run: npm install -g npm@latest
 
       - name: Install
         run: npm install --legacy-peer-deps
@@ -43,8 +47,6 @@ jobs:
       - name: Pack 확인(발행될 파일)
         run: npm pack --dry-run
 
-      - name: Publish
+      - name: Publish (OIDC / Trusted Publishing)
         if: ${{ inputs.dry_run == false }}
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
